@@ -8,6 +8,7 @@ import 'src/models/photo_credit.dart';
 import 'src/services/assistant_service.dart';
 import 'src/services/calendar_service.dart';
 import 'src/services/feature_flags.dart';
+import 'src/services/todo_service.dart';
 import 'src/services/photo_frame_service.dart';
 import 'src/services/settings_store.dart';
 import 'src/services/frame_stats.dart';
@@ -78,6 +79,7 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   late final PhotoFrameService _photos = PhotoFrameService();
   late final AssistantService _assistant = AssistantService();
   final SettingsStore _settings = SettingsStore();
+  late final TodoService _todo = TodoService(_settings);
   final FrameStats _frameStats = FrameStats();
   bool _weatherConfigured = false;
   ShellController? _controller;
@@ -159,6 +161,7 @@ class _NestLauncherAppState extends State<NestLauncherApp>
     WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
     _calendar.dispose();
+    _todo.dispose();
     _photos.dispose();
     _assistant.dispose();
     _clock.dispose();

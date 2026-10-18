@@ -9,7 +9,7 @@ change in code.
 |---|---|---|
 | What it is | Everything switched on. For finding out what actually happens. | A launcher and nothing else. This is the one that ships. |
 | Config | `assets/features.ef.json` | `assets/features.json` |
-| Features on | all 10 | 4 — `settings`, `quickSettings`, `digestPage`, `calendar` |
+| Features on | all 11 | 5 — `settings`, `quickSettings`, `digestPage`, `calendar`, `todo` |
 | Build | `./tool/build_variants.sh ef` | `./tool/build_variants.sh reduced` |
 
 Both keep settings and quick settings. A launcher you cannot configure, and
@@ -77,8 +77,9 @@ Edit the JSON and rebuild. Nothing else needs touching.
 }
 ```
 
-The reduced build keeps `settings`, `quickSettings`, `digestPage` and
-`calendar`, and nothing else. It is a launcher with a calendar on page two.
+The reduced build keeps `settings`, `quickSettings`, `digestPage`, `calendar`
+and `todo`, and nothing else. It is a launcher with a calendar and a to-do list
+on page two.
 
 **`digestPage` and `calendar` travel together on purpose.** `calendar` on with
 `digestPage` off is a calendar rendering on a page nobody can reach — which is

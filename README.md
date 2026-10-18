@@ -53,8 +53,11 @@ installing.
 ## What you get
 
 **The shipping build** is a launcher: the Nest-style clock and photo, the app
-row and the full app grid, a calendar on page two, brightness and volume, and
-a settings page.
+row and the full app grid, brightness and volume, and a settings page.
+
+Page two holds the two things worth glancing at: a **calendar** that shows the
+date and what's on today, and a **to-do list** you can add to, tick off and
+delete. The to-do list is saved on the device, so it is still there tomorrow.
 
 **The beta** additionally has the voice assistant, a music player, rotating
 photographs, live weather, and the "Sun" theme that follows the time of day. It
@@ -75,7 +78,8 @@ MT6789, 800x1340) and a **Nokia T20** (Android 13, Unisoc T610, 2000x1200).
 | The clock, date and weather | ✓ |
 | The photo frame, rotating every 10 min | ✓ |
 | The app row and the six-column grid | ✓ |
-| A calendar reading real events | ✓ |
+| A calendar reading real events, with the date | ✓ |
+| A to-do list you can add to, tick off and delete | ✓ |
 | The quick-settings row — every button does something | ✓ |
 | Five themes | ✓ |
 | Settings | ✓ |

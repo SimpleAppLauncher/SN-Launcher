@@ -8,6 +8,7 @@
 
     "digestPage": true,
     "calendar": true,
+    "todo": true,
 
     "assistant": false,
     "music": false,

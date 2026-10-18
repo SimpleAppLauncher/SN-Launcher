@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/nest_action.dart';
 import '../services/assistant_service.dart';
 import '../services/feature_flags.dart';
+import '../services/todo_service.dart';
 import '../services/photo_frame_service.dart';
 import '../models/photo_credit.dart';
 import '../services/calendar_service.dart';
@@ -24,6 +25,7 @@ import '../widgets/assistant_lightbar.dart';
 import '../widgets/music_player.dart';
 import '../widgets/photo_frame.dart';
 import '../widgets/settings_page.dart';
+import '../widgets/todo_card.dart';
 
 /// The Nest launcher shell.
 ///
@@ -49,6 +51,7 @@ class NestShell extends StatefulWidget {
     this.calendar,
     this.photos,
     this.assistant,
+    this.todo,
     this.suggested,
     this.actions,
     this.animateDecorations = true,
@@ -61,6 +64,9 @@ class NestShell extends StatefulWidget {
   /// Optional. When supplied the Digest page shows the user's real calendar
   /// instead of "No more events today".
   final CalendarService? calendar;
+
+  /// The to-do list. Optional so tests and desktop builds can omit it.
+  final TodoService? todo;
 
   /// Optional. Absent in tests and on desktop, where the background stays on
   /// the bundled photograph.
@@ -489,6 +495,7 @@ class _NestShellState extends State<NestShell> {
           weatherEnabled: widget.weather.enabled,
           weatherLoading: widget.weather.loading,
           calendar: widget.calendar,
+          todo: widget.todo,
           theme: _c.theme,
           onThemePick: _c.setTheme,
           onOpenMusic: _openMusic,
@@ -696,6 +703,7 @@ class _DigestPage extends StatelessWidget {
     required this.weatherEnabled,
     required this.weatherLoading,
     required this.calendar,
+    required this.todo,
     required this.theme,
     required this.onThemePick,
     required this.onOpenMusic,
@@ -710,6 +718,7 @@ class _DigestPage extends StatelessWidget {
   final bool weatherEnabled;
   final bool weatherLoading;
   final CalendarService? calendar;
+  final TodoService? todo;
   final NestTheme theme;
   final void Function(NestTheme) onThemePick;
 
@@ -727,23 +736,55 @@ class _DigestPage extends StatelessWidget {
   /// when in fact nothing was ever read.
   Widget _calendarCard(NestMetrics m) {
     final cal = calendar;
+
+    // The date, always, whether or not there are events. A card that says
+    // "Nothing else today" without saying which day "today" is answers the
+    // wrong question, and the events themselves are all from today anyway, so
+    // a date on each row would be noise.
+    final dateLine = Text(
+      ClockService.nestDate(now),
+      style: type.caption(color: palette.onSurfaceVariant),
+    );
+
     if (cal == null || !cal.available) {
       return _Card(
         title: 'Calendar',
-        body: 'Permission needed',
         metrics: m,
         palette: palette,
         type: type,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            dateLine,
+            SizedBox(height: m.px(8)),
+            Text(
+              'Permission needed',
+              style: type.caption(color: palette.onSurfaceVariant),
+            ),
+          ],
+        ),
       );
     }
     final events = cal.today.take(3).toList();
     if (events.isEmpty) {
       return _Card(
         title: 'Calendar',
-        body: 'Nothing else today',
         metrics: m,
         palette: palette,
         type: type,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            dateLine,
+            SizedBox(height: m.px(8)),
+            Text(
+              'Nothing else today',
+              style: type.caption(color: palette.onSurfaceVariant),
+            ),
+          ],
+        ),
       );
     }
 
@@ -756,6 +797,8 @@ class _DigestPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          dateLine,
+          SizedBox(height: m.px(10)),
           for (final e in events)
             Padding(
               padding: EdgeInsets.only(bottom: m.px(8)),
@@ -944,6 +987,16 @@ class _DigestPage extends StatelessWidget {
     final cards = <({int flex, Widget child})>[
       if (f.isOn('calendar'))
         (flex: 3, child: _calendarCard(m)),
+      if (f.isOn('todo') && todo != null)
+        (
+          flex: 3,
+          child: TodoCard(
+            service: todo!,
+            metrics: m,
+            palette: palette,
+            type: type,
+          ),
+        ),
       if (f.isOn('weather'))
         (
           flex: 2,
@@ -1007,8 +1060,18 @@ class _DigestPage extends StatelessWidget {
         ),
     ];
 
+    // The keyboard. There is no Scaffold in this tree, so nothing resizes the
+    // page for the IME and the to-do input would sit underneath it. Padding
+    // the bottom by the inset lifts the whole page clear.
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+
     return Padding(
-      padding: EdgeInsets.fromLTRB(m.px(48), m.px(44), m.px(48), m.px(60)),
+      padding: EdgeInsets.fromLTRB(
+        m.px(48),
+        m.px(44),
+        m.px(48),
+        m.px(60) + keyboard,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

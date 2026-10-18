@@ -92,7 +92,13 @@ void main() {
     /// [FeatureFlags.known] — the new flag would simply join the excluded side
     /// and the test would keep passing. Asking to add a feature to the reduced
     /// build should require editing this list on purpose.
-    const expected = {'settings', 'quickSettings', 'digestPage', 'calendar'};
+    const expected = {
+      'settings',
+      'quickSettings',
+      'digestPage',
+      'calendar',
+      'todo',
+    };
 
     test('contains exactly the intended features', () {
       final on = FeatureFlags.known.where(f.isOn).toSet();

@@ -189,6 +189,13 @@ void main() {
       await _pump(tester, page: ShellPage.digest);
       expect(find.textContaining('Good'), findsOneWidget);
       expect(find.text('Calendar'), findsOneWidget);
+      // The date the events belong to. The card used to show a time and a
+      // title and nothing else, so "Nothing else today" never said which day
+      // "today" was.
+      //
+      // At least one, not exactly one: the shell keeps the home page alive in
+      // the carousel, and the clock block there shows the same date.
+      expect(find.text('Thu, May 26'), findsWidgets);
       expect(find.text('Weather'), findsNothing);
       expect(find.text('Music'), findsNothing);
       expect(find.text('Photos'), findsNothing);

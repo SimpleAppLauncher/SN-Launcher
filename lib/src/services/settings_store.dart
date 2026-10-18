@@ -15,22 +15,34 @@ import 'package:flutter/services.dart';
 /// Everything is best-effort: a launcher that cannot remember your theme should
 /// still start, so every failure path degrades to the default value.
 class SettingsStore {
-  SettingsStore();
+  SettingsStore({String? fallbackPath})
+      : _fallback = File(
+          fallbackPath ??
+              '${Directory.systemTemp.path}/sn_launcher_settings.json',
+        );
 
   static const MethodChannel _channel =
       MethodChannel('dev.snlauncher/settings');
 
   /// Desktop fallback. `Directory.systemTemp` is the app-private cache dir on
   /// Android and `/tmp` elsewhere, so this needs no plugin and no permission.
-  final File _fallback =
-      File('${Directory.systemTemp.path}/sn_launcher_settings.json');
+  ///
+  /// Injectable so a test can give each case its own file. The default is
+  /// shared, which would let one test's to-do list leak into the next.
+  final File _fallback;
 
   // In-memory mirror so the UI never awaits a disk round trip to render.
   final Map<String, String> _cache = {};
 
   String? get(String key) => _cache[key];
 
+  /// Whether [load] has already run. Makes it idempotent, so a second caller
+  /// cannot re-read the platform and clobber a value written in between.
+  bool _loaded = false;
+
   Future<void> load() async {
+    if (_loaded) return;
+    _loaded = true;
     try {
       final raw = await _channel.invokeMethod<String>('getAll');
       if (raw != null && raw.isNotEmpty) {
@@ -104,6 +116,10 @@ abstract final class SettingKeys {
   static const placeName = 'placeName';
   static const rotatePhotos = 'rotatePhotos';
   static const rotateMinutes = 'rotateMinutes';
+
+  /// The to-do list, as a JSON array. Kept in one string rather than one key
+  /// per item, so a list of any length is still one write.
+  static const todo = 'todo';
 
   // ── Assistant ──────────────────────────────────────────────────────────────
   // Where the assistant sends hard requests. Kept as a name, not an enum, so a

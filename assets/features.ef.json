@@ -10,6 +10,7 @@
     "photoRotation": true,
     "themePicker": true,
     "calendar": true,
+    "todo": true,
     "digestPage": true,
     "weather": true,
     "quickSettings": true,

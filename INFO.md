@@ -540,7 +540,35 @@ a free day when in fact nothing was ever read.
 (`--dart-define=NEST_LAT=… --dart-define=NEST_LON=…`), because a runtime
 location prompt is a real cost on a wall-mounted tablet nobody taps again.
 
-**The first page is deliberately bright.** The legibility scrim over the
+### The to-do list
+
+A real list on page two, next to the calendar: add a thing, tick it off,
+delete it. Saved to the device, so it survives a restart.
+
+It is deliberately **not a plugin and not a database**. A list of short strings
+is exactly what `SettingsStore` is for, and this project's Android build is
+fragile enough without another dependency. The whole thing is one JSON array
+inside one settings key.
+
+Three decisions worth recording:
+
+**It fails closed on read.** If the stored string is not valid JSON, or is not
+a list, the list starts empty rather than guessing. A half-parsed list is worse
+than an empty one, and an empty one is honest — the user can see that nothing
+is on it. One malformed *entry* inside a valid list costs one item, not the
+list.
+
+**It loads the settings store itself.** An earlier version read the key off a
+store that had not been loaded yet, which returns null — indistinguishable from
+"the user has never had a to-do list". A list saved yesterday would silently
+come back empty. Depending on the caller to have loaded the store first is the
+kind of coupling that only shows up in a test, which is where it showed up.
+
+**The keyboard is handled by hand.** There is no `Scaffold` in this tree, so
+nothing resizes the page for the IME and the input would sit underneath it.
+The digest page pads its bottom by `MediaQuery.viewInsets.bottom`.
+
+### The first page is deliberately bright.** The legibility scrim over the
 photograph was `0.62` and the night dim `0.28`, which made the picture read as
 night even at 08:03 in the morning. Now `0.42` and `0.16` — the photograph reads
 as a photograph and the clock still reads clearly over it. Applied to both

@@ -46,6 +46,7 @@ class FeatureFlags {
     'weather',
     'quickSettings',
     'sunTheme',
+    'todo',
   };
 
   /// Which build this is, for the settings page and the about screen.
