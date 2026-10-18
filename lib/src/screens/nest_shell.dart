@@ -972,6 +972,48 @@ class _DigestPage extends StatelessWidget {
   String _clockTime(DateTime t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
+  /// Lays the cards out.
+  ///
+  /// Two paths, because six cards do not fit across a 1280-wide tablet and
+  /// five of them end up with 155px each: "Weather" wraps to two lines,
+  /// "YouTube" splits mid-word, the input truncates to "Add an it..." and the
+  /// theme swatches are clipped off the edge.
+  ///
+  /// So the cards get a minimum width, and when the total minimum no longer
+  /// fits, the row scrolls sideways instead of squeezing everything. The
+  /// reduced build has two cards, fits comfortably, and takes the plain path —
+  /// it looks exactly as it did.
+  Widget _cardRow(List<({int flex, Widget child})> cards, NestMetrics m) {
+    const gap = 14.0;
+    final minWidth = m.px(248);
+    final available = m.size.width - m.px(96);
+    final needed = cards.length * minWidth + (cards.length - 1) * m.px(gap);
+
+    if (needed > available && cards.length > 1) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < cards.length; i++) ...[
+              SizedBox(width: minWidth, child: cards[i].child),
+              if (i < cards.length - 1) SizedBox(width: m.px(gap)),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        for (var i = 0; i < cards.length; i++) ...[
+          Expanded(flex: cards[i].flex, child: cards[i].child),
+          if (i < cards.length - 1) SizedBox(width: m.px(gap)),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final m = metrics;
@@ -1081,14 +1123,7 @@ class _DigestPage extends StatelessWidget {
           ),
           SizedBox(height: m.px(22)),
           Expanded(
-            child: Row(
-              children: [
-                for (var i = 0; i < cards.length; i++) ...[
-                  Expanded(flex: cards[i].flex, child: cards[i].child),
-                  if (i < cards.length - 1) SizedBox(width: m.px(14)),
-                ],
-              ],
-            ),
+            child: _cardRow(cards, m),
           ),
         ],
       ),

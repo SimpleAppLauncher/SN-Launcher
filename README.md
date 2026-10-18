@@ -1,6 +1,6 @@
 # SN-Launcher
 
-**v0.1.1** · [Download](#download) · [INFO.md](INFO.md) for the technical record
+**v0.1.2** · [Download](#download) · [INFO.md](INFO.md) for the technical record
 
 A Google Nest Hub style launcher for **Android**, for putting an old tablet on
 a wall and having it look like a smart display.
@@ -21,17 +21,17 @@ Grab it from **[releases](../../releases/latest)**.
 
 | File | Size | For |
 |---|---|---|
-| **`SN-Launcher-0.1.1.apk`** | 32 MB | **Start here.** Works on any phone or tablet from roughly 2014 on. |
-| `SN-Launcher-0.1.1-arm64.apk` | 18 MB | Smaller. Nearly all modern tablets. |
-| `SN-Launcher-0.1.1-armv7.apk` | 16 MB | Smaller. Older budget tablets. |
-| `SN-Launcher-0.1.1-x86_64.apk` | 20 MB | Chromebooks, emulators. |
-| `SN-Launcher-0.1.1-beta-arm64.apk` | 18 MB | The beta. Everything on. |
+| **`SN-Launcher-0.1.2.apk`** | 32 MB | **Start here.** Works on any phone or tablet from roughly 2014 on. |
+| `SN-Launcher-0.1.2-arm64.apk` | 18 MB | Smaller. Nearly all modern tablets. |
+| `SN-Launcher-0.1.2-armv7.apk` | 16 MB | Smaller. Older budget tablets. |
+| `SN-Launcher-0.1.2-x86_64.apk` | 20 MB | Chromebooks, emulators. |
+| `SN-Launcher-0.1.2-beta-arm64.apk` | 18 MB | The beta. Everything on. |
 
 Copy the `.apk` to the device and tap it, allowing **Install unknown apps** for
 whatever opened it. Or over USB:
 
 ```bash
-adb install -r SN-Launcher-0.1.1.apk
+adb install -r SN-Launcher-0.1.2.apk
 ```
 
 Then set it as your home screen.
