@@ -175,7 +175,7 @@ void main() {
         final m = NestMetrics.forSize(size);
         expect(
           quickSettingsFor(FeatureFlags.parse(
-            '{"features":{"settings":true,"quickSettings":true}}',
+            '{"features":{"settings":true,"quickSettings":true,"digestPage":true}}',
             't',
           )).length,
           7,

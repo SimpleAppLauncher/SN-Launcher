@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../models/nest_action.dart';
 import '../services/action_launcher.dart';
+import '../services/feature_flags.dart';
 import '../services/platform_bridge.dart';
 import '../services/settings_store.dart';
 import '../theme/ambient_palette.dart';
@@ -92,6 +93,14 @@ class ShellController extends ChangeNotifier {
         (t) => t.name == stored,
         orElse: () => NestTheme.dynamic,
       );
+      // Re-check it against this build. The two variants have separate
+      // settings stores, but a user who installs ef, picks Sun, then installs
+      // the reduced build would otherwise be pinned to the one theme the
+      // reduced build does not offer and does not show in its picker.
+      final available = availableThemes(FeatureFlags.current);
+      if (!available.contains(_theme)) {
+        _theme = fallbackTheme(FeatureFlags.current);
+      }
     }
     _recomputePalette(force: true);
     notifyListeners();
@@ -374,9 +383,16 @@ class ShellController extends ChangeNotifier {
 
   /// The theme picker walks the list, so a single button cycles rather than
   /// dead-ending on the last entry.
+  ///
+  /// Walks [availableThemes], not `NestTheme.values`: in the reduced build the
+  /// Sun theme is compiled out, and cycling into a theme the picker cannot show
+  /// would leave the user in a state with no way back out through the dock.
   void cycleTheme() {
-    final values = NestTheme.values;
-    setTheme(values[(values.indexOf(_theme) + 1) % values.length]);
+    final values = availableThemes(FeatureFlags.current);
+    if (values.length < 2) return;
+    // A theme stored from a previous install may not exist in this build.
+    final at = values.indexOf(_theme);
+    setTheme(values[(at < 0 ? 0 : at + 1) % values.length]);
   }
 
   void toggleDoNotDisturb() {

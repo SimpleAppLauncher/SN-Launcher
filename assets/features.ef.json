@@ -12,6 +12,7 @@
     "calendar": true,
     "digestPage": true,
     "weather": true,
-    "quickSettings": true
+    "quickSettings": true,
+    "sunTheme": true
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/nest_action.dart' show AssistantBackend;
+import '../models/nest_action.dart' show AssistantBackend, availableThemes;
 import '../state/shell_controller.dart';
 import '../services/feature_flags.dart';
 import '../theme/ambient_palette.dart';
@@ -225,7 +225,7 @@ class SettingsPage extends StatelessWidget {
           spacing: m.px(8),
           runSpacing: m.px(8),
           children: [
-            for (final theme in NestTheme.values)
+            for (final theme in availableThemes(FeatureFlags.current))
               _ThemeSwatch(
                 theme: theme,
                 selected: theme == c.theme,

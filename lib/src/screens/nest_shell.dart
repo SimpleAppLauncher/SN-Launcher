@@ -991,7 +991,7 @@ class _DigestPage extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    for (final t in NestTheme.values)
+                    for (final t in availableThemes(f))
                       _ThemeSwatch(
                         theme: t,
                         selected: t == theme,

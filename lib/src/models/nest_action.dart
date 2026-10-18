@@ -175,14 +175,48 @@ const List<QuickSetting> kQuickSettings = [
 /// measurement, so a changed row has to be a deliberate, visible change.
 ///
 /// Two gates, because they answer different questions. `quickSettings` asks
-/// whether the row exists at all. `settings` asks whether one entry in it does:
-/// a button that opens a page this build does not have is worse than no button.
+/// whether the row exists at all. The per-entry gates ask whether one button in
+/// it does: a button that opens a page this build does not have is worse than
+/// no button at all.
+///
+/// The digest button is the one that matters. With `digestPage` off the page
+/// renders nothing, so tapping it navigated to a blank screen — which is what
+/// made the reduced build look broken on hardware. The row is one button
+/// shorter, which is a visible, deliberate change, and the alternative is a
+/// button that lies.
 List<QuickSetting> quickSettingsFor(FeatureFlags f) {
   if (!f.isOn('quickSettings')) return const [];
   return [
     for (final q in kQuickSettings)
-      if (q.kind != QuickSettingKind.settings || f.isOn('settings')) q,
+      if (q.kind != QuickSettingKind.settings || f.isOn('settings'))
+        if (q.kind != QuickSettingKind.zoomIn || f.isOn('digestPage')) q,
   ];
+}
+
+/// The themes this build offers.
+///
+/// "Sun" — [NestTheme.dynamic], the theme that follows the time of day, and
+/// the one labelled "Sun" in the picker — is a beta feature and is compiled out
+/// of the reduced build. Both the picker and the dock's cycle button have to
+/// skip it: a cycle button that lands on a theme the picker cannot show leaves
+/// the user in a state they cannot get out of through the dock.
+///
+/// [NestTheme.dynamic] is also the default, so anything that reads a stored
+/// theme has to re-check it. A setting persisted by the ef build and then
+/// restored by the reduced one would otherwise pin a theme that is not on.
+List<NestTheme> availableThemes(FeatureFlags f) => [
+  for (final t in NestTheme.values)
+    if (t != NestTheme.dynamic || f.isOn('sunTheme')) t,
+];
+
+/// The theme to use when a stored one is not available in this build.
+///
+/// Falls back to Day rather than the first entry: the first entry is Sun, which
+/// is exactly what is usually missing, so the fallback would be the thing we
+/// just excluded.
+NestTheme fallbackTheme(FeatureFlags f) {
+  final ok = availableThemes(f);
+  return ok.contains(NestTheme.day) ? NestTheme.day : ok.first;
 }
 
 /// Quick re-colour of an [AmbientPalette] used by the bottom sheet so it always

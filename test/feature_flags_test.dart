@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sn_launcher/src/models/nest_action.dart';
 import 'package:sn_launcher/src/services/feature_flags.dart';
+import 'package:sn_launcher/src/theme/ambient_palette.dart';
 
 /// These read the two config files **off disk** rather than through
 /// [FeatureFlags.load].
@@ -114,34 +115,116 @@ void main() {
   });
 
   group('quick-settings row', () {
-    test('is the full measured row when both gates are on', () {
-      // Seven. tool/verify.py asserts this badge pitch against a rectified
-      // photograph of a real Nest Hub Max, so this count is a measurement and
-      // not a preference — a build that silently dropped to six would break
-      // the one assertion the pixel audit actually makes.
+    /// The ef build, with both optional buttons available.
+    FeatureFlags efLike() => FeatureFlags.parse(
+          '{"features":{"settings":true,"quickSettings":true,"digestPage":true}}',
+          't',
+        );
+
+    test('is the full seven-button row on the ef build', () {
+      // Seven, and it is a measurement rather than a preference: this row was
+      // measured off a rectified photograph of a real Nest Hub Max. tool/
+      // verify.py asserts the app-badge *pitch*, which this does not change.
+      final row = quickSettingsFor(efLike());
+      expect(row.length, 7);
+      expect(
+        row.map((q) => q.kind),
+        containsAll(<QuickSettingKind>[
+          QuickSettingKind.settings,
+          QuickSettingKind.zoomIn,
+        ]),
+      );
+    });
+
+    test('drops the digest button when there is no digest page', () {
+      // The bug this replaces: the reduced build kept the sparkles button,
+      // which navigated to a page that renders nothing. Tapping it gave a blank
+      // screen, which is what made the reduced build look broken on hardware.
+      // Six buttons, every one of which does something.
       final f = FeatureFlags.parse(
         '{"features":{"settings":true,"quickSettings":true}}',
         't',
       );
-      expect(quickSettingsFor(f).length, 7);
-      expect(
-        quickSettingsFor(f).map((q) => q.kind),
-        contains(QuickSettingKind.settings),
-      );
+      final row = quickSettingsFor(f);
+      expect(row.length, 6);
+      expect(row.map((q) => q.kind), isNot(contains(QuickSettingKind.zoomIn)));
     });
 
     test('drops the settings button when settings is off', () {
+      final f = FeatureFlags.parse(
+        '{"features":{"quickSettings":true,"digestPage":true}}',
+        't',
+      );
+      final row = quickSettingsFor(f);
+      expect(row.length, 6);
+      expect(row.map((q) => q.kind), isNot(contains(QuickSettingKind.settings)));
+    });
+
+    test('drops both when both are off', () {
       final f = FeatureFlags.parse('{"features":{"quickSettings":true}}', 't');
-      expect(quickSettingsFor(f).length, 6);
+      final row = quickSettingsFor(f);
+      expect(row.length, 5);
       expect(
-        quickSettingsFor(f).map((q) => q.kind),
-        isNot(contains(QuickSettingKind.settings)),
+        row.map((q) => q.kind),
+        isNot(anyOf(
+          QuickSettingKind.settings,
+          QuickSettingKind.zoomIn,
+        )),
       );
     });
 
     test('is empty when the row itself is off', () {
       final f = FeatureFlags.parse('{"features":{"settings":true}}', 't');
       expect(quickSettingsFor(f), isEmpty);
+    });
+
+    test('the shipped builds produce the rows they should', () {
+      // Reads the real files, so an edit to either JSON shows up here.
+      expect(quickSettingsFor(loadFile('features.ef.json')).length, 7);
+      expect(quickSettingsFor(loadFile('features.json')).length, 6);
+    });
+  });
+
+  group('themes', () {
+    test('the ef build offers all five, including Sun', () {
+      final f = loadFile('features.ef.json');
+      expect(availableThemes(f).length, NestTheme.values.length);
+      expect(availableThemes(f), contains(NestTheme.dynamic));
+    });
+
+    test('the reduced build does not offer Sun', () {
+      // "Sun" in the picker is NestTheme.dynamic, the time-of-day theme.
+      final f = loadFile('features.json');
+      expect(availableThemes(f), isNot(contains(NestTheme.dynamic)));
+      expect(availableThemes(f).length, NestTheme.values.length - 1);
+    });
+
+    test('the reduced build still offers four, not none', () {
+      final f = loadFile('features.json');
+      expect(
+        availableThemes(f),
+        containsAll(<NestTheme>[
+          NestTheme.white,
+          NestTheme.day,
+          NestTheme.afternoon,
+          NestTheme.night,
+        ]),
+      );
+    });
+
+    test('the fallback is a theme the build actually has', () {
+      // Deliberately not the first entry: the first entry is Sun, which is
+      // exactly what is missing in the reduced build, so a first-entry
+      // fallback would return the thing just excluded.
+      final f = loadFile('features.json');
+      expect(availableThemes(f), contains(fallbackTheme(f)));
+      expect(fallbackTheme(f), NestTheme.day);
+    });
+
+    test('the fallback is a no-op on the ef build', () {
+      final f = loadFile('features.ef.json');
+      expect(fallbackTheme(f), NestTheme.day);
+      expect(availableThemes(f), contains(fallbackTheme(f)));
     });
   });
 }

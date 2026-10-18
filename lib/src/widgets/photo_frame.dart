@@ -36,6 +36,27 @@ class PhotoFrameBackground extends StatelessWidget {
   /// [asset] so the swap is a local file read and cannot flicker.
   final File? file;
 
+  /// How much black is laid over the bottom of the photograph, where the clock
+  /// and weather sit.
+  ///
+  /// Was 0.62, which is dark enough that on a real tablet the picture read as
+  /// night even at 07:48 in the morning — the complaint was that the first page
+  /// "is really dark", and it was fair. Dropping it trades some contrast for
+  /// the photograph actually being visible.
+  ///
+  /// The floor is not arbitrary: the clock is 96px of white type on this scrim,
+  /// so this can keep falling only as far as that type keeps its contrast
+  /// against the brightest photograph in the rotation pool. Verified by
+  /// screenshot on a Galaxy Tab A7 Lite, not by reasoning about it.
+  static const double _scrimStrong = 0.42;
+
+  /// Lighter scrim at the midpoint, where the date line sits.
+  static const double _scrimMid = 0.10;
+
+  /// Night dimming. Was 0.28; the frame was going nearly black on top of a
+  /// photograph that was already dimmed at source.
+  static const double _nightDim = 0.16;
+
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
@@ -87,8 +108,8 @@ class PhotoFrameBackground extends StatelessWidget {
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  Colors.black.withValues(alpha: 0.18),
-                  Colors.black.withValues(alpha: 0.62),
+                  Colors.black.withValues(alpha: _scrimMid),
+                  Colors.black.withValues(alpha: _scrimStrong),
                 ],
                 stops: const [0.0, 0.45, 1.0],
               ),
@@ -98,7 +119,7 @@ class PhotoFrameBackground extends StatelessWidget {
           // Night dimming. The real Hub drops the photo's brightness rather
           // than blanking the screen.
           if (palette.isNight)
-            ColoredBox(color: Colors.black.withValues(alpha: 0.28)),
+            ColoredBox(color: Colors.black.withValues(alpha: _nightDim)),
         ],
       ),
     );
