@@ -280,7 +280,7 @@ class AmbientPalette {
     // Ambient light sensor: in a bright room Nest pushes the UI lighter, in a
     // dark room it pushes it darker. `ambientBrightness` is 0 (pitch dark) .. 1.
     p = p.adaptToAmbientLight(ambientBrightness);
-    return p;
+    return p.ensureReadableInk();
   }
 
   /// Resolve the user's choice against the current wall-clock hour.
@@ -332,6 +332,67 @@ class AmbientPalette {
     final hi = math.max(l1, l2);
     final lo = math.min(l1, l2);
     return (hi + 0.05) / (lo + 0.05) >= 4.5;
+  }
+
+  /// Force [hasReadableInk], by walking the ink toward the extreme that
+  /// contrasts with [surface].
+  ///
+  /// Two things can break this on their own, and neither used to care:
+  ///
+  ///  * [lerpPalette] blends each colour independently, so an hour that sits
+  ///    halfway between a light and a dark keyframe can land on a light ink
+  ///    over a light surface.
+  ///  * [adaptToAmbientLight] moves the background toward white or near-black
+  ///    and leaves every ink colour untouched, so the ambient light sensor can
+  ///    slide a dark theme's background past its own text.
+  ///
+  /// Found by looking at a screenshot of the Dynamic theme on a Galaxy Tab A7
+  /// Lite at 07:43: the digest page was unreadable — "Weather", "Music" and
+  /// every body line washed out over the pale peach gradient — while the Day and
+  /// Night themes were both fine. The interpolation was fine; the *result* was
+  /// never checked.
+  ///
+  /// Returns `this` untouched when the contrast already passes, so Day and
+  /// Night are unaffected and only the broken hours change.
+  AmbientPalette ensureReadableInk() {
+    if (hasReadableInk) return this;
+
+    // Ink has to go dark on a light surface and light on a dark one. Keyed off
+    // the surface rather than `isDark`, because that is what the text actually
+    // sits on.
+    final target = surface.computeLuminance() > 0.18
+        ? const Color(0xFF0B1020)
+        : const Color(0xFFF7F9FF);
+
+    var candidate = this;
+    // Bounded loop rather than a solve: eight steps of 0.25 from any onSurface
+    // to either extreme clears 4.5:1, and a loop cannot divide by zero or run
+    // away on a degenerate surface.
+    for (var i = 0; i < 8 && !candidate.hasReadableInk; i++) {
+      candidate = candidate.copyWith(
+        onSurface: Color.lerp(candidate.onSurface, target, 0.25)!,
+        onSurfaceStrong:
+            Color.lerp(candidate.onSurfaceStrong, target, 0.25)!,
+        onSurfaceVariant:
+            Color.lerp(candidate.onSurfaceVariant, target, 0.25)!,
+      );
+    }
+    if (candidate.hasReadableInk) return candidate;
+
+    // Still short, which happens when the ink is *already* at an extreme: four
+    // hours land at 4.42:1 with near-black ink on a mid surface, and no amount
+    // of darkening helps. The lever left is the card fill itself — move the
+    // surface away from the ink. Four samples out of 144, so the fill shifts
+    // only just far enough to clear the threshold.
+    final ink = candidate.onSurface.computeLuminance();
+    final surfaceTarget =
+        ink > 0.5 ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
+    for (var i = 0; i < 4 && !candidate.hasReadableInk; i++) {
+      candidate = candidate.copyWith(
+        surface: Color.lerp(candidate.surface, surfaceTarget, 0.25)!,
+      );
+    }
+    return candidate;
   }
 
   /// The background as vertical stops plus a soft centre bloom, the way the
