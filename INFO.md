@@ -536,9 +536,17 @@ The card distinguishes "permission not granted" from "nothing else today" — th
 first version said "No more events today" in both cases, which claims you have
 a free day when in fact nothing was ever read.
 
-**Weather** is Open-Meteo, no key, degrades offline. It needs a pinned location
-(`--dart-define=NEST_LAT=… --dart-define=NEST_LON=…`), because a runtime
-location prompt is a real cost on a wall-mounted tablet nobody taps again.
+**Weather** is Open-Meteo, no key, degrades offline. It now has a page of its
+own rather than a card, and it works out where it is: the device's own location
+— the network provider first, which on a device with WiFi is derived from the
+access points, GPS second — then a location pinned by hand or at build time,
+then an IP lookup, which is rough and is labelled as approximate. A build-time
+pin still wins over the automatic path, because it was set deliberately.
+
+The result is cached, and the location is only worked out when the page is
+opened rather than at launch: the carousel keeps every page alive, so a page
+that resolved its own location in `initState` would ask for the permission on
+every cold start.
 
 ### The to-do list
 

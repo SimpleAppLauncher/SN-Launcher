@@ -69,7 +69,7 @@ Edit the JSON and rebuild. Nothing else needs touching.
     "themePicker": true,   // Theme card on the digest page
     "calendar": true,      // Calendar card
     "digestPage": true,    // the whole second page
-    "weather": true,       // Weather card
+    "weather": true,       // the weather page
     "settings": true,      // the gear, and the Settings button in the dock
     "quickSettings": true, // the dock row itself
     "sunTheme": true       // "Sun", the theme that follows the time of day

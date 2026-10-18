@@ -78,10 +78,14 @@ lie about it") on devices without the sensor.
 
 ---
 
-## 4. Weather location — BUILD-TIME ONLY
+## 4. Weather location — DONE, mostly
 
-`WeatherService` works and is verified against the live Open-Meteo API, but
-location is pinned at compile time:
+**This was deferred and is now built.** The weather page works out where it is:
+the device's own location (network provider first — on a device with WiFi that
+is derived from the access points — then GPS), then a pinned location, then an
+IP lookup as a permission-free fallback.
+
+The build-time pin still works and still wins:
 
 ```
 --dart-define=NEST_LAT=-33.86 --dart-define=NEST_LON=151.20
