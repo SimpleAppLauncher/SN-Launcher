@@ -83,12 +83,18 @@ repo, and whether Claude had somehow been involved. Most people never check.
 
 You were right to. Two things did happen:
 
-    * commits were authored under an older account of yours, "giathinh".
-      History was rewritten so everything reads Giathinh1234.
+    * commits were authored carrying the name string "giathinh" - which is a
+      real GitHub account belonging to somebody ELSE, not an older account of
+      yours. GitHub credits a commit to whichever account owns the email, so
+      a stranger's account was listed as a contributor to your repo.
+      History was rewritten; all 31 commits now read Giathinh1234 and the
+      contributor list shows nobody else.
     * a Co-Authored-By: Claude trailer was in the first commit. It was not
       harness-injected, it was in the repo, and it was removed.
 
-Neither was anybody else's work. But neither was right either. Keep checking.
+The stranger never pushed here and has no access - only the LABEL on your
+work was wrong. But a wrong label is still wrong, and nobody else is going to
+check it for you. Keep checking.
 
 
 7. TEST BEFORE YOU ADD

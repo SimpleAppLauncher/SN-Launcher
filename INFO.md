@@ -8,17 +8,37 @@ wrong*.
 
 ## 0. The elephant in the room: attribution
 
-**It's me.** `giathinh` and `Giathinh1234` are both my accounts — `giathinh` is
-just the older one. Every commit, the repo, the releases, everything now sits
-under **`Giathinh1234`**, and the git history was rewritten so no commit is
-attributed to anything else.
+**`giathinh` is not my account, and never was.**
 
-It showed up because an agent committed under whatever git identity happened to
-be on the machine, and that was the old account. Nothing about it was a
-stranger's work — it was all mine, filed under the wrong name.
+It is a **real, separate GitHub account** — id `57561631`, created 2019-11-09.
+Mine is `Giathinh1234` — id `125528059`, created 2023-02-16, display name
+"Thinh". Different account ids, different people, and the older one predates
+mine by three years.
 
-And for the record: I have never used Claude Code or any Claude agent on this.
-Whatever put that attribution there was wrong, and it came out.
+What actually happened: commits in this repo were authored carrying the name
+string "giathinh", picked up from whatever the machine's local git identity
+happened to be. GitHub attributes a commit to the account whose email matches
+it, so the repository listed **a stranger's account as a contributor**, and
+every one of its commits was showing up under their name.
+
+**That stranger did nothing.** They never pushed here, never opened a pull
+request, and have no access to the repository. The work was mine; only the
+*label* on it was wrong. The rewrite corrected a label — it did not remove
+anybody's work.
+
+The history was rewritten so every commit reads
+`Giathinh1234 <Giathinh1234@users.noreply.github.com>`. The `v0.1.0` tag object
+was re-created by hand because `filter-branch` copies tag objects verbatim and
+the old one still carried the wrong tagger.
+
+Verified rather than assumed:
+
+| | |
+| --- | --- |
+| Commits in the history | 31 — every one `Giathinh1234 <Giathinh1234@users.noreply.github.com>` |
+| GitHub's contributor list | `Giathinh1234`, 31 commits, and nobody else |
+| `giathinh`'s contributions to this repo | none |
+| Co-author trailers anywhere in the history | none |
 
 | | |
 | --- | --- |
