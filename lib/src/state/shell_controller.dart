@@ -68,7 +68,20 @@ class ShellController extends ChangeNotifier {
         _settings = settings ?? SettingsStore() {
     _palette = AmbientPalette.of(_theme);
 
-    _pageAnim = AnimationController(vsync: vsync, duration: kNestSlow);
+    // UNBOUNDED, and that is load-bearing.
+    //
+    // `AnimationController` defaults to `lowerBound: 0.0, upperBound: 1.0`.
+    // `goToPage` animates to the *index* of the target page, so every page past
+    // index 1 was silently clamped to 1.0: the animation ran, completed, and
+    // reported success while parking the carousel on the digest page. The
+    // weather page (index 2), home control (3) and discover (4) were all
+    // unreachable by swipe or arrow key, with no exception anywhere — the only
+    // symptom was that the page you selected never appeared.
+    //
+    // Bounds would need the page count, which the feature flags change at
+    // runtime, so unbounded is both the smaller fix and the honest one: the
+    // value is a page offset, not a 0..1 progress.
+    _pageAnim = AnimationController.unbounded(vsync: vsync, duration: kNestSlow);
     _sheetAnim = AnimationController(vsync: vsync, duration: kNestMedium);
   }
 
@@ -121,7 +134,7 @@ class ShellController extends ChangeNotifier {
     }
     final storedZoom = _settings.get(SettingKeys.clockZoom);
     if (storedZoom != null) {
-      _zoom = double.tryParse(storedZoom)?.clamp(1.0, 2.0) ?? 1.0;
+      _zoom = double.tryParse(storedZoom)?.clamp(1.0, 1.2) ?? 1.0;
     }
     _recomputePalette(force: true);
     notifyListeners();
@@ -196,7 +209,7 @@ class ShellController extends ChangeNotifier {
   double get zoom => _zoom;
 
   set zoom(double v) {
-    final clamped = v.clamp(1.0, 2.0);
+    final clamped = v.clamp(1.0, 1.2);
     if (_zoom == clamped) return;
     _zoom = clamped;
     unawaited(_settings.put(SettingKeys.clockZoom, '$_zoom'));

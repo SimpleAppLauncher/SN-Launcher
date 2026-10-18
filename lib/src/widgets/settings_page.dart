@@ -266,8 +266,11 @@ class SettingsPage extends StatelessWidget {
           palette: palette,
           value: c.zoom,
           min: 1.0,
-          max: 2.0,
-          divisions: 10,
+          // Past 1.2 the face stops reading as a clock face: the date has to
+          // climb away from it, and the temperature and the weather glyph have
+          // to grow with it, and by then it is just a big number.
+          max: 1.2,
+          divisions: 4,
           // The setter clamps and notifies; the shell's own listener drives
           // the repaint, same as the digest page's pickers.
           onChanged: (v) => c.zoom = v,

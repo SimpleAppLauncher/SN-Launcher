@@ -808,6 +808,77 @@ four-dot Assistant orb, is in [`docs/DEFERRED.md`](docs/DEFERRED.md).
 
 ---
 
+## 15a. The carousel could only reach page 1
+
+The longest-running bug in this project, and the cheapest fix in it: one word.
+
+```dart
+// before
+_pageAnim = AnimationController(vsync: vsync, duration: kNestSlow);
+// after
+_pageAnim = AnimationController.unbounded(vsync: vsync, duration: kNestSlow);
+```
+
+`AnimationController` defaults to `lowerBound: 0.0, upperBound: 1.0`.
+`goToPage` calls `_pageAnim.animateTo(index.toDouble())` where `index` is the
+target page's position in `availablePages`. So `animateTo(2.0)` was **clamped
+to 1.0**.
+
+Nothing reported an error. The animation ran, eased, and finished with
+`AnimationStatus.completed` at 1.0. The carousel slid one page and stopped
+there, whatever was asked for.
+
+What this meant in practice: with the ef page list of
+`[home, digest, weather, homeControl, discover]`, **only `home` and `digest`
+were reachable**. The weather page, home control and discover could not be
+navigated to by swipe, by arrow key, or by "See all" in the launcher sheet —
+all three routes call `goToPage`. The launcher opened; the selected page was
+correct; the picture on the glass was the digest page.
+
+### Why it survived two releases
+
+Every test that existed asserted on `controller.page`. The page *was* the
+right page — `_page` is assigned before the animation is asked for, so it was
+always correct. Nothing asserted on the thing the carousel actually renders
+from, which is `pageAnim.value`. A test written against the state variable
+rather than the rendered output is a test of the bookkeeping.
+
+It also survived two attempts at instrumentation on the device. A temporary
+debug print was added, it showed `value=1.0`, and the natural reading was
+"the ticker is not ticking". The ticker was ticking. It ticked, it eased, it
+completed, at the wrong value.
+
+The thing that actually found it was a widget test that navigated *after* the
+first frame and asked whether the page was `hitTestable` — because a `PageView`
+keeps its neighbours alive, so a page that is built but scrolled off screen is
+still findable by `findsOneWidget`. "In the tree" and "on the glass" are
+different questions, and this bug lived entirely in the gap between them.
+
+### The test that now guards it
+
+```dart
+for (var i = 0; i < pages.length; i++) {
+  c.goToPage(pages[i]);
+  await tester.pumpAndSettle();
+  expect(c.pageAnim.value, i.toDouble());   // not c.page
+}
+```
+
+Asserting on `pageAnim.value` rather than `page` is the entire difference.
+Verified by reverting the fix: the test fails with
+`weather is page 2 but the carousel parked at 1.0 — it clamped`.
+
+### Why unbounded rather than setting `upperBound`
+
+The bounds would need the page count, and the page count is a runtime
+property of the feature flags — 5 pages in the ef build, 3 in the reduced one,
+and different again if `weather` or `digest` is switched off. Mutating
+`upperBound` on a controller that is mid-animation is an assertion failure.
+The value is a page offset, not a 0-to-1 progress, so unbounded is both the
+smaller change and the more honest description of what the number means.
+
+---
+
 ## 16. How this was built
 
 See [`docs/MODELS.md`](docs/MODELS.md) for model routing and the per-file

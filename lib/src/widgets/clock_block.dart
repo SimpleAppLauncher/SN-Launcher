@@ -77,6 +77,22 @@ class ClockBlock extends StatelessWidget {
     final timeText =
         ClockService.time(now, use24Hour: use24Hour, withSeconds: showSeconds);
 
+    // The clock's cap height at zoom 1, in design pixels. Measured: 61px.
+    //
+    // Used to work out how much taller the clock gets, and therefore how far
+    // the date line has to move up to stay clear of it. The date is positioned
+    // independently of the clock so each can be calibrated against the device
+    // without the other's metrics moving it — which means growing the clock
+    // has to move the date explicitly, or the two collide.
+    const capHeight = 61.0;
+    final grew = metrics.px(capHeight * (zoom - 1.0));
+
+    // The temperature reads as part of the clock, so it grows with it. At 1.0
+    // this is exactly the measured style, so zoom 1 is untouched.
+    TextStyle tempStyle(Color c) => type.temperature(color: c).copyWith(
+          fontSize: type.temperature(color: c).fontSize! * zoom,
+        );
+
     // Wrap the whole block so the once-a-minute clock tick repaints only this
     // subtree instead of the entire screen.
     return RepaintBoundary(
@@ -88,7 +104,11 @@ class ClockBlock extends StatelessWidget {
           // without the other's metrics moving it.
           Positioned(
             left: metrics.marginX,
-            bottom: metrics.size.height - metrics.px(NestMetrics.dateTextBoxBottomY),
+            // Lifted by however much taller the clock got, so the gap between
+            // the date and the clock stays what it was measured as.
+            bottom: metrics.size.height -
+                metrics.px(NestMetrics.dateTextBoxBottomY) -
+                grew,
             child: Text(ClockService.nestDate(now), style: type.date(color: color)),
           ),
 
@@ -135,13 +155,19 @@ class ClockBlock extends StatelessWidget {
                   condition: weather.condition,
                   color: color,
                   animate: animateWeather,
+                  // Scales with the clock. A big clock next to a small glyph
+                  // and a small temperature looked like three separate
+                  // accidents rather than one clock.
                   size: Size(
-                    metrics.px(NestMetrics.weatherIconW),
-                    metrics.px(NestMetrics.weatherIconH * 2.0),
+                    metrics.px(NestMetrics.weatherIconW) * zoom,
+                    metrics.px(NestMetrics.weatherIconH * 2.0) * zoom,
                   ),
                 ),
                 SizedBox(width: metrics.px(NestMetrics.weatherToTempGap)),
-                Text(weather.shortLabel, style: type.temperature(color: color)),
+                Text(
+                  weather.shortLabel,
+                  style: tempStyle(color),
+                ),
               ],
             ),
           ),

@@ -1,6 +1,6 @@
 # SN-Launcher
 
-**v0.1.2** · [Download](#download) · [INFO.md](INFO.md) for the technical record
+**v0.1.3** · [Download](#download) · [INFO.md](INFO.md) for the technical record
 
 A Google Nest Hub style launcher for **Android**, for putting an old tablet on
 a wall and having it look like a smart display.

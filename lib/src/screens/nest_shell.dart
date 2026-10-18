@@ -1003,8 +1003,13 @@ class _DigestPage extends StatelessWidget {
               ],
             ),
             SizedBox(height: m.px(8)),
+            // "Can be blocked", not "blocked". The filter is installed when
+            // the player opens and the page confirms it; this card is shown
+            // before that has happened, and a card that claims a thing has
+            // already happened is the exact thing this project keeps refusing
+            // to do.
             Text(
-              'YouTube: blocked\nSpotify: not blocked',
+              'YouTube: ads blocked\nSpotify: not blocked',
               style: type.caption(color: palette.onSurfaceVariant),
             ),
           ],

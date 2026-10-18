@@ -15,6 +15,7 @@ import 'package:sn_launcher/src/theme/ambient_palette.dart';
 import 'package:sn_launcher/src/theme/nest_icons.dart';
 import 'package:sn_launcher/src/theme/nest_metrics.dart';
 import 'package:sn_launcher/src/widgets/assistant_lightbar.dart';
+import 'package:sn_launcher/src/widgets/weather_page.dart';
 
 /// The point of these: [feature_flags_test.dart] proves the *config files* are
 /// right, which is not the same thing as proving the *GUI* honours them. A flag
@@ -143,6 +144,68 @@ void main() {
     FeatureFlags.forTesting = reduced;
   });
 
+
+
+  group('the weather page', () {
+    testWidgets('renders the current weather', (tester) async {
+      // The page was selected correctly but never rendered. This test says
+      // whether the page content itself works, so the fault can be pinned to
+      // the page or to the carousel.
+      FeatureFlags.forTesting = ef;
+      final shell = await _pump(tester, page: ShellPage.home);
+      // Navigate *after* the shell is up, the way a swipe does. Going to the
+      // page before the first frame hid the fault: a ticker that has not
+      // started yet will happily jump to its target, and one that is already
+      // running is the case that never worked.
+      shell.controller.goToPage(ShellPage.weather);
+      await tester.pumpAndSettle();
+      // hitTestable, not just "in the tree": a PageView keeps its neighbours
+      // alive, so a page that is built but scrolled off is still findable.
+      expect(find.byType(WeatherPage).hitTestable(), findsOneWidget);
+    });
+
+    testWidgets('is absent in the reduced build', (tester) async {
+      FeatureFlags.forTesting = reduced;
+      await _pump(tester, page: ShellPage.weather);
+      expect(find.byType(WeatherPage), findsNothing,
+          reason: 'the weather page is ef-only');
+    });
+  });
+
+
+  group('every page is reachable', () {
+    // The bug this exists for: the carousel animation clamped at 1.0, so page
+    // index 2 onwards was selected correctly and then never shown. Asserting
+    // on `controller.page` cannot catch that — the page really was selected.
+    // The thing that has to hold is the thing the carousel renders from.
+    testWidgets('the animation lands on every page', (tester) async {
+      FeatureFlags.forTesting = ef;
+      final c = await _pump(tester, page: ShellPage.home);
+      final pages = c.controller.availablePages;
+      expect(pages.length, greaterThan(2),
+          reason: 'a carousel test over one page proves nothing');
+
+      for (var i = 0; i < pages.length; i++) {
+        c.controller.goToPage(pages[i]);
+        await tester.pumpAndSettle();
+        expect(c.controller.page, pages[i]);
+        expect(c.controller.pageAnim.value, i.toDouble(),
+            reason: '${pages[i].name} is page $i but the carousel parked at '
+                '${c.controller.pageAnim.value} — it clamped');
+      }
+    });
+
+    testWidgets('and back down again', (tester) async {
+      FeatureFlags.forTesting = ef;
+      final c = await _pump(tester, page: ShellPage.home);
+      final pages = c.controller.availablePages;
+      for (var i = pages.length - 1; i >= 0; i--) {
+        c.controller.goToPage(pages[i]);
+        await tester.pumpAndSettle();
+        expect(c.controller.pageAnim.value, i.toDouble());
+      }
+    });
+  });
 
   group('the carousel gesture', () {
     // The shell accumulated the drag distance itself — `DragEndDetails` has the

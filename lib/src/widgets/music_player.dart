@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -81,6 +83,11 @@ class MusicPlayer extends StatefulWidget {
 
 class _MusicPlayerState extends State<MusicPlayer> {
   WebViewController? _controller;
+
+  /// Whether the page-side filter actually installed.
+  ///
+  /// Set from the script's own return value, not assumed.
+  bool _filterInstalled = false;
 
   /// 0–100 from the platform, or -1 before the first callback.
   int _progress = -1;
@@ -221,14 +228,28 @@ class _MusicPlayerState extends State<MusicPlayer> {
   /// entirely wrapped in try/catch: a filter that throws must never be able
   /// to break the page it is filtering.
   void _injectCosmeticFilter() {
-    _controller?.runJavaScript(_cosmeticFilterJs).catchError((Object e) {
-      debugPrint('MusicPlayer: cosmetic filter injection failed: $e');
+    _controller?.runJavaScript(_filterJs).then((Object? result) {
+      // The page reports whether it actually installed the filter. Without
+      // that, "ads blocked" is a claim about a list of domains that nothing
+      // ever consulted.
+      final installed = result == true;
+      if (installed != _filterInstalled && mounted) {
+        setState(() => _filterInstalled = installed);
+      }
+    }).catchError((Object e) {
+      debugPrint('MusicPlayer: filter injection failed: $e');
       return null;
     });
   }
 
+  /// Whether ads are actually being blocked.
+  ///
+  /// Both conditions have to hold: the site has to be one where blocking is
+  /// possible at all, and the filter has to have actually installed. Before,
+  /// this was decided by the URL alone, so the player claimed to be blocking
+  /// ads before it had blocked anything.
   bool get _effectiveCanBlockAds =>
-      widget.canBlockAds ?? _canBlockAdsForHost(widget.url);
+      _filterInstalled && (widget.canBlockAds ?? _canBlockAdsForHost(widget.url));
 
   /// YouTube serves its ads as real requests from real ad domains, so the
   /// URL filter reaches them. Everything else is false: claiming otherwise
@@ -440,11 +461,111 @@ class _ErrorCard extends StatelessWidget {
 /// Cosmetic-filter payload. Runs inside the page, so it is plain ES5-flavoured
 /// JS with every operation guarded: this script may only ever remove ad nodes
 /// and stub one global, never throw into the host page.
-const String _cosmeticFilterJs = r'''
+/// The filter, with the blocklist baked in.
+///
+/// The list lives in [kBlockedHostSuffixes] so it is testable in Dart, and it
+/// is injected into the page as JSON so the page-side filter and the Dart side
+/// agree on exactly one list. Two lists is how "blocked" and "not blocked"
+/// end up disagreeing.
+///
+/// **This is the part that was missing.** The blocklist existed, was tested,
+/// and was never consulted by anything: there was no request interception at
+/// all, only a DOM sweep that removed the ad boxes after they had already been
+/// fetched. The page-side filter below blocks the ad *requests* — which is
+/// what stops the ad being fetched in the first place.
+///
+/// `webview_flutter` 4.x does not expose `shouldInterceptRequest`, so a
+/// native interceptor is not available without writing a platform view. Doing
+/// it in the page is the difference between "the ad was fetched and then
+/// hidden" and "the ad was never fetched".
+String get _filterJs => '''
 (function () {
   try {
-    if (window.__snLauncherFilter) return;
+    if (window.__snLauncherFilter) {
+      return window.__snLauncherFilterInstalled === true;
+    }
     window.__snLauncherFilter = true;
+
+    var HOSTS = ${jsonEncode(kBlockedHostSuffixes)};
+
+    function blocked(url) {
+      try {
+        var host = String(url).toLowerCase();
+        var m = host.match(/^https?:\\/\\/([^\\/]+)/);
+        if (m) host = m[1];
+        else {
+          var p2 = host.indexOf('//');
+          if (p2 >= 0) {
+            host = host.substring(p2 + 2);
+            var slash = host.indexOf('/');
+            if (slash >= 0) host = host.substring(0, slash);
+          }
+        }
+        host = host.split(':')[0];
+        if (!host) return false;
+        for (var i = 0; i < HOSTS.length; i++) {
+          var sfx = HOSTS[i];
+          if (host === sfx || host.endsWith('.' + sfx)) return true;
+        }
+        return false;
+      } catch (e) { return false; }
+    }
+
+    // fetch
+    try {
+      var origFetch = window.fetch;
+      if (origFetch && !origFetch.__snPatched) {
+        var patchedFetch = function (input, init) {
+          var url = (typeof input === 'string') ? input : (input && input.url);
+          if (blocked(url)) {
+            return Promise.reject(new TypeError('Network request blocked'));
+          }
+          return origFetch.apply(this, arguments);
+        };
+        patchedFetch.__snPatched = true;
+        window.fetch = patchedFetch;
+      }
+    } catch (e) {}
+
+    // XMLHttpRequest
+    try {
+      var XHR = window.XMLHttpRequest;
+      if (XHR && XHR.prototype && !XHR.prototype.open.__snPatched) {
+        var origOpen = XHR.prototype.open;
+        var patchedOpen = function (method, url) {
+          this.__snUrl = url;
+          return origOpen.apply(this, arguments);
+        };
+        patchedOpen.__snPatched = true;
+        XHR.prototype.open = patchedOpen;
+
+        var origSend = XHR.prototype.send;
+        XHR.prototype.send = function () {
+          if (blocked(this.__snUrl)) {
+            try {
+              Object.defineProperty(this, 'readyState',
+                {value: 4, configurable: true});
+            } catch (e) {}
+            try { this.dispatchEvent(new Event('error')); } catch (e) {}
+            return;
+          }
+          return origSend.apply(this, arguments);
+        };
+      }
+    } catch (e) {}
+
+    // sendBeacon - a lot of ad reporting goes through it.
+    try {
+      if (navigator.sendBeacon && !navigator.sendBeacon.__snPatched) {
+        var origBeacon = navigator.sendBeacon.bind(navigator);
+        var patchedBeacon = function (url) {
+          if (blocked(url)) return false;
+          return origBeacon(url);
+        };
+        patchedBeacon.__snPatched = true;
+        navigator.sendBeacon = patchedBeacon;
+      }
+    } catch (e) {}
 
     var SELECTORS = [
       'ins.adsbygoogle',
@@ -503,6 +624,11 @@ const String _cosmeticFilterJs = r'''
         document.addEventListener('DOMContentLoaded', sweep);
       }
     } catch (e) {}
-  } catch (e) {}
+
+    window.__snLauncherFilterInstalled = true;
+    return true;
+  } catch (e) {
+    return false;
+  }
 })();
 ''';

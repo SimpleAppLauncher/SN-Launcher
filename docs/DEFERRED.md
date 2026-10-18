@@ -78,9 +78,26 @@ lie about it") on devices without the sensor.
 
 ---
 
-## 4. Weather location — DONE, mostly
+## 4. Weather location — DONE, but it shipped broken first
 
-**This was deferred and is now built.** The weather page works out where it is:
+**This was deferred, then built, then shipped without working, then fixed.**
+The record matters more than the ending here: between v0.1.2 and v0.1.3 this
+section said "DONE" about a page that could not be reached.
+
+The location logic was fine the whole time. The fault was one line of carousel
+code: `AnimationController` defaults to `upperBound: 1.0`, and `goToPage`
+animates to the target page's *index*, so every page past index 1 was clamped
+to 1.0. `animateTo` returned normally, reported `AnimationStatus.completed`,
+raised nothing, and left the carousel parked on the digest page. The weather
+page, home control and discover were all unreachable — by swipe, by arrow key
+and by the launcher sheet. Only `controller.page` was ever checked, and that
+did say the right page, which is why it read as "the page is selected but not
+drawn".
+
+Fixed in v0.1.3 by making the controller unbounded. See "The carousel could
+only reach page 1" in `INFO.md`.
+
+The page works out where it is:
 the device's own location (network provider first — on a device with WiFi that
 is derived from the access points — then GPS), then a pinned location, then an
 IP lookup as a permission-free fallback.
