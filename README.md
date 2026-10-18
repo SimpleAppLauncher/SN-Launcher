@@ -104,8 +104,16 @@ thing as working — the microphone path has never heard a microphone.
 
 ## Credits
 
-Written by **Giathinh1234**. Built in Flutter — the same stack Google used for
-the real Nest Hub, which is what makes matching it realistic at all.
+Written by **Giathinh1234**, and built with **[OpenCode](https://opencode.ai)** —
+not Claude Code, and no part of it came from Anthropic. There is no
+`Co-Authored-By: Claude` trailer anywhere in the history, and GitHub's
+contributor list for this repository contains exactly one account. The
+OpenCode references in [`docs/MODELS.md`](docs/MODELS.md) and
+[`tool/chatlog.py`](tool/chatlog.py) are deliberate, so the tool is
+unambiguous without anyone having to guess.
+
+Built in Flutter — the same stack Google used for the real Nest Hub, which is
+what makes matching it realistic at all.
 
 * **Google Sans** (SIL OFL 1.1), bundled genuinely rather than approximated.
   This is the single biggest reason the clock reads as "Google".

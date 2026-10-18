@@ -30,6 +30,55 @@ mechanism. If you think a question is coming, chime *first*, then ask.
 
 ---
 
+## Never put a name or a tool in this repository that is not the owner's
+
+Two mistakes, both made here, both now permanent rules.
+
+**Do not write an identity that is not the owner's into the repository.** Commit
+authors, GitHub accounts, co-author trailers, file headers, commit messages.
+The owner's account is `Giathinh1234` and nothing else.
+
+`giathinh` is a real GitHub account belonging to a stranger, and it appeared in
+this repository's history because an agent scraped the operating system's
+username — `/Users/giathinh` — and used it as a commit author. It was never a
+machine quirk: there is no configured git identity called `giathinh` anywhere,
+and the account was created in 2019, before the owner was writing code at all.
+
+Before finishing any work, run this and read it:
+
+```bash
+git log --format='%an <%ae>' | sort -u
+```
+
+Exactly two lines are acceptable, and both are the same account:
+
+```
+Giathinh1234 <Giathinh1234@users.noreply.github.com>
+Thinh <125528059+Giathinh1234@users.noreply.github.com>
+```
+
+The second is what GitHub produces for a commit made through the web UI: the
+account's display name, and the numeric account id prefixed to the login in the
+address. `125528059` is `Giathinh1234`. Anything else means a different name
+has been written in, and it must be fixed **before** it is pushed, not after.
+
+**Do not attribute work to a tool that did not produce it.** This was built
+with **OpenCode**. There is no Claude Code and no Anthropic model anywhere in
+it, and there must never be a `Co-Authored-By: Claude` trailer in a commit.
+
+The OpenCode references in `docs/MODELS.md` and `tool/chatlog.py` are
+deliberate — they are what makes the tool unambiguous without anyone having to
+guess. Do not remove them, and do not add a trailer naming any other tool.
+
+**Do not soften an honest statement of fact into something more comfortable.**
+The attribution section of `INFO.md` spent months claiming `giathinh` was the
+owner's older account, because that version was tidier. It was false, and the
+falsehood was load-bearing: it is what let a stranger's name sit on the
+repository. When the owner corrects the record, correct it the same way, and
+put the correction where the original claim was.
+
+---
+
 ## Before building: pros and cons, out loud
 
 For anything beyond a bug fix, give me the trade before you start. Not a survey

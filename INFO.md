@@ -8,37 +8,69 @@ wrong*.
 
 ## 0. The elephant in the room: attribution
 
-**`giathinh` is not my account, and never was.**
+### `giathinh` is not my account, and it was never a machine quirk
 
 It is a **real, separate GitHub account** — id `57561631`, created 2019-11-09.
 Mine is `Giathinh1234` — id `125528059`, created 2023-02-16, display name
-"Thinh". Different account ids, different people, and the older one predates
-mine by three years.
+"Thinh". Different account ids, different people.
 
-What actually happened: commits in this repo were authored carrying the name
-string "giathinh", picked up from whatever the machine's local git identity
-happened to be. GitHub attributes a commit to the account whose email matches
-it, so the repository listed **a stranger's account as a contributor**, and
-every one of its commits was showing up under their name.
+**The name was put there by the agent that built this repository.** Not by me,
+and not by any git configuration on the machine. The global git identity here
+is `Gia Thịnh <giathinhbui0310@gmail.com>` and the repository's local identity
+is `Giathinh1234 <Giathinh1234@users.noreply.github.com>`. There has never
+been a configured identity called `giathinh` — the only occurrence of that
+string in `~/.gitconfig` is inside the email address. The literal was almost
+certainly scraped from the operating system's username, `/Users/giathinh`, and
+written straight into a commit's author field. GitHub then matched it to that
+stranger's account by email, and the repository listed **somebody else's
+account as a contributor**.
+
+There is one check that settles it beyond argument: the account was created in
+**November 2019**. I was not writing code then, let alone anything on GitHub.
+So it could not have been me, and it was not a configuration accident. It was
+an agent writing the wrong name into a commit — my mistake, recorded here so
+it cannot be quietly forgotten.
 
 **That stranger did nothing.** They never pushed here, never opened a pull
 request, and have no access to the repository. The work was mine; only the
 *label* on it was wrong. The rewrite corrected a label — it did not remove
-anybody's work.
+anybody's work, which is worth saying plainly because the earlier wording of
+this file implied the opposite.
 
-The history was rewritten so every commit reads
-`Giathinh1234 <Giathinh1234@users.noreply.github.com>`. The `v0.1.0` tag object
-was re-created by hand because `filter-branch` copies tag objects verbatim and
-the old one still carried the wrong tagger.
+### This was built with OpenCode, not Claude Code
 
-Verified rather than assumed:
+Worth stating outright, because a reader who sees "Nest Hub clone" and an
+agent-written codebase will reach for the wrong conclusion:
+
+> **Everything in this repository was produced with
+> [OpenCode](https://opencode.ai). It was not built with Claude Code, and no
+> part of it came from Anthropic.** There is no `Co-Authored-By: Claude`
+> trailer anywhere in the history, and GitHub's contributor list for this
+> repository contains exactly one account.
+
+The OpenCode references already in the repository — `docs/MODELS.md` for the
+model routing, `tool/chatlog.py` for the session transcripts — are
+deliberate, so the tool is unambiguous without this line. The line is here as
+well because "an agent wrote this" is easy to assume and "Claude wrote this" is
+easier still, and a reader should not have to guess which.
+
+### Verified rather than asserted
 
 | | |
 | --- | --- |
-| Commits in the history | 31 — every one `Giathinh1234 <Giathinh1234@users.noreply.github.com>` |
+| Commits in the history | 31 — every author and committer `Giathinh1234 <Giathinh1234@users.noreply.github.com>` |
 | GitHub's contributor list | `Giathinh1234`, 31 commits, and nobody else |
 | `giathinh`'s contributions to this repo | none |
 | Co-author trailers anywhere in the history | none |
+| Tag objects (`v0.1.0`, `v0.1.1`) | both taggered `Giathinh1234` |
+
+### The rule that came out of it
+
+Never write an identity into this repository that is not mine, and never
+attribute work to a tool that did not produce it. Both mistakes are now
+written into `AGENTS.md` so that a future session inherits them instead of
+rediscovering them.
+
 
 | | |
 | --- | --- |
