@@ -6,6 +6,8 @@ import 'package:sn_launcher/src/screens/nest_shell.dart';
 import 'package:sn_launcher/src/services/assistant_service.dart';
 import 'package:sn_launcher/src/services/clock_service.dart';
 import 'package:sn_launcher/src/services/feature_flags.dart';
+import 'package:sn_launcher/src/services/settings_store.dart';
+import 'package:sn_launcher/src/services/todo_service.dart';
 import 'package:sn_launcher/src/services/weather_service.dart';
 import 'package:sn_launcher/src/state/shell_controller.dart';
 import 'package:sn_launcher/src/theme/ambient_palette.dart';
@@ -37,6 +39,7 @@ class _Harness extends StatefulWidget {
     required this.clock,
     required this.weather,
     required this.assistant,
+    required this.todo,
   });
 
   final ShellController controller;
@@ -47,6 +50,10 @@ class _Harness extends StatefulWidget {
   /// `assist != null`, so passing null here would make "absent in the reduced
   /// build" pass for entirely the wrong reason.
   final AssistantService assistant;
+
+  /// Same reasoning. The to-do card is only rendered when the service is
+  /// present, so a harness without one would quietly not render it.
+  final TodoService todo;
 
   @override
   State<_Harness> createState() => _HarnessState();
@@ -59,6 +66,7 @@ class _HarnessState extends State<_Harness> with TickerProviderStateMixin {
     widget.clock.dispose();
     widget.weather.dispose();
     widget.assistant.dispose();
+    widget.todo.dispose();
     super.dispose();
   }
 
@@ -73,6 +81,7 @@ class _HarnessState extends State<_Harness> with TickerProviderStateMixin {
         clock: widget.clock,
         weather: widget.weather,
         assistant: widget.assistant,
+        todo: widget.todo,
         animateDecorations: false,
       ),
     ),
@@ -88,6 +97,12 @@ Future<_Harness> _pump(
   // Constructed but never asked to listen: constructing touches no platform
   // channel, and _startListening is never invoked in these tests.
   final assistant = AssistantService();
+  // A real service, backed by a throwaway file. If the shell is handed a null
+  // service the to-do card is silently not rendered, and a test that does not
+  // supply one proves nothing about the card being there.
+  final todo = TodoService(SettingsStore(
+    fallbackPath: '${Directory.systemTemp.path}/sn_gate_test.json',
+  ));
   final controller = ShellController(
     metrics: NestMetrics.forSize(_size),
     vsync: tester,
@@ -103,6 +118,7 @@ Future<_Harness> _pump(
       clock: clock,
       weather: weather,
       assistant: assistant,
+      todo: todo,
     ),
   );
   await tester.pump();
@@ -112,6 +128,7 @@ Future<_Harness> _pump(
     clock: clock,
     weather: weather,
     assistant: assistant,
+    todo: todo,
   );
 }
 

@@ -96,6 +96,11 @@ class _NestLauncherAppState extends State<NestLauncherApp>
       if (FeatureFlags.current.isOn('calendar')) {
         unawaited(_calendar.start());
       }
+      // The to-do list is a disk read behind the same settings store the
+      // theme came from. Also off the critical path, for the same reason.
+      if (FeatureFlags.current.isOn('todo')) {
+        unawaited(_todo.load());
+      }
       // Never on the critical path: the bundled photograph is already on
       // screen, and this only upgrades it later.
       if (FeatureFlags.current.isOn('photoRotation')) {
@@ -201,6 +206,7 @@ class _NestLauncherAppState extends State<NestLauncherApp>
               calendar: _calendar,
               photos: _photos,
               assistant: _assistant,
+              todo: _todo,
             ),
             if (FrameStats.enabled) PerfOverlay(stats: _frameStats),
           ],
