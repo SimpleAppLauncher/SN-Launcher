@@ -84,3 +84,7 @@ scratch/
 tmp/
 *.bak.msym-cache/
 .photo-cache.jpg
+
+# Release artefacts. Built by tool/build_variants.sh and attached to the
+# GitHub release rather than committed - they are large and reproducible.
+dist/

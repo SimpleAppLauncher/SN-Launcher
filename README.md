@@ -1,14 +1,50 @@
 # SN-Launcher
 
-**v0.1.0**
+**v0.1.1**
 
-A Google Nest Hub style launcher that runs on **Android** and **Unix/Linux/macOS**
-desktops from a single Flutter codebase, built to look like the real device and
-to stay smooth on e-waste hardware.
+A Google Nest Hub style launcher for **Android**, built to look like the real
+device and to stay smooth on e-waste hardware. Written in Flutter, the same
+stack Google used for the real thing.
 
 > The real Nest Hub UI is itself written in Flutter ("Dragonglass", shipped on
 > both Cast OS and Fuchsia), so this is the same technology stack Google chose —
 > which is what makes matching its rendering and animation behaviour realistic.
+
+---
+
+## Download
+
+Grab it from **[releases](../../releases/latest)**. Android only.
+
+| File | Size | For |
+|---|---|---|
+| **`SN-Launcher-0.1.1.apk`** | 32 MB | **Start here.** Works on any phone or tablet from roughly 2014 onward. |
+| `SN-Launcher-0.1.1-arm64.apk` | 18 MB | Smaller. Nearly all modern tablets. |
+| `SN-Launcher-0.1.1-armv7.apk` | 16 MB | Smaller. Older budget tablets. |
+| `SN-Launcher-0.1.1-x86_64.apk` | 20 MB | Chromebooks, emulators. |
+| `SN-Launcher-0.1.1-beta-arm64.apk` | 18 MB | The beta. Everything on. |
+
+Install it: copy the `.apk` to the device and tap it, with **Install unknown
+apps** allowed for whatever opened it. Or over USB:
+
+```bash
+adb install -r SN-Launcher-0.1.1.apk
+```
+
+### Two things to know before you install
+
+**It is signed with a debug key.** Android allows sideloading a debug-signed APK,
+so it installs fine — but this is not a Play Store build, and there is no release
+keystore in the repository. The key that signed this file lives on one machine.
+If a later build is signed with a different key, Android refuses to install it
+over the top, and you have to uninstall first (which loses the settings). Treat
+each release as a fresh install unless I say otherwise.
+
+**What "reduced" means.** The default build is a launcher: the app row, a
+calendar on page two, brightness and volume, and a settings page. The Sun
+theme, the assistant, the music player, rotating photos and the weather card
+are beta features and are not in it. The beta APK is a *separate app* with its
+own icon, so you can run both at once and compare.
 
 ---
 
@@ -544,6 +580,12 @@ found"*; the bundle format already does per-ABI delivery. Flutter implements
 Flutter cannot build a desktop target for a foreign host, so these two have to
 be built where they will run. `build_all.sh` detects that and says so rather
 than failing.
+
+> **These are not part of any release.** Android is the only shipped target —
+> desktop and Raspberry Pi were deliberately set aside. The runners are still in
+> the tree and the Dart side is platform-clean, so this section is how to build
+> them if you want to, but nothing here has been run on desktop hardware and
+> nothing is tested.
 
 **Linux** needs the GTK toolchain:
 
