@@ -94,3 +94,22 @@ fallback is a privacy decision that has not been made yet.
 `SettingsStore` is already in place, so persisting a chosen location is small —
 the missing piece is the UI and the decision about how the first location is
 acquired.
+
+---
+
+## 5. Built, but never run against real hardware
+
+Not deferred — these are **finished and shipped in the beta build**, and that
+is the problem. They are listed here because a future session picking this up
+should know exactly which parts of the project have never touched a physical
+device, which is not the same as "works".
+
+| | State |
+| --- | --- |
+| **The assistant's microphone path** | `SpeechRecognizer` capture, `TextToSpeech` output, and the local-intent routing are implemented and unit-tested. No microphone has ever been pointed at them. The largest untested surface in the project. |
+| **The music WebView** | Lazy construction, the URL filter and the DOM scrubber are implemented and the blocking logic is tested. No page has ever rendered. |
+| **The settings page** | Exercised by widget tests at 1024x600 and 1280x800, never screenshotted on a device. |
+| **The gesture layer** | Fixed against real hardware, but a scripted swipe still completes as a full drag to the app grid on a Samsung device, so a normal-length swipe skipping the sheet is **unresolved** and needs a hand. |
+
+The full accounting of what is and is not verified is in
+[`../INFO.md`](../INFO.md) §14 and §15.
