@@ -121,6 +121,16 @@ abstract final class SettingKeys {
   /// per item, so a list of any length is still one write.
   static const todo = 'todo';
 
+  /// Whether the big clock shows seconds.
+  static const showSeconds = 'showSeconds';
+
+  /// The clock face size, as a multiplier. 1.0 is the measured size.
+  static const clockZoom = 'clockZoom';
+
+  /// Where the device turned out to be, resolved automatically. Cached so the
+  /// launcher does not ask the platform for a fix on every launch.
+  static const resolvedPlace = 'resolvedPlace';
+
   // ── Assistant ──────────────────────────────────────────────────────────────
   // Where the assistant sends hard requests. Kept as a name, not an enum, so a
   // value written by a newer build is not silently discarded by an older one.

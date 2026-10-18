@@ -6,8 +6,13 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.media.AudioManager
 import android.net.Uri
+import android.os.Bundle
+import android.os.Looper
 import android.provider.CalendarContract
 import android.provider.MediaStore
 import android.provider.Settings
@@ -16,6 +21,7 @@ import androidx.core.app.ActivityCompat
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 
 /** Provides the Android capabilities that the launcher shell exposes to Flutter. */
@@ -38,6 +44,7 @@ class PlatformBridge(private val activity: Activity) : MethodChannel.MethodCallH
             "hasCamera" -> hasCamera(result)
             "openCamera" -> openCamera(result)
             "requestPermission" -> requestPermission(call, result)
+            "getLocation" -> getLocation(result)
             "upcomingEvents" -> upcomingEvents(call, result)
             "openUrl" -> openUrl(call, result)
             "mediaKey" -> mediaKey(call, result)
@@ -163,10 +170,126 @@ class PlatformBridge(private val activity: Activity) : MethodChannel.MethodCallH
         }
     }
 
+    /**
+     * The device's own location.
+     *
+     * The network provider first, then GPS. On a device with WiFi the network
+     * provider is derived from the access points, which is what a wall-mounted
+     * tablet actually wants: fast, indoor-friendly, and it does not need a view
+     * of the sky. GPS is the fallback for when there is no WiFi to work from.
+     *
+     * A last known fix is preferred over a fresh request — it is instant, and
+     * on a device that has moved in the last half hour it is as good as a new
+     * one for weather. With no usable last known fix, a single fresh update is
+     * requested, with a timeout so the caller is never left waiting.
+     */
+    private fun getLocation(result: MethodChannel.Result) {
+        try {
+            if (ActivityCompat.checkSelfPermission(
+                    activity, Manifest.permission.ACCESS_COARSE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                result.success(mapOf("ok" to false, "reason" to "permission"))
+                return
+            }
+            val manager =
+                activity.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            if (manager == null) {
+                result.success(mapOf("ok" to false, "reason" to "no_service"))
+                return
+            }
+
+            val fresh = lastKnown(manager)
+            if (fresh != null && System.currentTimeMillis() - fresh.time < STALE_LOCATION_MS) {
+                result.success(locationPayload(fresh, "cached"))
+                return
+            }
+
+            // No usable last known fix: ask for one, and give up after a while
+            // rather than leaving the caller waiting.
+            val answered = AtomicBoolean(false)
+            val listener = object : LocationListener {
+                override fun onLocationChanged(location: Location) {
+                    if (answered.compareAndSet(false, true)) {
+                        try {
+                            manager.removeUpdates(this)
+                        } catch (_: Exception) {
+                        }
+                        result.success(locationPayload(location, "fresh"))
+                    }
+                }
+
+                override fun onProviderEnabled(provider: String) {
+                }
+
+                override fun onProviderDisabled(provider: String) {
+                }
+            }
+
+            var requested = false
+            for (provider in listOf(
+                    LocationManager.NETWORK_PROVIDER,
+                    LocationManager.GPS_PROVIDER
+                )
+            ) {
+                try {
+                    manager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
+                    requested = true
+                    break
+                } catch (_: Exception) {
+                    // This provider is not available; try the next one.
+                }
+            }
+            if (!requested) {
+                result.success(mapOf("ok" to false, "reason" to "no_provider"))
+                return
+            }
+
+            activity.window.decorView.postDelayed({
+                if (answered.compareAndSet(false, true)) {
+                    try {
+                        manager.removeUpdates(listener)
+                    } catch (_: Exception) {
+                    }
+                    result.success(mapOf("ok" to false, "reason" to "timeout"))
+                }
+            }, LOCATION_TIMEOUT_MS)
+        } catch (e: Exception) {
+            result.success(mapOf("ok" to false, "reason" to e::class.java.simpleName))
+        }
+    }
+
+    private fun lastKnown(manager: LocationManager): Location? {
+        var best: Location? = null
+        for (provider in listOf(
+                LocationManager.NETWORK_PROVIDER,
+                LocationManager.GPS_PROVIDER,
+                LocationManager.PASSIVE_PROVIDER
+            )
+        ) {
+            val loc = try {
+                manager.getLastKnownLocation(provider)
+            } catch (_: Exception) {
+                null
+            }
+            if (loc != null && (best == null || loc.time > best!!.time)) best = loc
+        }
+        return best
+    }
+
+    private fun locationPayload(location: Location, source: String) = mapOf(
+        "ok" to true,
+        "lat" to location.latitude,
+        "lon" to location.longitude,
+        "accuracy" to location.accuracy.toDouble(),
+        "source" to source
+    )
+
     private fun requestPermission(call: MethodCall, result: MethodChannel.Result) {
         val permission = when (call.argument<String>("permission")) {
             "calendar" -> Manifest.permission.READ_CALENDAR
             "camera" -> Manifest.permission.CAMERA
+            "location" -> Manifest.permission.ACCESS_COARSE_LOCATION
             else -> null
         }
         if (permission == null) {
@@ -319,6 +442,13 @@ class PlatformBridge(private val activity: Activity) : MethodChannel.MethodCallH
         const val CHANNEL_NAME = "dev.snlauncher/platform"
         const val REQUEST_CODE_START = 4100
         const val DEFAULT_EVENT_COLOR = 0xFF4285F4.toInt()
+
+        // A last known fix older than half an hour is not much use for weather.
+        const val STALE_LOCATION_MS = 30L * 60L * 1000L
+
+        // How long to wait for a fresh fix before giving up. The caller is
+        // never left hanging.
+        const val LOCATION_TIMEOUT_MS = 8000L
         val EVENT_PROJECTION = arrayOf(
             CalendarContract.Instances.TITLE,
             // BEGIN/END, *not* DTSTART/DTEND.

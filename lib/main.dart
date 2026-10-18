@@ -8,8 +8,10 @@ import 'src/models/photo_credit.dart';
 import 'src/services/assistant_service.dart';
 import 'src/services/calendar_service.dart';
 import 'src/services/feature_flags.dart';
+import 'src/services/location_service.dart';
 import 'src/services/todo_service.dart';
 import 'src/services/photo_frame_service.dart';
+import 'src/services/platform_bridge.dart';
 import 'src/services/settings_store.dart';
 import 'src/services/frame_stats.dart';
 import 'src/screens/nest_shell.dart';
@@ -80,6 +82,13 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   late final AssistantService _assistant = AssistantService();
   final SettingsStore _settings = SettingsStore();
   late final TodoService _todo = TodoService(_settings);
+  late final LocationService _location = LocationService(
+    PlatformBridge(),
+    _settings,
+    // A build-time pin beats the automatic location. It was set deliberately.
+    pinnedLatitude: double.tryParse(const String.fromEnvironment('NEST_LAT')),
+    pinnedLongitude: double.tryParse(const String.fromEnvironment('NEST_LON')),
+  );
   final FrameStats _frameStats = FrameStats();
   bool _weatherConfigured = false;
   ShellController? _controller;
@@ -167,6 +176,7 @@ class _NestLauncherAppState extends State<NestLauncherApp>
     _controller?.dispose();
     _calendar.dispose();
     _todo.dispose();
+    _location.dispose();
     _photos.dispose();
     _assistant.dispose();
     _clock.dispose();

@@ -35,6 +35,7 @@ class ClockBlock extends StatelessWidget {
     this.forceLightText = false,
     this.albumTitle,
     this.photoCredit,
+    this.zoom = 1.0,
   });
 
   final NestMetrics metrics;
@@ -59,6 +60,12 @@ class ClockBlock extends StatelessWidget {
 
   /// Bottom-right album / photo-frame title.
   final String? albumTitle;
+
+  /// The clock face size, as a multiplier. 1.0 is the measured size.
+  ///
+  /// The setting existed and did nothing, because nothing read it. The
+  /// "Clock face size" slider wrote to a field that no drawing code consulted.
+  final double zoom;
 
   /// Photographer's name, shown after [albumTitle]. Required by the licence of
   /// the bundled photograph.
@@ -96,9 +103,28 @@ class ClockBlock extends StatelessWidget {
               children: [
                 Text(
                   timeText,
-                  style: lightFace
-                      ? type.clockLight(color: color)
-                      : type.clock(color: color),
+                  style: (lightFace
+                          ? type.clockLight(color: color)
+                          : type.clock(color: color))
+                      .copyWith(
+                    // Only the clock face scales. The date, the temperature
+                    // and the weather glyph keep their measured sizes, because
+                    // "clock face size" means the clock.
+                    fontSize:
+                        (lightFace
+                                ? type.clockLight(color: color)
+                                : type.clock(color: color))
+                            .fontSize! *
+                        zoom,
+                    // The tracking is a fraction of the em, so it has to
+                    // scale with the size or the digits drift apart.
+                    letterSpacing:
+                        (lightFace
+                                ? type.clockLight(color: color)
+                                : type.clock(color: color))
+                            .letterSpacing! *
+                        zoom,
+                  ),
                 ),
                 if (!use24Hour) ...[
                   SizedBox(width: metrics.px(6)),

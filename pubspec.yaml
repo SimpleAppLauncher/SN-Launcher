@@ -22,6 +22,9 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Already a transitive dependency of flutter_test. Declared directly because
+  # the clock tests need fake time to prove the clock ticks every second.
+  fake_async: ^1.3.1
 
 flutter:
   uses-material-design: true

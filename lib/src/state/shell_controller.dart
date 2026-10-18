@@ -28,6 +28,14 @@ enum ShellPage {
   /// "Your morning / afternoon / evening" suggestion carousel.
   digest,
 
+  /// The weather, on its own page.
+  ///
+  /// It used to be a card on the digest page, which was the wrong shape: the
+  /// weather is the one thing on a Nest display that deserves the whole
+  /// screen, and a card squeezed beside five others showed a temperature and
+  /// two words.
+  weather,
+
   /// Home control.
   homeControl,
 
@@ -102,6 +110,19 @@ class ShellController extends ChangeNotifier {
         _theme = fallbackTheme(FeatureFlags.current);
       }
     }
+    // The seconds flag has to be applied *after* the hook is attached, because
+    // firing the hook is what re-schedules the clock service's timer — a
+    // minute-resolution clock that is told to show seconds has to actually
+    // start waking every second.
+    final storedSeconds = _settings.get(SettingKeys.showSeconds);
+    if (storedSeconds != null) {
+      _showSeconds = storedSeconds == 'true';
+      onShowSecondsChanged?.call(_showSeconds);
+    }
+    final storedZoom = _settings.get(SettingKeys.clockZoom);
+    if (storedZoom != null) {
+      _zoom = double.tryParse(storedZoom)?.clamp(1.0, 2.0) ?? 1.0;
+    }
     _recomputePalette(force: true);
     notifyListeners();
     unawaited(syncWithDeviceState());
@@ -160,14 +181,25 @@ class ShellController extends ChangeNotifier {
   bool _showSeconds = false;
   bool get showSeconds => _showSeconds;
 
+  /// Called when the seconds display is turned on or off.
+  ///
+  /// The clock service owns the timer, and it only wakes on the *minute*
+  /// boundary unless it is told to tick every second. So the flag has to
+  /// reach the service and not just the display — otherwise the seconds are
+  /// drawn and then frozen, which is exactly what happened.
+  ValueChanged<bool>? onShowSecondsChanged;
+
   String _albumTitle = 'Recent highlights';
   String get albumTitle => _albumTitle;
 
   double _zoom = 1.0;
   double get zoom => _zoom;
+
   set zoom(double v) {
-    if (_zoom == v) return;
-    _zoom = v.clamp(1.0, 2.0);
+    final clamped = v.clamp(1.0, 2.0);
+    if (_zoom == clamped) return;
+    _zoom = clamped;
+    unawaited(_settings.put(SettingKeys.clockZoom, '$_zoom'));
     notifyListeners();
   }
 
@@ -221,26 +253,49 @@ class ShellController extends ChangeNotifier {
   }
 
   // ── Page navigation ──────────────────────────────────────────────────────
+  /// The pages this build actually has, in order.
+  ///
+  /// The carousel indexes into this list rather than into [ShellPage.values],
+  /// so a build without the weather page has no hole in its carousel. Indexing
+  /// the enum directly would leave a blank page in the middle of a swipe.
+  List<ShellPage> get availablePages {
+    final f = FeatureFlags.current;
+    return [
+      for (final p in ShellPage.values)
+        if (p != ShellPage.weather || f.isOn('weather')) p,
+    ];
+  }
+
   void goToPage(ShellPage p, {Duration? duration}) {
+    final pages = availablePages;
+    final index = pages.indexOf(p);
+    if (index < 0) return;
     if (_page == p && _pageAnim.isAnimating) return;
     _page = p;
-    _pageAnim.animateTo(p.index.toDouble(),
+    _pageAnim.animateTo(index.toDouble(),
         duration: duration ?? kNestMedium, curve: kNestEase);
     notifyListeners();
   }
 
   /// Horizontal swipe moves the page carousel; small flicks advance one page.
+  ///
+  /// The base is the current *page*, not the animation's value. The animation
+  /// is still catching up when a second gesture arrives, and a flick in that
+  /// window computed its target from a stale position and went nowhere.
   void onHorizontalDragEnd(double velocity, double delta, double width) {
     if (width <= 0) return;
+    final pages = availablePages;
+    final base = pages.indexOf(_page);
+    if (base < 0) return;
     final threshold = width * 0.18;
-    var target = _pageAnim.value;
+    var target = base.toDouble();
     if (velocity.abs() > 260) {
       target = velocity > 0 ? target - 1 : target + 1;
     } else if (delta.abs() > threshold) {
       target = delta < 0 ? target + 1 : target - 1;
     }
-    target = target.clamp(0, ShellPage.values.length - 1);
-    goToPage(ShellPage.values[target.round()]);
+    target = target.clamp(0, pages.length - 1);
+    goToPage(pages[target.round()]);
   }
 
   // ── Bottom sheet gesture ─────────────────────────────────────────────────
@@ -419,8 +474,15 @@ class ShellController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleShowSeconds() {
-    _showSeconds = !_showSeconds;
+  void toggleShowSeconds() => setShowSeconds(!_showSeconds);
+
+  /// Sets the seconds display and tells the clock service, which changes the
+  /// timer's granularity.
+  void setShowSeconds(bool value) {
+    if (_showSeconds == value) return;
+    _showSeconds = value;
+    onShowSecondsChanged?.call(value);
+    unawaited(_settings.put(SettingKeys.showSeconds, '$_showSeconds'));
     notifyListeners();
   }
 

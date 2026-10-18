@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sn_launcher/src/screens/nest_shell.dart';
 import 'package:sn_launcher/src/services/assistant_service.dart';
@@ -142,6 +143,73 @@ void main() {
     FeatureFlags.forTesting = reduced;
   });
 
+
+  group('the carousel gesture', () {
+    // The shell accumulated the drag distance itself — `DragEndDetails` has the
+    // velocity but not how far the finger travelled — and it passed the
+    // distance as zero, so only a fast flick could change the page. A slow
+    // drag across the screen did nothing at all.
+    testWidgets('a slow drag changes the page', (tester) async {
+      FeatureFlags.forTesting = ef;
+      final harness = await _pump(tester, page: ShellPage.home);
+      expect(harness.controller.page, ShellPage.home);
+
+      // A slow drag: `timedDrag` moves the pointer in steps over a duration
+      // rather than flinging it, so the gesture ends with no velocity. That is
+      // the case that used to do nothing.
+      // Slow enough that the velocity is under the flick threshold:
+      // 400px over 2s is 200px/s, and a flick is anything over 260. A faster
+      // drag would still be a flick and the test would pass even with the
+      // distance thrown away.
+      await tester.timedDrag(
+        find.byType(NestShell),
+        const Offset(-400, 0),
+        const Duration(milliseconds: 2000),
+        frequency: 60.0,
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        harness.controller.page,
+        isNot(ShellPage.home),
+        reason: 'a 400px drag is well past the 18% threshold',
+      );
+    });
+
+    testWidgets('a small drag does not change the page', (tester) async {
+      FeatureFlags.forTesting = ef;
+      final harness = await _pump(tester, page: ShellPage.home);
+      await tester.timedDrag(
+        find.byType(NestShell),
+        const Offset(-40, 0),
+        const Duration(milliseconds: 600),
+        frequency: 60.0,
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(harness.controller.page, ShellPage.home);
+    });
+
+    testWidgets('the left arrow key goes to the next page', (tester) async {
+      // These two were the wrong way round: LEFT went back and RIGHT went
+      // forward, so a D-pad or an Android TV remote paged the wrong way.
+      FeatureFlags.forTesting = ef;
+      final harness = await _pump(tester, page: ShellPage.home);
+      expect(harness.controller.page, ShellPage.home);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        harness.controller.page,
+        ShellPage.digest,
+        reason: 'left is the next page, because the first page is left-most',
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(harness.controller.page, ShellPage.home);
+    });
+  });
+
   group('the settings gear', () {
     testWidgets('is on screen in the ef build', (tester) async {
       FeatureFlags.forTesting = ef;
@@ -189,9 +257,17 @@ void main() {
       FeatureFlags.forTesting = ef;
       await _pump(tester, page: ShellPage.digest);
       expect(find.textContaining('Good'), findsOneWidget);
-      expect(find.text('Weather'), findsOneWidget);
       expect(find.text('Theme'), findsOneWidget);
       expect(find.text('Calendar'), findsOneWidget);
+      expect(find.text('Music'), findsOneWidget);
+    });
+
+    testWidgets('the weather is not a card on the digest page', (tester) async {
+      // It has a page of its own now. A card squeezed beside four others
+      // showed a temperature and two words.
+      FeatureFlags.forTesting = ef;
+      await _pump(tester, page: ShellPage.digest);
+      expect(find.text('Weather'), findsNothing);
     });
 
     testWidgets('shows a calendar and nothing else in the reduced build', (tester) async {
@@ -217,6 +293,7 @@ void main() {
       expect(find.text('Music'), findsNothing);
       expect(find.text('Photos'), findsNothing);
       expect(find.text('Theme'), findsNothing);
+      expect(find.text('Weather'), findsNothing);
     });
 
     testWidgets('is unreachable at all when the digest page is off', (tester) async {

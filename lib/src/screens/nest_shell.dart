@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/nest_action.dart';
 import '../services/assistant_service.dart';
 import '../services/feature_flags.dart';
+import '../services/location_service.dart';
 import '../services/todo_service.dart';
 import '../services/photo_frame_service.dart';
 import '../models/photo_credit.dart';
@@ -26,6 +27,7 @@ import '../widgets/music_player.dart';
 import '../widgets/photo_frame.dart';
 import '../widgets/settings_page.dart';
 import '../widgets/todo_card.dart';
+import '../widgets/weather_page.dart';
 
 /// The Nest launcher shell.
 ///
@@ -52,6 +54,7 @@ class NestShell extends StatefulWidget {
     this.photos,
     this.assistant,
     this.todo,
+    this.location,
     this.suggested,
     this.actions,
     this.animateDecorations = true,
@@ -67,6 +70,9 @@ class NestShell extends StatefulWidget {
 
   /// The to-do list. Optional so tests and desktop builds can omit it.
   final TodoService? todo;
+
+  /// Where the device is. Only the weather page needs it.
+  final LocationService? location;
 
   /// Optional. Absent in tests and on desktop, where the background stays on
   /// the bundled photograph.
@@ -99,6 +105,56 @@ class _NestShellState extends State<NestShell> {
     super.initState();
     widget.photos?.addListener(_onPhotosChanged);
     widget.assistant?.addListener(_onAssistantChanged);
+
+    // The clock service owns the timer, and it only wakes on the minute
+    // boundary unless it is told otherwise. The "Show seconds" setting has to
+    // reach the *service*, not just the display — otherwise the seconds are
+    // drawn and then sit frozen, which is what it did.
+    widget.controller.onShowSecondsChanged = widget.clock.setShowSeconds;
+    // Apply whatever is already stored, so a restart with seconds on comes
+    // back ticking every second rather than waiting for the next toggle.
+    widget.clock.setShowSeconds(widget.controller.showSeconds);
+
+    widget.controller.addListener(_onControllerChanged);
+    widget.location?.addListener(_onLocationChanged);
+  }
+
+  /// The weather page is the only thing that needs a location, so the location
+  /// is worked out when the page is first opened rather than at launch.
+  ///
+  /// The carousel keeps every page alive, so a page that resolved its own
+  /// location in `initState` would ask for the location permission on every
+  /// cold start, whether or not the user ever looked at the weather.
+  void _onControllerChanged() {
+    if (!mounted) return;
+    final page = widget.controller.page;
+    if (page == ShellPage.weather) {
+      _ensureWeatherLocation();
+    }
+    setState(() {});
+  }
+
+  void _onLocationChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool _locationRequested = false;
+
+  Future<void> _ensureWeatherLocation() async {
+    if (_locationRequested) return;
+    final location = widget.location;
+    if (location == null) return;
+    _locationRequested = true;
+    final place = await location.resolve();
+    if (!mounted) return;
+    if (place == null) return;
+    // The weather service needs the coordinates. Configuring it also kicks off
+    // a refresh.
+    widget.weather.configure(
+      latitude: place.latitude,
+      longitude: place.longitude,
+      enabled: true,
+    );
   }
 
   @override
@@ -112,12 +168,18 @@ class _NestShellState extends State<NestShell> {
       old.assistant?.removeListener(_onAssistantChanged);
       widget.assistant?.addListener(_onAssistantChanged);
     }
+    if (old.location != widget.location) {
+      old.location?.removeListener(_onLocationChanged);
+      widget.location?.addListener(_onLocationChanged);
+    }
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
     widget.photos?.removeListener(_onPhotosChanged);
     widget.assistant?.removeListener(_onAssistantChanged);
+    widget.location?.removeListener(_onLocationChanged);
     super.dispose();
   }
 
@@ -147,6 +209,12 @@ class _NestShellState extends State<NestShell> {
   /// the JSON is bundled and resolved before the first frame, so there is no
   /// window where a feature flickers on for one frame and off for the next.
   FeatureFlags get flags => FeatureFlags.current;
+
+  /// How far the current horizontal drag has travelled.
+  ///
+  /// `DragEndDetails` has the velocity but not the distance, so the distance
+  /// is accumulated here. Without it the carousel only responds to flicks.
+  double _dragDx = 0;
 
   /// The pointer currently dragging the sheet, if any. Single-owner so a
   /// second finger cannot cancel the drag in progress.
@@ -215,9 +283,12 @@ class _NestShellState extends State<NestShell> {
             case LogicalKeyboardKey.arrowDown:
               _c.closeSheet();
             case LogicalKeyboardKey.arrowRight:
-              _c.onHorizontalDragEnd(-320, 0, _m.size.width);
-            case LogicalKeyboardKey.arrowLeft:
+              // Positive velocity moves towards the previous page, because the
+              // carousel's first page is the left-most one. These two were
+              // the wrong way round: LEFT went back and RIGHT went forward.
               _c.onHorizontalDragEnd(320, 0, _m.size.width);
+            case LogicalKeyboardKey.arrowLeft:
+              _c.onHorizontalDragEnd(-320, 0, _m.size.width);
             case LogicalKeyboardKey.escape:
               _c.closeSheet();
             case LogicalKeyboardKey.space:
@@ -281,8 +352,23 @@ class _NestShellState extends State<NestShell> {
                 // no microphone exists, so this refuses outright unless the
                 // assistant is enabled *and* speech input is really available.
                 onTap: flags.isOn('assistant') ? _startListening : null,
-                onHorizontalDragEnd: (d) =>
-                    _c.onHorizontalDragEnd(d.primaryVelocity ?? 0, 0, _m.size.width),
+                // The drag has to be measured as well as the flick.
+                //
+                // `onHorizontalDragEnd` carries the velocity but not how far
+                // the finger travelled, so the delta was passed as zero and
+                // only a fast flick could change the page. A slow, deliberate
+                // drag across the screen did nothing at all — and a synthetic
+                // swipe, which is steady rather than flicked, did nothing
+                // either, which is how this was found.
+                onHorizontalDragUpdate: (d) => _dragDx += d.delta.dx,
+                onHorizontalDragEnd: (d) {
+                  _c.onHorizontalDragEnd(
+                    d.primaryVelocity ?? 0,
+                    _dragDx,
+                    _m.size.width,
+                  );
+                  _dragDx = 0;
+                },
                 child: SizedBox.expand(
                   child: Theme(
                     // Follows the ambient palette, so any Material widget that
@@ -431,19 +517,21 @@ class _NestShellState extends State<NestShell> {
       animation: _c.pageAnim,
       builder: (context, child) {
         final value = _c.pageAnim.value;
-        final index = value.round().clamp(0, ShellPage.values.length - 1);
+        // The available pages, not the enum. A build without the weather page
+        // has no hole in its carousel.
+        final pages = _c.availablePages;
+        final index = value.round().clamp(0, pages.length - 1);
         // Parallax: neighbouring pages sit at ~30% offset and scale down a
         // touch, which is what gives the Nest carousel its depth.
         return Stack(
           fit: StackFit.expand,
           children: [
-            for (var i = 0; i < ShellPage.values.length; i++)
-              if (i != index || true)
-                _PageLayer(
-                  visible: i == index,
-                  offset: (i - value),
-                  child: _pageContent(ShellPage.values[i], palette, type),
-                ),
+            for (var i = 0; i < pages.length; i++)
+              _PageLayer(
+                visible: i == index,
+                offset: (i - value),
+                child: _pageContent(pages[i], palette, type),
+              ),
           ],
         );
       },
@@ -472,6 +560,7 @@ class _NestShellState extends State<NestShell> {
               now: now,
               use24Hour: _c.use24Hour,
               showSeconds: _c.showSeconds,
+              zoom: _c.zoom,
               animateWeather: widget.animateDecorations,
               forceLightText: true,
               albumTitle: _c.albumTitle,
@@ -500,6 +589,18 @@ class _NestShellState extends State<NestShell> {
           onThemePick: _c.setTheme,
           onOpenMusic: _openMusic,
           photos: widget.photos,
+        );
+      case ShellPage.weather:
+        if (!flags.isOn('weather')) {
+          return const SizedBox.shrink();
+        }
+        return WeatherPage(
+          weather: widget.weather.current,
+          place: widget.location?.place,
+          metrics: _m,
+          palette: palette,
+          type: type,
+          locating: widget.location?.resolving ?? false,
         );
       case ShellPage.homeControl:
         return _HomeControlPage(metrics: _m, type: type, palette: palette);
@@ -690,6 +791,28 @@ class _PageLayer extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Whether the digest page's cards have to scroll sideways.
+///
+/// **This matters more than it looks.** A card row that scrolls eats the
+/// horizontal drag, so a swipe that should change page instead scrolls the
+/// cards — and the user can never reach the page after the digest page. That
+/// is exactly what happened: the weather page was unreachable because the card
+/// row swallowed the gesture.
+///
+/// The ef build has five cards and they fit, so the row is a plain row and the
+/// carousel keeps its gesture. The minimum width is 224 design pixels because
+/// that is what the widest remaining title needs — "Photos" and "Calendar" both
+/// fit, and the weather card, the one that used to squeeze them, now has a
+/// page of its own.
+bool cardsNeedScroll(
+  int count, {
+  required double share,
+  required double floor,
+}) {
+  if (count < 2) return false;
+  return share < floor;
 }
 
 /// "Your morning / afternoon / evening" page — greeting plus a row of cards.
@@ -985,30 +1108,39 @@ class _DigestPage extends StatelessWidget {
   /// it looks exactly as it did.
   Widget _cardRow(List<({int flex, Widget child})> cards, NestMetrics m) {
     const gap = 14.0;
-    final minWidth = m.px(248);
+    if (cards.isEmpty) return const SizedBox.shrink();
+    final g = m.px(gap);
     final available = m.size.width - m.px(96);
-    final needed = cards.length * minWidth + (cards.length - 1) * m.px(gap);
+    final share = (available - (cards.length - 1) * g) / cards.length;
 
-    if (needed > available && cards.length > 1) {
+    if (cardsNeedScroll(cards.length, share: share, floor: m.px(150))) {
+      // Too many cards for the width. They scroll sideways — and that costs
+      // the carousel its horizontal gesture on this page, which is why the
+      // ef build is sized to avoid it.
       return SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (var i = 0; i < cards.length; i++) ...[
-              SizedBox(width: minWidth, child: cards[i].child),
-              if (i < cards.length - 1) SizedBox(width: m.px(gap)),
+              SizedBox(width: m.px(200), child: cards[i].child),
+              if (i < cards.length - 1) SizedBox(width: g),
             ],
           ],
         ),
       );
     }
 
+    // Equal widths, and they fit.
+    //
+    // Not a flex layout: flex gave the calendar three shares and the rest
+    // two, which left the narrow cards at about 150px — enough for "Weath" and
+    // not for "Weather". Equal shares fit every title.
     return Row(
       children: [
         for (var i = 0; i < cards.length; i++) ...[
-          Expanded(flex: cards[i].flex, child: cards[i].child),
-          if (i < cards.length - 1) SizedBox(width: m.px(gap)),
+          SizedBox(width: share, child: cards[i].child),
+          if (i < cards.length - 1) SizedBox(width: g),
         ],
       ],
     );
@@ -1037,21 +1169,6 @@ class _DigestPage extends StatelessWidget {
             metrics: m,
             palette: palette,
             type: type,
-          ),
-        ),
-      if (f.isOn('weather'))
-        (
-          flex: 2,
-          child: _Card(
-            title: 'Weather',
-            metrics: m,
-            palette: palette,
-            type: type,
-            body: weatherLoading
-                ? 'Checking…'
-                : !weatherEnabled
-                ? 'Set NEST_LAT / LON to enable'
-                : '${weather.condition.label} · ${weather.shortLabel}',
           ),
         ),
       if (f.isOn('music'))

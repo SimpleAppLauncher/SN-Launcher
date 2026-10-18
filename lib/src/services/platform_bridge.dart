@@ -103,6 +103,16 @@ class PlatformBridge {
     return r?['granted'] as bool?;
   }
 
+  // ── Location ──────────────────────────────────────────────────────────────
+  /// The device's own position.
+  ///
+  /// Returns null when the platform has no location service, and a map with
+  /// `ok: false` and a `reason` when it could not produce a fix. The reasons
+  /// that matter to the caller: `permission` (the user has not granted it, or
+  /// declined) and `timeout` (no fix arrived in time).
+  Future<Map<Object?, Object?>?> getLocation() =>
+      _invoke<Map<Object?, Object?>>('getLocation', const {});
+
   // ── Media keys ────────────────────────────────────────────────────────────
   /// Raise a hardware media key so any installed player responds, including the
   /// system media UI. Returns false if the platform refused — the assistant
