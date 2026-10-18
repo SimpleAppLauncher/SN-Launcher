@@ -9,7 +9,7 @@ change in code.
 |---|---|---|
 | What it is | Everything switched on. For finding out what actually happens. | A launcher and nothing else. This is the one that ships. |
 | Config | `assets/features.ef.json` | `assets/features.json` |
-| Features on | all 9 | 2 — `settings`, `quickSettings` |
+| Features on | all 10 | 4 — `settings`, `quickSettings`, `digestPage`, `calendar` |
 | Build | `./tool/build_variants.sh ef` | `./tool/build_variants.sh reduced` |
 
 Both keep settings and quick settings. A launcher you cannot configure, and
@@ -71,13 +71,20 @@ Edit the JSON and rebuild. Nothing else needs touching.
     "digestPage": true,    // the whole second page
     "weather": true,       // Weather card
     "settings": true,      // the gear, and the Settings button in the dock
-    "quickSettings": true  // the dock row itself
+    "quickSettings": true, // the dock row itself
+    "sunTheme": true       // "Sun", the theme that follows the time of day
   }
 }
 ```
 
-`settings` and `quickSettings` are what "a launcher" means here; everything else
-is an extra.
+The reduced build keeps `settings`, `quickSettings`, `digestPage` and
+`calendar`, and nothing else. It is a launcher with a calendar on page two.
+
+**`digestPage` and `calendar` travel together on purpose.** `calendar` on with
+`digestPage` off is a calendar rendering on a page nobody can reach — which is
+exactly what made the reduced build look broken on hardware, when the digest page
+was gated off but the dock still had the button that navigated to it. Both
+directions of that mistake are now tested.
 
 ## How it behaves when the config is wrong
 

@@ -1,19 +1,19 @@
 {
-  "_comment": "Reduced build. This is the default. Every extra is off so the launcher is one job: open things. Swap values here and rebuild, or push the file to a device. Settings stays on because a launcher you cannot configure is a launcher you cannot keep using.",
+  "_comment": "Reduced build. This is the default. It is a launcher: open the apps, open the calendar, change the brightness. Swap values here and rebuild. Settings stays on because a launcher you cannot configure is a launcher you cannot keep using, and the digest page stays on because a calendar with nowhere to live is not a feature.",
 
   "build": "sn-launcher",
   "features": {
     "settings": true,
+    "quickSettings": true,
+
+    "digestPage": true,
+    "calendar": true,
 
     "assistant": false,
     "music": false,
     "photoRotation": false,
     "themePicker": false,
-    "calendar": false,
-    "digestPage": false,
     "weather": false,
-    "quickSettings": true,
-
     "sunTheme": false
   }
 }

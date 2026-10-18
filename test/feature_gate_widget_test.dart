@@ -177,20 +177,35 @@ void main() {
       expect(find.text('Calendar'), findsOneWidget);
     });
 
-    testWidgets('collapses entirely in the reduced build', (tester) async {
-      // Asserted on the greeting, not on the cards.
+    testWidgets('shows a calendar and nothing else in the reduced build', (tester) async {
+      // The reduced build is a launcher with a calendar. The greeting and the
+      // Calendar card must be there; every other card must not, because a
+      // card with a dead control is the same lie as a dead button.
       //
-      // The cards are individually gated too, so checking that they are absent
-      // passes even with this page's own gate deleted — the row is empty either
-      // way and the test proves nothing. The greeting is the part that only
-      // this gate controls, so it is the part worth asserting on.
+      // Asserted on the greeting as well as the cards. The cards are
+      // individually gated, so checking only their absence would pass even if
+      // the page-level gate were deleted — the row would be empty either way.
       FeatureFlags.forTesting = reduced;
       await _pump(tester, page: ShellPage.digest);
-      expect(find.textContaining('Good'), findsNothing);
+      expect(find.textContaining('Good'), findsOneWidget);
+      expect(find.text('Calendar'), findsOneWidget);
       expect(find.text('Weather'), findsNothing);
-      expect(find.text('Theme'), findsNothing);
-      expect(find.text('Calendar'), findsNothing);
+      expect(find.text('Music'), findsNothing);
       expect(find.text('Photos'), findsNothing);
+      expect(find.text('Theme'), findsNothing);
+    });
+
+    testWidgets('is unreachable at all when the digest page is off', (tester) async {
+      // A build with calendar on but digestPage off is the shape that made the
+      // reduced build look broken on hardware: a calendar rendering on a page
+      // nobody can reach. Both flags have to travel together.
+      FeatureFlags.forTesting = FeatureFlags.parse(
+        '{"features":{"calendar":true}}',
+        'orphan',
+      );
+      await _pump(tester, page: ShellPage.digest);
+      expect(find.textContaining('Good'), findsNothing);
+      expect(find.text('Calendar'), findsNothing);
     });
   });
 

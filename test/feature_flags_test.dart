@@ -85,28 +85,57 @@ void main() {
   group('the shipped reduced build', () {
     final f = loadFile('features.json');
 
-    /// What "reduced" means: a launcher, and nothing else. These two stay on
-    /// in both builds because without them it is not a launcher — there is no
-    /// way to reach brightness, volume, or configuration.
-    const core = {'settings', 'quickSettings'};
+    /// Exactly what the reduced build is allowed to contain.
+    ///
+    /// Pinned as an explicit set rather than "the core, minus everything else",
+    /// because that shape silently passes whenever a flag is added to
+    /// [FeatureFlags.known] — the new flag would simply join the excluded side
+    /// and the test would keep passing. Asking to add a feature to the reduced
+    /// build should require editing this list on purpose.
+    const expected = {'settings', 'quickSettings', 'digestPage', 'calendar'};
 
-    test('keeps the launcher core on', () {
+    test('contains exactly the intended features', () {
+      final on = FeatureFlags.known.where(f.isOn).toSet();
       expect(
-        core.where(f.isOn).toSet(),
-        core,
-        reason: 'reduced build lost a core launcher capability',
+        on.difference(expected),
+        isEmpty,
+        reason: 'reduced build unexpectedly enables '
+            '${on.difference(expected)}',
+      );
+      expect(
+        expected.difference(on),
+        isEmpty,
+        reason: 'reduced build lost '
+            '${expected.difference(on)}',
       );
     });
 
-    test('has every optional extra switched off', () {
-      // The whole point of the reduced build. Guarded explicitly so that
-      // flipping a flag on in this file is a deliberate act, not an accident
-      // that ships to users.
-      final on = FeatureFlags.known
-          .where((k) => !core.contains(k))
-          .where(f.isOn)
-          .toList();
-      expect(on, isEmpty, reason: 'reduced build unexpectedly enables $on');
+    test('keeps settings and the dock', () {
+      // Without these it is not a launcher: no way to configure it and no way
+      // to change the brightness.
+      expect(f.isOn('settings'), isTrue);
+      expect(f.isOn('quickSettings'), isTrue);
+    });
+
+    test('has the digest page on, so the calendar has somewhere to live', () {
+      // These two travel together on purpose. digestPage off with calendar on
+      // is the exact shape that made the reduced build look broken on hardware:
+      // a calendar that renders on a page nobody can reach.
+      expect(f.isOn('digestPage'), isTrue);
+      expect(f.isOn('calendar'), isTrue);
+    });
+
+    test('has the beta extras off', () {
+      for (final extra in [
+        'assistant',
+        'music',
+        'photoRotation',
+        'themePicker',
+        'weather',
+        'sunTheme',
+      ]) {
+        expect(f.isOn(extra), isFalse, reason: '$extra leaked into reduced');
+      }
     });
 
     test('declares no flags the build does not know', () {
@@ -181,7 +210,7 @@ void main() {
     test('the shipped builds produce the rows they should', () {
       // Reads the real files, so an edit to either JSON shows up here.
       expect(quickSettingsFor(loadFile('features.ef.json')).length, 7);
-      expect(quickSettingsFor(loadFile('features.json')).length, 6);
+      expect(quickSettingsFor(loadFile('features.json')).length, 7);
     });
   });
 
