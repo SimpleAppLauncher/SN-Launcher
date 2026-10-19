@@ -97,18 +97,30 @@ class WeatherArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A RepaintBoundary, so the artwork is rasterised once into its own layer
+    // and the page can be animated without re-running the painter. Without it
+    // a full-screen CustomPaint re-painted on every frame of a carousel
+    // transition — a hundred-odd strokes of rain, redrawn sixty times a
+    // second, for an image that had not changed.
+    //
+    // `willChange` is false on purpose. It tells the engine "this will change,
+    // keep the layer around" — but this does not change, and asking for a
+    // permanent layer is how a static background becomes a permanent GPU
+    // cost.
     return IgnorePointer(
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: _WeatherArtworkPainter(
-          condition: condition,
-          ink: ink,
-          seed: condition.index * 7919,
-          animate: animate,
-          tint: tint,
+      child: RepaintBoundary(
+        child: CustomPaint(
+          size: Size.infinite,
+          painter: _WeatherArtworkPainter(
+            condition: condition,
+            ink: ink,
+            seed: condition.index * 7919,
+            animate: animate,
+            tint: tint,
+          ),
+          isComplex: true,
+          willChange: false,
         ),
-        isComplex: true,
-        willChange: animate,
       ),
     );
   }

@@ -31,9 +31,16 @@ android {
     // The property keeps this to four lines.
     val appIdSuffix = (project.findProperty("snAppIdSuffix") as String?) ?: ""
 
-    // No `ndkVersion`: there is no native code in this app (url_launcher is
-    // pure Kotlin), so declaring one makes AGP shell out to sdkmanager during
-    // configuration and drag in a ~1 GB NDK download for nothing.
+    // `ndkVersion` is now declared, because there *is* native code: the Rust
+    // licence filter in native/licence_filter, built by tool/build_rust.sh into
+    // src/main/jniLibs/.
+    //
+    // The previous comment said there was no native code and that declaring an
+    // NDK would drag in a ~1 GB download for nothing. That was true then and
+    // stopped being true when the Rust library arrived. It is pinned to the
+    // version already on this machine so AGP does not shell out to sdkmanager
+    // and try to install a different one.
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

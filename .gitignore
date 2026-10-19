@@ -88,3 +88,8 @@ tmp/
 # Release artefacts. Built by tool/build_variants.sh and attached to the
 # GitHub release rather than committed - they are large and reproducible.
 dist/
+
+# Rust build output. The compiled .so files ARE committed, under
+# android/app/src/main/jniLibs, so the APK can be built without a Rust
+# toolchain — but the intermediate cargo target directory is not.
+native/licence_filter/target/

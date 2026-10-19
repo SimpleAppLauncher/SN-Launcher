@@ -138,9 +138,14 @@ void main() {
       c.goToPage(ShellPage.digest);
 
       // A slow drag: no velocity worth speaking of, but it travelled.
-      c.onHorizontalDragEnd(20, -400, 1000);
+      //
+      // The drag update comes first because that is what a real gesture does
+      // — the carousel follows the finger, so the release reads a live
+      // position rather than the page it started on.
+      c.onHorizontalDragUpdate(-600, 1000);
+      c.onHorizontalDragEnd(20, -600, 1000);
       expect(c.page, isNot(ShellPage.digest),
-          reason: 'a drag of 400px is well past the 18% threshold');
+          reason: 'a drag past halfway commits to the next page');
     });
 
     test('a flick changes the page', () {

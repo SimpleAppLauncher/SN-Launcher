@@ -212,6 +212,63 @@ void main() {
     });
   });
 
+  group('the carousel follows the finger', () {
+    // The complaint that "the animation is meh" turned out not to be about the
+    // spring at all. The carousel sat still while your finger was down and
+    // then jumped on release. No spring tuning fixes that.
+    testWidgets('a drag moves the page before release', (tester) async {
+      FeatureFlags.forTesting = ef;
+      final c = await _pump(tester, page: ShellPage.home);
+
+      c.controller.onHorizontalDragUpdate(-200, 1000);
+      await tester.pump();
+
+      expect(c.controller.pageAnim.value, closeTo(0.2, 0.01),
+          reason: 'dragging 200px of a 1000px page must move the carousel 20% '
+              'of a page while the finger is still down');
+    });
+
+    testWidgets('dragging past halfway and releasing commits', (tester) async {
+      FeatureFlags.forTesting = ef;
+      final c = await _pump(tester, page: ShellPage.home);
+
+      c.controller.onHorizontalDragUpdate(-600, 1000);
+      await tester.pump();
+      c.controller.onHorizontalDragEnd(0, -600, 1000);
+      await tester.pumpAndSettle();
+
+      expect(c.controller.page, ShellPage.digest,
+          reason: 'a drag past halfway should land on the next page');
+    });
+
+    testWidgets('a small drag snaps back', (tester) async {
+      FeatureFlags.forTesting = ef;
+      final c = await _pump(tester, page: ShellPage.home);
+
+      c.controller.onHorizontalDragUpdate(-150, 1000);
+      await tester.pump();
+      c.controller.onHorizontalDragEnd(0, -150, 1000);
+      await tester.pumpAndSettle();
+
+      expect(c.controller.page, ShellPage.home,
+          reason: 'a drag that did not get halfway should not change the page');
+      expect(c.controller.pageAnim.value, closeTo(0, 0.05));
+    });
+
+    testWidgets('the edge resists rather than stopping dead', (tester) async {
+      FeatureFlags.forTesting = ef;
+      final c = await _pump(tester, page: ShellPage.home);
+
+      c.controller.onHorizontalDragUpdate(600, 1000); // past the first page
+      await tester.pump();
+      expect(c.controller.pageAnim.value, lessThan(0),
+          reason: 'pulling past the first page should show some give');
+      expect(c.controller.pageAnim.value, greaterThan(-0.5),
+          reason: 'but not much — the edge is meant to be felt, not to be a '
+              'rubber band');
+    });
+  });
+
   group('interrupted motion', () {
     // The reason the carousel is a spring and not a duration. An eased curve
     // restarted from the beginning when it was interrupted; a spring starts
@@ -336,9 +393,16 @@ void main() {
       // 400px over 2s is 200px/s, and a flick is anything over 260. A faster
       // drag would still be a flick and the test would pass even with the
       // distance thrown away.
+      // Past halfway. The rule is now "past halfway commits", because the
+      // carousel follows the finger: a drag that got 40% of the way and
+      // stopped is visibly *not* a page change, and committing to one anyway
+      // is what made a slow drag feel like it was ignoring you.
+      //
+      // The old rule was 18% of the width, chosen when the carousel did not
+      // move until release and the distance was all there was to go on.
       await tester.timedDrag(
         find.byType(NestShell),
-        const Offset(-400, 0),
+        const Offset(-600, 0),
         const Duration(milliseconds: 2000),
         frequency: 60.0,
       );

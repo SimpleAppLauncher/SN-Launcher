@@ -156,6 +156,12 @@ class ShellController extends ChangeNotifier {
 
   /// True while a finger is dragging the sheet, so release can decide snap.
   bool _draggingSheet = false;
+
+  /// True once the finger has moved the carousel, so the release knows the
+  /// animation's value is the live position rather than a value still catching
+  /// up from the previous transition. Without this the release can read a
+  /// stale value that is a whole page away from where the carousel is.
+  bool _carouselDragged = false;
   double _dragStart = 0;
 
   // ── Settings ─────────────────────────────────────────────────────────────
@@ -305,17 +311,63 @@ class ShellController extends ChangeNotifier {
   /// The base is the current *page*, not the animation's value. The animation
   /// is still catching up when a second gesture arrives, and a flick in that
   /// window computed its target from a stale position and went nowhere.
+  /// The finger is moving the carousel.
+  ///
+  /// This is the thing that makes a swipe feel like a swipe. Without it the
+  /// carousel sat still until you let go and then jumped — no amount of spring
+  /// tuning fixes that, because the problem is not the spring, it is that
+  /// nothing was moving while your finger was down.
+  ///
+  /// The animation's value is *set* rather than animated, so the page tracks
+  /// the finger exactly, and the release springs from wherever it happens to
+  /// be. That is the same reason the spring is there at all: it can start from
+  /// any value, including a half-dragged one.
+  ///
+  /// [dx] is the total distance travelled, negative to the left.
+  void onHorizontalDragUpdate(double dx, double width) {
+    if (width <= 0) return;
+    // Remember that the live value is authoritative from here on. Without
+    // this the release would read a value that is still catching up from the
+    // previous transition and decide the wrong thing — a stale value can be
+    // a whole page away from where the carousel actually is.
+    _carouselDragged = true;
+    final pages = availablePages;
+    if (pages.length < 2) return;
+    final base = pages.indexOf(_page);
+    if (base < 0) return;
+
+    // A little resistance past the ends, so the edge of the list is felt
+    // rather than simply stopping dead.
+    const rubberBand = 0.35;
+    final offset = dx / width;
+    var target = base - offset;
+    if (target < 0) target = -(-target) * rubberBand;
+    if (target > pages.length - 1) {
+      final over = target - (pages.length - 1);
+      target = (pages.length - 1) + over * rubberBand;
+    }
+    _pageAnim.value = target;
+  }
+
   void onHorizontalDragEnd(double velocity, double delta, double width) {
     if (width <= 0) return;
     final pages = availablePages;
     final base = pages.indexOf(_page);
     if (base < 0) return;
-    final threshold = width * 0.18;
+    // Decide from where the carousel *is*, not only from how far the finger
+    // travelled. Now that the page follows the finger, the live position is
+    // the honest answer: a drag that got 40% of the way and stopped is not a
+    // page change, and the old threshold -- 18% of the width -- called that a
+    // page change, so a small nudge sent you to the next page.
+    final current = _carouselDragged ? _pageAnim.value : base.toDouble();
+    _carouselDragged = false;
     var target = base.toDouble();
     if (velocity.abs() > 260) {
+      // A flick decides on its own, and it throws the carousel.
       target = velocity > 0 ? target - 1 : target + 1;
-    } else if (delta.abs() > threshold) {
-      target = delta < 0 ? target + 1 : target - 1;
+    } else if ((current - base).abs() > 0.5) {
+      // Past halfway: commit to the page it is closest to.
+      target = current;
     }
     target = target.clamp(0, pages.length - 1);
     // Velocity arrives in px/s; the carousel counts pages. The sign is kept

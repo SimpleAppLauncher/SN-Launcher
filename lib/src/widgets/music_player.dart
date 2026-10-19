@@ -54,6 +54,7 @@ class MusicPlayer extends StatefulWidget {
     required this.backgroundColor,
     required this.foregroundColor,
     this.canBlockAds,
+    this.onClose,
   });
 
   /// Entry URL. Must be `http`/`https`; anything else shows the error card.
@@ -76,6 +77,13 @@ class MusicPlayer extends StatefulWidget {
   /// server-side into the audio stream and cannot be filtered by any URL
   /// filter). Pass an explicit value only to override the inference.
   final bool? canBlockAds;
+
+  /// Closes the player.
+  ///
+  /// The player used to be a full-screen route, so it had no close button —
+  /// the back gesture did it. It now lives in a panel on the launcher, which
+  /// has no back gesture of its own, so it needs one.
+  final VoidCallback? onClose;
 
   @override
   State<MusicPlayer> createState() => _MusicPlayerState();
@@ -273,6 +281,7 @@ class _MusicPlayerState extends State<MusicPlayer> {
           _Header(
             title: widget.title,
             canBlockAds: _effectiveCanBlockAds,
+            onClose: widget.onClose,
             foregroundColor: fg,
             backgroundColor: widget.backgroundColor,
           ),
@@ -326,12 +335,14 @@ class _Header extends StatelessWidget {
   const _Header({
     required this.title,
     required this.canBlockAds,
+    this.onClose,
     required this.foregroundColor,
     required this.backgroundColor,
   });
 
   final String title;
   final bool canBlockAds;
+  final VoidCallback? onClose;
   final Color foregroundColor;
   final Color backgroundColor;
 
@@ -361,6 +372,18 @@ class _Header extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
+          if (onClose != null) ...[
+            IconButton(
+              onPressed: onClose,
+              icon: Icon(Icons.close_rounded, color: foregroundColor),
+              iconSize: 20,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Close',
+            ),
+            const SizedBox(width: 8),
+          ],
           Icon(
             canBlockAds ? Icons.block : Icons.speaker_phone_outlined,
             size: 16,

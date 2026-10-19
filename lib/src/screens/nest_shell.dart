@@ -147,7 +147,11 @@ class _NestShellState extends State<NestShell> {
     if (page == ShellPage.weather) {
       _ensureWeatherLocation();
     }
-    setState(() {});
+    // No setState here: this listener is attached to the controller, and the
+    // controller is already in the shell's AnimatedBuilder's merge list, so the
+    // shell rebuilds anyway. Calling setState as well built the entire tree
+    // twice for every frame of a swipe — the single biggest CPU cost in the
+    // app, and the reason a drag could spike a cheap tablet to 100%.
   }
 
   void _onLocationChanged() {
@@ -339,10 +343,20 @@ class _NestShellState extends State<NestShell> {
           // The lesson: when a service is added to the shell, it goes in here.
           // A service that only registers a listener still cannot repaint the
           // screen, because this builder is what builds the screen.
+          // Deliberately NOT including _c.pageAnim or _c.sheetAnim.
+          //
+          // They used to be here, and it cost two full rebuilds of the shell
+          // for every frame of a swipe: the animation notified this builder,
+          // and _onControllerChanged called setState as well, so the same
+          // frame built the whole tree twice.
+          //
+          // The carousel's per-page AnimatedBuilders listen to pageAnim
+          // themselves, and the launcher sheet has its own, so neither needs
+          // the shell to rebuild in order to move. What is left here are the
+          // things whose *content* changes and therefore genuinely need a
+          // rebuild.
           animation: Listenable.merge([
             _c,
-            _c.pageAnim,
-            _c.sheetAnim,
             widget.clock,
             widget.weather,
             if (widget.location != null) widget.location!,
@@ -403,7 +417,12 @@ class _NestShellState extends State<NestShell> {
                 // drag across the screen did nothing at all — and a synthetic
                 // swipe, which is steady rather than flicked, did nothing
                 // either, which is how this was found.
-                onHorizontalDragUpdate: (d) => _dragDx += d.delta.dx,
+                onHorizontalDragUpdate: (d) {
+                  _dragDx += d.delta.dx;
+                  // The carousel follows the finger. Before this it sat still
+                  // until release and then jumped.
+                  _c.onHorizontalDragUpdate(_dragDx, _m.size.width);
+                },
                 onHorizontalDragEnd: (d) {
                   _c.onHorizontalDragEnd(
                     d.primaryVelocity ?? 0,
@@ -770,20 +789,37 @@ class _NestShellState extends State<NestShell> {
   /// The WebView is constructed only here, never at app start — building one
   /// eagerly would add a WebView and its first page load to a cold start that
   /// currently measures 0.8s on a UNISOC T610.
+  /// Opens a site in a panel on the launcher, not full screen.
+  ///
+  /// It used to be a full-screen route, which is the same shape as a browser
+  /// and nothing like a Nest. The launcher is the product: a web page that
+  /// takes the whole screen stops being a launcher and becomes a browser that
+  /// happens to be full of web pages.
+  ///
+  /// So it is a panel now — the launcher stays visible behind it, in the
+  /// launcher's own shape, and the panel can be dismissed by tapping outside
+  /// it or by its close button.
   void _openMusic(String url, String title) {
-    Navigator.of(context).push(
-      PageRouteBuilder<void>(
-        opaque: false,
-        barrierColor: Colors.black.withValues(alpha: 0.88),
-        transitionDuration: const Duration(milliseconds: 260),
-        pageBuilder: (_, _, _) => MusicPlayer(
+    final m = _m;
+    final palette = _c.palette;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      // Transparent, because the panel draws its own surface. The default sheet
+      // has a hard-edged white background that would look like a different app.
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      builder: (sheetContext) => _MusicPanel(
+        metrics: m,
+        palette: palette,
+        type: NestType(m),
+        child: MusicPlayer(
           url: url,
           title: title,
           backgroundColor: const Color(0xFF121212),
           foregroundColor: Colors.white,
+          onClose: () => Navigator.of(sheetContext).maybePop(),
         ),
-        transitionsBuilder: (_, anim, _, child) =>
-            FadeTransition(opacity: anim, child: child),
       ),
     );
   }
@@ -843,6 +879,72 @@ class _NestShellState extends State<NestShell> {
 /// A single carousel page with the Nest's parallax + scale treatment.
 /// A single carousel page with the Nest's parallax + scale treatment.
 /// One radio station, as a row in the music card.
+/// The box a web page appears in.
+///
+/// A rounded panel with the launcher's own surface colour, sitting on a
+/// scrim, leaving the launcher visible behind it. Sized so the page inside is
+/// usable rather than a postage stamp, and so it is obviously a panel and not
+/// a full-screen app that happens to have rounded corners.
+class _MusicPanel extends StatelessWidget {
+  const _MusicPanel({
+    required this.metrics,
+    required this.palette,
+    required this.type,
+    required this.child,
+  });
+
+  final NestMetrics metrics;
+  final AmbientPalette palette;
+  final NestType type;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = metrics.px(22);
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.px(18),
+          vertical: metrics.px(18),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: Container(
+            decoration: BoxDecoration(
+              color: palette.surface,
+              borderRadius: BorderRadius.circular(radius),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: metrics.px(28),
+                  offset: Offset(0, metrics.px(8)),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // The handle, like the launcher's own sheet.
+                Container(
+                  margin: EdgeInsets.only(top: metrics.px(9)),
+                  width: metrics.px(36),
+                  height: metrics.px(4),
+                  decoration: BoxDecoration(
+                    color: palette.onSurface.withValues(alpha: 0.28),
+                    borderRadius: BorderRadius.circular(metrics.px(2)),
+                  ),
+                ),
+                SizedBox(height: metrics.px(6)),
+                Flexible(child: child),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _StationButton extends StatelessWidget {
   const _StationButton({
     required this.station,
