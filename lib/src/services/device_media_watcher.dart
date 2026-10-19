@@ -92,6 +92,35 @@ class DeviceMediaWatcher extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    // Only notify when something actually changed.
+    //
+    // This polls every 400 ms, and the position field changes on every poll,
+    // so "notify only when the session changed" has to mean "changed in a way
+    // the card can see" — the track, or whether it is playing. The position is
+    // deliberately not compared, because comparing it would notify on every
+    // single poll, which is the thing being fixed.
+    final next = ExternalSession(
+      package: raw['package'] as String? ?? '',
+      title: raw['title'] as String? ?? '',
+      artist: raw['artist'] as String? ?? '',
+      album: raw['album'] as String? ?? '',
+      artworkPath: raw['artworkPath'] as String? ?? '',
+      playing: raw['playing'] == true,
+      position: Duration(milliseconds: _ms(raw['positionMs'])),
+      duration: Duration(milliseconds: _ms(raw['durationMs'])),
+    );
+    final previous = _session;
+    if (previous != null &&
+        previous.title == next.title &&
+        previous.artist == next.artist &&
+        previous.album == next.album &&
+        previous.playing == next.playing &&
+        previous.duration == next.duration) {
+      // The same track, still playing. Update the position without waking
+      // anyone up.
+      _session = next;
+      return;
+    }
     // The permission can be revoked while the app is running; the native side
     // starts sending nulls, and a stale card must not outlive it.
     _hasPermission = true;

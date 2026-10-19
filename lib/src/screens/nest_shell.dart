@@ -1029,15 +1029,25 @@ class _PageLayer extends StatelessWidget {
     final d = offset.clamp(-1.6, 1.6);
     final scale = 1 - d.abs() * 0.06;
     final opacity = (1 - d.abs() * 1.25).clamp(0.0, 1.0);
+    // The Opacity is skipped entirely when it would not do anything.
+    //
+    // An `Opacity` widget allocates a saveLayer — a full-screen offscreen
+    // buffer — for the thing it wraps. The *current* page is at opacity 1.0
+    // and fills the screen, so it was paying for a full-screen saveLayer to
+    // display a page that was not transparent at all, on every frame of a
+    // swipe. At opacity 1.0 there is no layer to allocate, so there is no
+    // reason to ask for one.
+    final Widget moved = Transform.translate(
+      offset: Offset(d * 90, 0),
+      child: Transform.scale(scale: scale, child: child),
+    );
+    if (opacity >= 0.999) {
+      // Fully opaque: no saveLayer needed, so none is allocated.
+      return IgnorePointer(ignoring: false, child: moved);
+    }
     return IgnorePointer(
       ignoring: opacity < 0.02,
-      child: Opacity(
-        opacity: opacity,
-        child: Transform.translate(
-          offset: Offset(d * 90, 0),
-          child: Transform.scale(scale: scale, child: child),
-        ),
-      ),
+      child: Opacity(opacity: opacity, child: moved),
     );
   }
 }
