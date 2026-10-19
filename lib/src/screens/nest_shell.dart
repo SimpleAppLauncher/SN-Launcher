@@ -6,6 +6,8 @@ import '../models/nest_action.dart';
 import '../services/assistant_service.dart';
 import '../services/feature_flags.dart';
 import '../services/location_service.dart';
+import '../services/device_media_watcher.dart';
+import '../services/playback_service.dart';
 import '../services/todo_service.dart';
 import '../services/photo_frame_service.dart';
 import '../models/photo_credit.dart';
@@ -27,6 +29,7 @@ import '../widgets/music_player.dart';
 import '../widgets/photo_frame.dart';
 import '../widgets/settings_page.dart';
 import '../widgets/todo_card.dart';
+import '../widgets/now_playing_card.dart';
 import '../widgets/weather_page.dart';
 
 /// The Nest launcher shell.
@@ -55,6 +58,8 @@ class NestShell extends StatefulWidget {
     this.assistant,
     this.todo,
     this.location,
+    this.playback,
+    this.media,
     this.suggested,
     this.actions,
     this.animateDecorations = true,
@@ -73,6 +78,16 @@ class NestShell extends StatefulWidget {
 
   /// Where the device is. Only the weather page needs it.
   final LocationService? location;
+
+  /// The native player.
+  ///
+  /// Null where there is no audio service, so the transport is never rendered
+  /// with controls that cannot work. A music card full of dead buttons is worse
+  /// than no transport at all.
+  final PlaybackService? playback;
+
+  /// Active media sessions belonging to other apps.
+  final DeviceMediaWatcher? media;
 
   /// Optional. Absent in tests and on desktop, where the background stays on
   /// the bundled photograph.
@@ -146,6 +161,8 @@ class _NestShellState extends State<NestShell> {
     if (location == null) return;
     _locationRequested = true;
     final place = await location.resolve();
+    debugPrint('SNLOC resolve -> place=$place error="${location.lastError}" '
+        'resolving=${location.resolving}');
     if (!mounted) return;
     if (place == null) return;
     // The weather service needs the coordinates. Configuring it also kicks off
@@ -306,7 +323,32 @@ class _NestShellState extends State<NestShell> {
           // carousel animates a separate AnimationController — which notifies
           // its own listeners, *not* the controller. Without these in the list
           // the UI only repaints by accident, whenever the clock ticks.
-          animation: Listenable.merge([_c, _c.pageAnim, widget.clock, widget.weather]),
+          //
+          // This list is the reason the weather page showed a temperature with
+          // no place name. Everything below this widget is built inside this
+          // builder, and `AnimatedBuilder` delegates to `ListenableBuilder`,
+          // which *caches* the widget its builder returned and only rebuilds
+          // when one of these notifies. `location` was missing from the list,
+          // so `LocationService` resolving did nothing at all: the shell's own
+          // `setState` rebuilt this widget, and the cached child was handed
+          // straight back. The page corrected itself only when something in
+          // the list happened to notify — which is why it looked intermittent
+          // rather than broken.
+          //
+          // The lesson: when a service is added to the shell, it goes in here.
+          // A service that only registers a listener still cannot repaint the
+          // screen, because this builder is what builds the screen.
+          animation: Listenable.merge([
+            _c,
+            _c.pageAnim,
+            _c.sheetAnim,
+            widget.clock,
+            widget.weather,
+            if (widget.location != null) widget.location!,
+            if (widget.photos != null) widget.photos!,
+            if (widget.assistant != null) widget.assistant!,
+            if (widget.todo != null) widget.todo!,
+          ]),
           builder: (context, _) {
             final palette = _c.palette;
             final assist = widget.assistant;
@@ -421,10 +463,14 @@ class _NestShellState extends State<NestShell> {
                           ),
 
                         // ── Page carousel ───────────────────────────────────
-                        AnimatedBuilder(
-                          animation: _c.pageAnim,
-                          builder: (context, _) => _buildCarousel(palette, type),
-                        ),
+                        // Not wrapped in an AnimatedBuilder of its own. It used
+                        // to be, and that wrapper is why the weather page could
+                        // show a temperature with no place name: see the note
+                        // in _buildCarousel. The per-page AnimatedBuilders
+                        // inside drive the animation, and each one keeps its
+                        // content as a `child` so the content is built here,
+                        // in the ordinary path, and a setState reaches it.
+                        _buildCarousel(palette, type),
 
                         // ── Launcher sheet ──────────────────────────────────
                         // Driven by its own AnimatedBuilder rather than the
@@ -513,28 +559,51 @@ class _NestShellState extends State<NestShell> {
   }
 
   Widget _buildCarousel(AmbientPalette palette, NestType type) {
-    return AnimatedBuilder(
-      animation: _c.pageAnim,
-      builder: (context, child) {
-        final value = _c.pageAnim.value;
-        // The available pages, not the enum. A build without the weather page
-        // has no hole in its carousel.
-        final pages = _c.availablePages;
-        final index = value.round().clamp(0, pages.length - 1);
-        // Parallax: neighbouring pages sit at ~30% offset and scale down a
-        // touch, which is what gives the Nest carousel its depth.
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            for (var i = 0; i < pages.length; i++)
-              _PageLayer(
+    final pages = _c.availablePages;
+
+    // The page *content* is built here, in the ordinary build path. The
+    // animation only ever re-applies the positioning around it.
+    //
+    // This used to be the other way round — one AnimatedBuilder wrapping the
+    // whole Stack, with every page's content constructed inside its builder.
+    // That silently breaks every non-navigational update: `AnimatedBuilder`
+    // delegates to `ListenableBuilder`, which caches the widget its builder
+    // returned and only rebuilds when the animation itself notifies. A
+    // `setState` from anywhere else — the location service resolving, the
+    // weather refreshing, the to-do list changing, the photo rotating —
+    // rebuilt this subtree and handed the same cached widget straight back.
+    //
+    // The symptom that exposed it: the weather page sat there showing a
+    // temperature and no place name, and the place had in fact resolved and
+    // the weather had in fact fetched, because the weather only fetches once it
+    // has coordinates. Repainting required a page animation, so the page
+    // corrected itself the moment you swiped away and back, which is exactly
+    // the kind of bug that looks like "works sometimes".
+    //
+    // Passing the content as AnimatedBuilder's `child` fixes that — the child
+    // is built by the parent and passed through untouched — and as a bonus it
+    // stops every page's content being reconstructed on every frame of a
+    // swipe. On a UNISOC T610 that is not a small saving.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        for (var i = 0; i < pages.length; i++)
+          AnimatedBuilder(
+            animation: _c.pageAnim,
+            builder: (context, child) {
+              final value = _c.pageAnim.value;
+              final index = value.round().clamp(0, pages.length - 1);
+              // Parallax: neighbouring pages sit at ~30% offset and scale down
+              // a touch, which is what gives the Nest carousel its depth.
+              return _PageLayer(
                 visible: i == index,
                 offset: (i - value),
-                child: _pageContent(pages[i], palette, type),
-              ),
-          ],
-        );
-      },
+                child: child!,
+              );
+            },
+            child: _pageContent(pages[i], palette, type),
+          ),
+      ],
     );
   }
 
@@ -576,6 +645,8 @@ class _NestShellState extends State<NestShell> {
           return const SizedBox.shrink();
         }
         return _DigestPage(
+          playback: widget.playback,
+          media: widget.media,
           metrics: _m,
           type: type,
           palette: palette,
@@ -601,6 +672,7 @@ class _NestShellState extends State<NestShell> {
           palette: palette,
           type: type,
           locating: widget.location?.resolving ?? false,
+          locationError: widget.location?.lastError ?? '',
         );
       case ShellPage.homeControl:
         return _HomeControlPage(metrics: _m, type: type, palette: palette);
@@ -830,6 +902,8 @@ class _DigestPage extends StatelessWidget {
     required this.theme,
     required this.onThemePick,
     required this.onOpenMusic,
+    this.playback,
+    this.media,
     this.photos,
   });
 
@@ -842,6 +916,12 @@ class _DigestPage extends StatelessWidget {
   final bool weatherLoading;
   final CalendarService? calendar;
   final TodoService? todo;
+
+  /// The native player, when there is one.
+  final PlaybackService? playback;
+
+  /// Active media sessions belonging to other apps.
+  final DeviceMediaWatcher? media;
   final NestTheme theme;
   final void Function(NestTheme) onThemePick;
 
@@ -1012,6 +1092,19 @@ class _DigestPage extends StatelessWidget {
               'YouTube: ads blocked\nSpotify: not blocked',
               style: type.caption(color: palette.onSurfaceVariant),
             ),
+            // The transport, once there is something to transport. Only when
+            // a track is loaded: an idle player showing empty fields and live
+            // controls looks like a broken app rather than a quiet one.
+            if (playback != null && playback!.state.hasTrack) ...[
+              SizedBox(height: m.px(14)),
+              NowPlayingCard(
+                metrics: m,
+                type: type,
+                palette: palette,
+                playback: playback!,
+                onOpen: () => onOpenMusic('', ''),
+              ),
+            ],
           ],
         ),
       );

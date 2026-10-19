@@ -106,8 +106,14 @@ class ClockBlock extends StatelessWidget {
             left: metrics.marginX,
             // Lifted by however much taller the clock got, so the gap between
             // the date and the clock stays what it was measured as.
+            //
+            // `Positioned(bottom:)` measures *upward* from the parent's bottom
+            // edge: a larger number puts the child higher. Subtracting here —
+            // which is what this did first — pushed the date down into the
+            // clock as soon as the zoom went above 1, and "Sun, Oct 18" ended
+            // up printed through the top of the digits. Plus, not minus.
             bottom: metrics.size.height -
-                metrics.px(NestMetrics.dateTextBoxBottomY) -
+                metrics.px(NestMetrics.dateTextBoxBottomY) +
                 grew,
             child: Text(ClockService.nestDate(now), style: type.date(color: color)),
           ),

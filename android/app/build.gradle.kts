@@ -125,3 +125,19 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// ── Media playback ──────────────────────────────────────────────────────────
+//
+// Media3, not ExoPlayer directly: it is the maintained line and it is what
+// `MediaSessionService` is built on.
+//
+// Chosen over a `just_audio`-style plugin for one reason that matters on this
+// hardware: those run a localhost HTTP proxy inside the app to handle headers
+// and caching. That is a second network stack resident in a process that
+// already holds the Flutter engine on a tablet with 2 GB of RAM. A plain
+// ExoPlayer plus a MethodChannel is a player and a message port.
+dependencies {
+    implementation("androidx.media3:media3-exoplayer:1.5.1")
+    implementation("androidx.media3:media3-session:1.5.1")
+    implementation("androidx.media3:media3-common:1.5.1")
+}

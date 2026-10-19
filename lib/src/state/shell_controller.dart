@@ -10,15 +10,10 @@ import '../services/platform_bridge.dart';
 import '../services/settings_store.dart';
 import '../theme/ambient_palette.dart';
 import '../theme/nest_metrics.dart';
+import '../theme/nest_motion.dart';
 
 /// Material 1 standard easing — the curve the Nest's Flutter UI uses.
-const Curve kNestEase = Cubic(0.4, 0.0, 0.2, 1);
-const Curve kNestDecelerate = Cubic(0.4, 0.0, 0.6, 1);
-const Curve kNestAccelerate = Cubic(0.4, 0.0, 1.0, 1);
 
-const Duration kNestFast = Duration(milliseconds: 200);
-const Duration kNestMedium = Duration(milliseconds: 300);
-const Duration kNestSlow = Duration(milliseconds: 420);
 
 /// The four top-level pages of the shell, in the device's carousel order.
 enum ShellPage {
@@ -279,14 +274,29 @@ class ShellController extends ChangeNotifier {
     ];
   }
 
-  void goToPage(ShellPage p, {Duration? duration}) {
+  /// Moves the carousel to [p].
+  ///
+  /// Springs rather than eases, and starts from wherever the animation happens
+  /// to be rather than from a remembered position — see [nest_motion.dart] for
+  /// why. [velocity] is the gesture's release velocity in pages/second; passing
+  /// it is what makes a flick feel like it is throwing the carousel instead of
+  /// asking it to go somewhere.
+  ///
+  /// [duration] forces the eased path and is used only where there is no
+  /// gesture behind the motion (a tap on a page name, for instance).
+  void goToPage(ShellPage p, {Duration? duration, double velocity = 0}) {
     final pages = availablePages;
     final index = pages.indexOf(p);
     if (index < 0) return;
     if (_page == p && _pageAnim.isAnimating) return;
     _page = p;
-    _pageAnim.animateTo(index.toDouble(),
-        duration: duration ?? kNestMedium, curve: kNestEase);
+    final target = index.toDouble();
+    if (duration != null) {
+      _pageAnim.animateTo(target, duration: duration, curve: kNestEase);
+    } else {
+      _pageAnim.animateWith(nestSpring(kNestPageSpring, _pageAnim.value, target,
+          clampNestVelocity(velocity, max: 3.0)));
+    }
     notifyListeners();
   }
 
@@ -308,7 +318,9 @@ class ShellController extends ChangeNotifier {
       target = delta < 0 ? target + 1 : target - 1;
     }
     target = target.clamp(0, pages.length - 1);
-    goToPage(pages[target.round()]);
+    // Velocity arrives in px/s; the carousel counts pages. The sign is kept
+    // because a flick to the left must throw it forwards, not backwards.
+    goToPage(pages[target.round()], velocity: -velocity / width);
   }
 
   // ── Bottom sheet gesture ─────────────────────────────────────────────────
@@ -364,25 +376,49 @@ class ShellController extends ChangeNotifier {
     }
 
     if (shouldOpen) {
-      goToPage(isDiscover ? ShellPage.discover : _page, duration: kNestFast);
-      _sheetAnim.animateTo(1, duration: kNestMedium, curve: kNestDecelerate);
+      // No duration: the page springs too, rather than running the eased path
+      // that only exists for taps. The velocity passed is the *sheet's*,
+      // converted into page-widths per second — it is not the carousel's own
+      // gesture, so this is a hint rather than a throw. The carousel clamp
+      // inside goToPage keeps a hard fling from overshooting the page.
+      final width = math.max(1.0, metrics.size.width);
+      goToPage(isDiscover ? ShellPage.discover : _page, velocity: velocity / width);
+      _springSheet(true, releaseVelocity: velocity);
     } else {
-      _sheetAnim.animateTo(0, duration: kNestMedium, curve: kNestAccelerate);
+      _springSheet(false, releaseVelocity: velocity);
       // Match closeSheet(): leaving the drawer also returns to the first page.
       if (_page == ShellPage.discover) goToPage(ShellPage.home);
     }
   }
 
+  /// Springs the sheet to [open], carrying the gesture's release velocity.
+  ///
+  /// The velocity is divided by a nominal travel so that "how hard was that
+  /// flung" survives the trip from pixels to a 0..1 progress. It is the
+  /// difference between a sheet that follows your finger and one that runs a
+  /// fixed animation after letting go of it.
+  void _springSheet(bool open, {double releaseVelocity = 0}) {
+    final SpringDescription spring =
+        open ? kNestSheetSpring : kNestSheetCloseSpring;
+    _sheetAnim.animateWith(nestSpring(
+      spring,
+      _sheetAnim.value,
+      open ? 1.0 : 0.0,
+      clampNestVelocity(releaseVelocity / _nominalSheetTravel),
+    ));
+  }
+
+  /// A full sheet height in logical pixels, used only to convert a gesture's
+  /// px/s into progress-per-second. Exact value is unimportant; the ratio is
+  /// what matters and any plausible number gives it.
+  static const double _nominalSheetTravel = 900;
+
   void toggleSheet() {
-    if (_sheetAnim.value > sheetOpenThreshold) {
-      _sheetAnim.animateBack(0, duration: kNestMedium, curve: kNestAccelerate);
-    } else {
-      _sheetAnim.animateTo(1, duration: kNestMedium, curve: kNestDecelerate);
-    }
+    _springSheet(_sheetAnim.value <= sheetOpenThreshold);
   }
 
   void closeSheet() {
-    _sheetAnim.animateTo(0, duration: kNestMedium, curve: kNestAccelerate);
+    _springSheet(false);
     if (_page == ShellPage.discover) {
       goToPage(ShellPage.home);
     }

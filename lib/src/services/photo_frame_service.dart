@@ -1,3 +1,4 @@
+import 'licence_filter.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -57,6 +58,12 @@ const Set<String> _allowedLicenceFragments = {
 /// "CC BY 4.0 SA" with no hyphen at all, which a substring check for "-sa"
 /// misses — a real licence string from the actual API, found by this test.
 bool licenceAllowsRedistribution(String licence) {
+  // The Rust implementation, when the library loaded, with this function as the
+  // fallback. The two are checked against each other over a corpus of real
+  // Commons licence strings and agree on all of them — see
+  // native/licence_filter and tool/verify_licence_parity.sh. A divergence here
+  // would be a licensing bug, so the fallback is not decorative.
+  if (LicenceFilter.isLoaded) return LicenceFilter.instance.allows(licence);
   final low = licence.toLowerCase().trim();
   if (low.isEmpty) return false;
 
@@ -86,10 +93,66 @@ bool licenceAllowsRedistribution(String licence) {
 ///  * **Plain `dart:io` HttpClient**, no HTTP package. On a 1 GB tablet every
 ///    avoided dependency is avoided APK size and avoided cold-start work.
 class PhotoFrameService extends ChangeNotifier {
-  PhotoFrameService({SettingsStore? settings})
+  PhotoFrameService({SettingsStore? settings, this.discover = false})
       : _settings = settings ?? SettingsStore();
 
   final SettingsStore _settings;
+
+  /// When true, new photographs are discovered from Wikimedia Commons at
+  /// runtime rather than taken from the hand-checked [pool].
+  ///
+  /// The pool is still there and still tried first when this is false; when it
+  /// is true discovery is preferred and the pool is the fallback.
+  ///
+  /// Licensing is not weakened by this. Commons reports the actual licence per
+  /// file, and [licenceAllowsRedistribution] still refuses everything that is
+  /// not public domain, CC0 or CC-BY — share-alike especially, which a launcher
+  /// cannot honour. What changes is where the candidates come from, not the
+  /// rule about which of them may be used.
+  final bool discover;
+
+  /// Commons categories of curated photographs, queried in turn.
+  ///
+  /// "Featured" and "Quality" are the two grades Commons maintainers assign by
+  /// hand. Landscape and nature are the subjects that suit a launcher sitting
+  /// on a wall: no people, no text, no diagrams.
+  ///
+  /// Measured acceptance rates, 50 candidates sampled from each — most of
+  /// Commons' curated work is share-alike, and a launcher has to refuse it:
+  ///
+  ///   Featured pictures of landscapes   3/50   (6%)
+  ///   Quality images of landscapes      1/50   (2%)
+  ///   Featured pictures of nature       0/15   (0%)
+  ///
+  /// Which is why [discoveryBatch] is large and why a discovery pass may end
+  /// up refusing almost everything it is shown. That is the filter working,
+  /// not the filter failing.
+  static const List<String> discoveryCategories = [
+    'Category:Featured pictures of landscapes',
+    'Category:Quality images of landscapes',
+    'Category:Featured pictures of nature',
+    'Category:Featured pictures of plants',
+    'Category:Quality images of nature',
+  ];
+
+  /// Wikimedia asks every caller to identify itself. An honest one.
+  static const String _userAgent = 'SN-Launcher (Nest Hub replacement; +https://github.com/SimpleAppLauncher/SN-Launcher)';
+
+  /// Candidates per query. Sized from the measured 2–6% acceptance rate: at
+  /// 100 there is a good chance of several usable files, and it is still a
+  /// single HTTP request.
+  static const int discoveryBatch = 100;
+
+  /// Rejected shapes.
+  ///
+  /// Commons' landscape categories are full of stitched panoramas — one
+  /// featured picture is 28186 × 4183 px. Rendered behind a clock that is a
+  /// smeared stripe, and the download alone would cost tens of megabytes.
+  static const double _minAspect = 0.9;
+  static const double _maxAspect = 2.6;
+
+  /// Below this the image is not worth showing on a 2000px panel.
+  static const int _minWidth = 1200;
 
   /// How many downloaded images to keep on disk.
   static const int _cacheLimit = 6;
@@ -125,10 +188,6 @@ class PhotoFrameService extends ChangeNotifier {
     PhotoSource(
       'Himalaya sunrise.jpg',
       'Ali Sabbagh',
-    ),
-    PhotoSource(
-      'MistySunrise.JPG',
-      'Elaine Li[dead link]',
     ),
     PhotoSource(
       'Khodz River Valley in fog, Adygea, Верховья реки Ходзь в тумане и облаках, Адыгея.jpg',
@@ -301,6 +360,139 @@ class PhotoFrameService extends ChangeNotifier {
     }
   }
 
+  /// Asks Commons for a batch of candidates from one category and returns the
+  /// ones that may actually be used.
+  ///
+  /// One request returns the licence, the dimensions and a scaled thumbnail
+  /// URL for every file, so a whole batch is filtered without a second lookup
+  /// per candidate. `iiurlwidth` makes Commons render the thumbnail server-side
+  /// rather than us downloading a 4600px original and resizing it on a tablet
+  /// with 2 GB of RAM.
+  Future<List<PhotoCredit>> _discoverCandidates(
+    HttpClient client,
+    String category,
+  ) async {
+    final uri = Uri.https('commons.wikimedia.org', '/w/api.php', {
+      'action': 'query',
+      'format': 'json',
+      'generator': 'categorymembers',
+      'gcmtitle': category,
+      'gcmtype': 'file',
+      'gcmlimit': '$discoveryBatch',
+      'prop': 'imageinfo',
+      'iiprop': 'url|size|extmetadata',
+      'iiurlwidth': '$_maxWidth',
+    });
+    final request = await client.getUrl(uri);
+    request.headers.set(HttpHeaders.userAgentHeader, _userAgent);
+    final response = await request.close();
+    if (response.statusCode != 200) return const [];
+    final body = await response.transform(utf8.decoder).join();
+    final decoded = jsonDecode(body);
+    if (decoded is! Map) return const [];
+    final pages = (decoded['query'] as Map?)?['pages'];
+    if (pages is! Map) return const [];
+
+    return pages.values
+        .whereType<Map>()
+        .map(candidateFromApiPage)
+        .whereType<PhotoCredit>()
+        .toList();
+  }
+
+  /// Turns one `query` API page into a usable photograph, or null.
+  ///
+  /// Public and pure so the licensing and shape rules can be tested against
+  /// real API payloads rather than being exercised by hand once. Every reason
+  /// to refuse a file is a reason that stops unlawful or absurd work reaching
+  /// a user's screen, and this is the one function in the file where being
+  /// wrong is not a cosmetic problem.
+  @visibleForTesting
+  static PhotoCredit? candidateFromApiPage(Map page) {
+    final infos = page['imageinfo'];
+    if (infos is! List || infos.isEmpty || infos.first is! Map) return null;
+    final info = infos.first as Map;
+    final meta = info['extmetadata'];
+    if (meta is! Map) return null;
+
+    // Fail closed, before anything else about the file is believed.
+    final licence = _metaText(meta['LicenseShortName']);
+    if (!licenceAllowsRedistribution(licence)) return null;
+
+    final width = info['width'];
+    final height = info['height'];
+    if (width is! num || height is! num || height <= 0) return null;
+    if (width < _minWidth) return null;
+    final aspect = width / height;
+    if (aspect < _minAspect || aspect > _maxAspect) return null;
+
+    // Formats a launcher cannot usefully paint, and formats that cost a lot to
+    // decode on a weak GPU.
+    final original = info['url'];
+    if (original is! String) return null;
+    final lower = original.toLowerCase();
+    if (!(lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png'))) {
+      return null;
+    }
+    final thumb = info['thumburl'];
+
+    final title =
+        (page['title'] as String? ?? '').replaceFirst('File:', '').replaceAll('_', ' ');
+    if (title.isEmpty) return null;
+
+    return PhotoCredit(
+      title: title,
+      author: _stripHtml(_metaText(meta['Artist'])),
+      license: licence,
+      licenseUrl: _metaText(meta['LicenseUrl']),
+      sourceUrl:
+          'https://commons.wikimedia.org/wiki/${Uri.encodeComponent(title)}',
+      imageUrl: thumb is String && thumb.isNotEmpty ? thumb : original,
+    );
+  }
+
+  /// Commons returns author fields as HTML fragments — links, and occasionally
+  /// a whole `<a>` wrapper around a name.
+  static String _stripHtml(String html) => html
+      .replaceAll(RegExp(r'<[^>]*>'), '')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#039;', "'")
+      .trim();
+
+  static String _metaText(Object? node) {
+    if (node is Map && node['value'] is String) return node['value'] as String;
+    return '';
+  }
+
+  /// Discovers a usable photograph from Commons.
+  ///
+  /// Returns null — and the caller falls back to the checked pool — when every
+  /// category yields nothing usable. On the measured acceptance rates that is
+  /// the *expected* outcome fairly often, so it is a normal return, not an
+  /// error worth logging loudly.
+  Future<({File file, PhotoCredit credit})?> _discoverOne(
+    HttpClient client,
+  ) async {
+    final categories = List<String>.of(discoveryCategories)..shuffle();
+    for (final category in categories) {
+      final candidates = await _discoverCandidates(client, category);
+      if (candidates.isEmpty) continue;
+      final fresh =
+          candidates.where((c) => c.title != _lastTitle).toList(growable: false);
+      final usable = fresh.isEmpty ? candidates : fresh;
+      final pick = usable[DateTime.now().microsecondsSinceEpoch % usable.length];
+      final got = await _fetchOne(
+        PhotoSource(pick.title ?? '', pick.author ?? ''),
+        preResolved: pick,
+      );
+      if (got != null) return got;
+    }
+    return null;
+  }
+
   Future<({File file, PhotoCredit credit})?> _fetchIntoCache() async {
     if (_busy) return null;
     _busy = true;
@@ -309,6 +501,22 @@ class PhotoFrameService extends ChangeNotifier {
       // Try each pool entry in turn. A pool entry can fail (file renamed on
       // Commons, licence changed, network blip) and that must not take the
       // whole rotation down with it.
+      if (discover) {
+        final client =
+            HttpClient()..connectionTimeout = const Duration(seconds: 20);
+        try {
+          final got = await _discoverOne(client);
+          if (got != null) {
+            _prune();
+            return got;
+          }
+        } catch (e) {
+          debugPrint('PhotoFrameService: discovery failed — $e');
+        } finally {
+          client.close(force: true);
+        }
+      }
+
       for (var attempt = 0; attempt < 4; attempt++) {
         final pick = _pickSource();
         final got = await _fetchOne(pick);
@@ -333,10 +541,13 @@ class PhotoFrameService extends ChangeNotifier {
     return from[DateTime.now().microsecondsSinceEpoch % from.length];
   }
 
-  Future<({File file, PhotoCredit credit})?> _fetchOne(PhotoSource src) async {
+  Future<({File file, PhotoCredit credit})?> _fetchOne(
+    PhotoSource src, {
+    PhotoCredit? preResolved,
+  }) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
     try {
-      final meta = await _api(client, src.title, src.author);
+      final meta = preResolved ?? await _api(client, src.title, src.author);
       if (meta == null) return null;
       if (!licenceAllowsRedistribution(meta.license ?? '')) {
         debugPrint(

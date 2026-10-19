@@ -12,7 +12,8 @@
 
     "assistant": false,
     "music": false,
-    "photoRotation": false,
+    "photoRotation": true,
+    "photoDiscovery": false,
     "themePicker": false,
     "weather": false,
     "sunTheme": false

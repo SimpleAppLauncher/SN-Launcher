@@ -11,6 +11,8 @@ import 'src/services/feature_flags.dart';
 import 'src/services/location_service.dart';
 import 'src/services/todo_service.dart';
 import 'src/services/photo_frame_service.dart';
+import 'src/services/device_media_watcher.dart';
+import 'src/services/playback_service.dart';
 import 'src/services/platform_bridge.dart';
 import 'src/services/settings_store.dart';
 import 'src/services/frame_stats.dart';
@@ -78,7 +80,20 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   late final ClockService _clock = ClockService();
   late final WeatherService _weather = WeatherService();
   late final CalendarService _calendar = CalendarService();
-  late final PhotoFrameService _photos = PhotoFrameService();
+  // ef discovers new photographs from Wikimedia Commons; the reduced build
+  // uses the hand-checked pool. Same licence rules either way — see
+  // PhotoFrameService.discover.
+  /// ef only. The reduced build has no audio service, so it is handed null
+  /// and the transport never appears — a card with dead controls is worse than
+  /// no card.
+  late final PlaybackService _playback = PlaybackService();
+
+  /// Notices whatever is playing on the device, whoever is playing it.
+  late final DeviceMediaWatcher _media = DeviceMediaWatcher();
+
+  late final PhotoFrameService _photos = PhotoFrameService(
+    discover: FeatureFlags.current.isOn('photoDiscovery'),
+  );
   late final AssistantService _assistant = AssistantService();
   final SettingsStore _settings = SettingsStore();
   late final TodoService _todo = TodoService(_settings);
@@ -103,6 +118,16 @@ class _NestLauncherAppState extends State<NestLauncherApp>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_controller?.restore());
       if (FeatureFlags.current.isOn('calendar')) {
+        // Without this the weather fetches exactly once and never again:
+        // `configure()` triggers a single refresh, and the 15-minute timer that
+        // keeps it current is started by `start()`. Nothing was calling it, so
+        // the temperature on the screen was whatever it was when the page was
+        // first opened — which is how it ended up stuck on 21° indefinitely.
+        _weather.startAutoRefresh();
+        // Polls the system's active media sessions so the card appears when
+        // something else is playing. Without notification access this simply
+        // reports nothing, which is the honest failure — it does not guess.
+        _media.startPolling();
         unawaited(_calendar.start());
       }
       // The to-do list is a disk read behind the same settings store the
@@ -178,6 +203,8 @@ class _NestLauncherAppState extends State<NestLauncherApp>
     _todo.dispose();
     _location.dispose();
     _photos.dispose();
+    _playback.dispose();
+    _media.dispose();
     _assistant.dispose();
     _clock.dispose();
     _weather.dispose();
@@ -215,6 +242,8 @@ class _NestLauncherAppState extends State<NestLauncherApp>
               weather: _weather,
               calendar: _calendar,
               photos: _photos,
+              playback: _playback,
+              media: _media,
               assistant: _assistant,
               todo: _todo,
             ),

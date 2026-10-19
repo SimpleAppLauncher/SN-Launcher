@@ -1,0 +1,10 @@
+[package]
+name = "licence_filter"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+# cdylib so dart:ffi can load it; rlib so `cargo test` works on the host.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]

@@ -8,6 +8,7 @@
     "assistant": true,
     "music": true,
     "photoRotation": true,
+    "photoDiscovery": true,
     "themePicker": true,
     "calendar": true,
     "todo": true,

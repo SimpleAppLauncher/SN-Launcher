@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/location_service.dart';
 import '../services/weather_service.dart';
+import 'weather_artwork.dart';
 import '../theme/ambient_palette.dart';
 import 'weather_glyph.dart';
 import '../theme/nest_metrics.dart';
@@ -29,6 +30,7 @@ class WeatherPage extends StatelessWidget {
     super.key,
     required this.weather,
     required this.place,
+    this.locationError = '',
     required this.metrics,
     required this.palette,
     required this.type,
@@ -37,6 +39,14 @@ class WeatherPage extends StatelessWidget {
 
   final WeatherNow weather;
   final GeoPlace? place;
+
+  /// Why the location could not be worked out, if it could not.
+  ///
+  /// Shown on the page rather than swallowed. A bare temperature with no idea
+  /// where it came from is the single worst thing this screen could do: it
+  /// looks authoritative and is not. If we cannot place the reading, the page
+  /// says so instead of implying the number is about wherever you are.
+  final String locationError;
   final NestMetrics metrics;
   final AmbientPalette palette;
   final NestType type;
@@ -59,6 +69,15 @@ class WeatherPage extends StatelessWidget {
       ),
       child: Stack(
         children: [
+          // The weather, drawn. Rain streaks, snow, fog banks, a hazy sun —
+          // enough that the page reads as weather from across a kitchen
+          // rather than as a blue rectangle with a number on it.
+          Positioned.fill(
+            child: WeatherArtwork(
+              condition: weather.condition,
+              ink: _ink(sky),
+            ),
+          ),
           // The whole page is drawn in the sky's ink, not the palette's. A pale
           // sky needs dark text; a storm needs light text. Deciding it here
           // rather than per widget is what keeps the page coherent.
@@ -70,7 +89,15 @@ class WeatherPage extends StatelessWidget {
               child: const SizedBox.shrink(),
             ),
           ),
-          SafeArea(
+          // Positioned.fill, not a bare child. The Stack's default fit is
+          // loose, so an unpositioned Column gets loose constraints, sizes
+          // itself to its widest child and sits in the top-left corner. The
+          // temperature and the sentence were jammed against the left edge
+          // instead of centred. Nothing caught it: every text was present,
+          // every assertion passed, and it looked like a design choice in a
+          // screenshot until you measured where the words actually were.
+          Positioned.fill(
+            child: SafeArea(
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: m.px(48),
@@ -105,10 +132,22 @@ class WeatherPage extends StatelessWidget {
                   ),
                   SizedBox(height: m.px(14)),
                   _highLow(m, sky),
+                  SizedBox(height: m.px(10)),
+                  // "It's raining this afternoon." A sentence, because that is
+                  // how a person would say it and this is a screen someone
+                  // glances at from across a room.
+                  Text(
+                    weather.condition.sentence(metrics.size.height > 0
+                        ? DateTime.now().hour
+                        : 12),
+                    style: type.caption(color: _ink(sky).withValues(alpha: 0.8)),
+                    textAlign: TextAlign.center,
+                  ),
                   const Spacer(),
                   _footer(m, sky),
                 ],
               ),
+            ),
             ),
           ),
         ],
@@ -118,7 +157,18 @@ class WeatherPage extends StatelessWidget {
 
   Widget _placeLine(NestMetrics m, List<Color> sky) {
     final name = place?.displayName ?? weather.location;
-    if (name.isEmpty && !locating) return const SizedBox.shrink();
+    if (!locating && name.isEmpty) {
+      // Nothing to say about where this is. Say that, rather than showing a
+      // confident-looking temperature and letting it be assumed.
+      if (locationError.isEmpty) return const SizedBox.shrink();
+      return Text(
+        locationError,
+        style: type.caption(color: _ink(sky).withValues(alpha: 0.6)),
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [

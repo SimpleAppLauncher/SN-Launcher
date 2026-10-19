@@ -98,6 +98,11 @@ void main() {
       'digestPage',
       'calendar',
       'todo',
+      // Added 2026-10-19 at the owner's request: the reduced build should
+      // change its background picture too, using the same downloaded pool the
+      // ef build uses. It was never a feature difference between the two —
+      // only a flag that happened to be off.
+      'photoRotation',
     };
 
     test('contains exactly the intended features', () {
@@ -132,13 +137,19 @@ void main() {
     });
 
     test('has the beta extras off', () {
+      // photoRotation was here until 2026-10-19, when the reduced build was
+      // given the same rotating background as the ef build. It was never an
+      // ef-only capability — the code and the licence-checked pool are shared,
+      // and the reduced build renders the identical thing.
       for (final extra in [
         'assistant',
         'music',
-        'photoRotation',
         'themePicker',
         'weather',
         'sunTheme',
+        // ef-only: the reduced build rotates through the hand-checked pool,
+        // never through live Commons discovery.
+        'photoDiscovery',
       ]) {
         expect(f.isOn(extra), isFalse, reason: '$extra leaked into reduced');
       }

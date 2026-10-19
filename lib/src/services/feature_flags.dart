@@ -40,6 +40,10 @@ class FeatureFlags {
     'assistant',
     'music',
     'photoRotation',
+    // Fetches new photographs from Wikimedia Commons at runtime instead of
+    // using the hand-checked pool. ef only: the reduced build keeps the
+    // checked pool, which is the behaviour that was already there.
+    'photoDiscovery',
     'themePicker',
     'calendar',
     'digestPage',

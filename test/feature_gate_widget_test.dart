@@ -189,7 +189,12 @@ void main() {
         c.controller.goToPage(pages[i]);
         await tester.pumpAndSettle();
         expect(c.controller.page, pages[i]);
-        expect(c.controller.pageAnim.value, i.toDouble(),
+        // closeTo, not exact: the carousel springs, and a spring settles at
+        // wherever its solver decides it has come to rest — 0.99999 is on the
+        // page. Exact equality would have failed here and taught nobody
+        // anything. A tolerance of 0.05 is still far tighter than the bug this
+        // guards, which parks a whole page away at 1.0 when asked for 2.0.
+        expect(c.controller.pageAnim.value, closeTo(i, 0.05),
             reason: '${pages[i].name} is page $i but the carousel parked at '
                 '${c.controller.pageAnim.value} — it clamped');
       }
@@ -202,8 +207,115 @@ void main() {
       for (var i = pages.length - 1; i >= 0; i--) {
         c.controller.goToPage(pages[i]);
         await tester.pumpAndSettle();
-        expect(c.controller.pageAnim.value, i.toDouble());
+        expect(c.controller.pageAnim.value, closeTo(i, 0.05));
       }
+    });
+  });
+
+  group('interrupted motion', () {
+    // The reason the carousel is a spring and not a duration. An eased curve
+    // restarted from the beginning when it was interrupted; a spring starts
+    // from where it actually is and carries on, so a second swipe during a
+    // transition continues the motion instead of stuttering.
+    // These two distinguish a spring from an eased curve, rather than merely
+    // agreeing with both. Asserting only "it ends up on the right page" would
+    // have passed on the old code too, which is the mistake this whole group
+    // exists to stop repeating.
+    testWidgets('release velocity changes how fast it arrives', (tester) async {
+      // This is the difference between a spring and an eased curve, measured.
+      // `animateTo(target, duration:)` has a fixed duration and ignores the
+      // velocity entirely: the same distance always takes the same time, and
+      // throwing the carousel harder changes nothing. A spring starts with the
+      // velocity it was released with, so it does.
+      FeatureFlags.forTesting = ef;
+      final c = await _pump(tester, page: ShellPage.home);
+
+      Future<int> framesToSettle(double velocity) async {
+        c.controller.goToPage(ShellPage.home);
+        await tester.pumpAndSettle();
+        c.controller.goToPage(ShellPage.digest, velocity: velocity);
+        var frames = 0;
+        while (frames < 200) {
+          await tester.pump(const Duration(milliseconds: 16));
+          frames++;
+          if ((c.controller.pageAnim.value - 1).abs() < 0.01) break;
+        }
+        return frames;
+      }
+
+      final gentle = await framesToSettle(0);
+      final thrown = await framesToSettle(2.5);
+
+      expect(thrown, lessThan(gentle),
+          reason: 'throwing the carousel should arrive sooner than easing it '
+              'there — if both take the same time the velocity is being thrown '
+              'away, which is exactly what the old eased path did');
+      // And it must still not overshoot: that is what the critically damped
+      // page spring is for.
+      expect(c.controller.pageAnim.value, closeTo(1, 0.02));
+    });
+
+    testWidgets('the carousel does NOT overshoot', (tester) async {
+      // The mirror image, and the reason the page spring is critically damped
+      // while the sheet's is not: a page carousel that travels past its target
+      // shows a sliver of the page you did not ask for.
+      FeatureFlags.forTesting = ef;
+      final c = await _pump(tester, page: ShellPage.home);
+
+      c.controller.goToPage(ShellPage.digest, velocity: 3.0);
+      var peak = 0.0;
+      for (var i = 0; i < 60; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        final v = c.controller.pageAnim.value;
+        if (v > peak) peak = v;
+      }
+
+      expect(peak, lessThanOrEqualTo(1.001),
+          reason: 'a critically damped page spring must not overshoot, even at '
+              'maximum velocity — overshooting here is a visible glitch');
+      expect(c.controller.pageAnim.value, closeTo(1, 0.05));
+    });
+
+    testWidgets('reversing mid-transition lands, not strands', (tester) async {
+      FeatureFlags.forTesting = ef;
+      final c = await _pump(tester, page: ShellPage.home);
+      final pages = c.controller.availablePages;
+
+      c.controller.goToPage(pages.last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80)); // mid-flight
+      c.controller.goToPage(ShellPage.home, velocity: -2.0);
+      await tester.pumpAndSettle();
+
+      expect(c.controller.page, ShellPage.home);
+      expect(c.controller.pageAnim.value, closeTo(0, 0.05));
+    });
+
+    testWidgets('a released flick throws the carousel', (tester) async {
+      FeatureFlags.forTesting = ef;
+      final c = await _pump(tester, page: ShellPage.home);
+      final width = 1000.0;
+
+      c.controller.onHorizontalDragEnd(-3000, -400, width);
+      await tester.pumpAndSettle();
+
+      final pages = c.controller.availablePages;
+      expect(c.controller.page, pages[1],
+          reason: 'a hard left flick should advance exactly one page');
+      expect(c.controller.pageAnim.value, closeTo(1, 0.05));
+    });
+
+    testWidgets('an absurd velocity is clamped, not obeyed', (tester) async {
+      // A hard flick can read several thousand px/s. Fed straight into a
+      // spring that makes a critically damped carousel overshoot, which is the
+      // wobble the page spring exists to prevent.
+      FeatureFlags.forTesting = ef;
+      final c = await _pump(tester, page: ShellPage.home);
+
+      c.controller.goToPage(ShellPage.digest, velocity: 1e9);
+      await tester.pumpAndSettle();
+      expect(c.controller.pageAnim.value, closeTo(1, 0.05),
+          reason: 'velocity must never push the carousel past the target page');
     });
   });
 

@@ -38,16 +38,29 @@ void main() {
         var ticks = 0;
         clock.addListener(() => ticks++);
 
+        // `fakeAsync` starts from the real wall clock, so a three-second
+        // window is not a fixed distance from a minute boundary — it lands
+        // somewhere different on every run. Asserting "exactly 0 ticks here"
+        // therefore failed about one run in twenty, because roughly one time
+        // in twelve a minute boundary genuinely falls inside the window and
+        // the clock correctly ticks. The property under test is the *rate*,
+        // so the assertion now permits the one legitimate tick.
         async.elapse(const Duration(seconds: 3));
         expect(
           ticks,
-          0,
-          reason: 'a minute-resolution clock must not wake every second',
+          lessThanOrEqualTo(1),
+          reason: 'at minute resolution the clock may only tick if a minute '
+              'boundary falls inside the window; waking every second is the '
+              'bug this guards',
         );
 
         clock.setShowSeconds(true);
         final before = ticks;
-        async.elapse(const Duration(seconds: 3));
+        // Four seconds, expecting at least three. The boundary offset is the
+        // same problem, and rounding the expectation down to 3 removes it
+        // without weakening the test: a clock still on minute resolution
+        // scores 1, not 3.
+        async.elapse(const Duration(seconds: 4));
         expect(
           ticks - before,
           greaterThanOrEqualTo(3),

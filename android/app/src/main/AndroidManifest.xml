@@ -8,6 +8,16 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.KEEP_SCREEN_ON"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <!-- Background audio. A foreground service is not optional on Android 8+:
+         a background app cannot keep audio going, and there is no
+         notification-only alternative. FOREGROUND_SERVICE_MEDIA_PLAYBACK is the
+         Android 14+ permission that covers the mediaPlayback service type; the
+         app crashes at runtime without it. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <!-- API 33+: without this the media notification is silently dropped and
+         there are no lock-screen controls. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.READ_CALENDAR"/>
     <!-- Let the assistant give a short haptic tick when it starts listening, so a
          wall display says something even when nobody is looking at it. -->
@@ -37,7 +47,44 @@
         android:enableOnBackInvokedCallback="true"
         android:isGame="false">
 
-        <activity
+        <!-- The playback service. mediaPlayback is the one foreground service type
+         that survives Android 14's new FGS-type requirement and Android 15's
+         tightened rules. -->
+    <!-- Lets the launcher see what is playing, whoever is playing it.
+         This is the officially sanctioned way to read another app's media
+         session, and it is a permission the user grants once and can revoke
+         from Settings. Without it the card shows only this app's own playback. -->
+    <service
+        android:name=".MediaSessionListener"
+        android:exported="false"
+        android:label="@string/app_name"
+        android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+        <intent-filter>
+            <action android:name="android.service.notification.NotificationListenerService"/>
+        </intent-filter>
+    </service>
+
+    <service
+        android:name=".PlaybackService"
+        android:exported="true"
+        android:foregroundServiceType="mediaPlayback">
+        <intent-filter>
+            <action android:name="androidx.media3.session.MediaSessionService"/>
+            <action android:name="android.media.browse.MediaBrowserService"/>
+        </intent-filter>
+    </service>
+
+    <!-- Hardware and Bluetooth transport buttons. Without this the headset
+         buttons do nothing while the app is in the background. -->
+    <receiver
+        android:name="androidx.media3.session.MediaButtonReceiver"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="android.intent.action.MEDIA_BUTTON"/>
+        </intent-filter>
+    </receiver>
+
+    <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"

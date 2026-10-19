@@ -20,6 +20,8 @@ class MainActivity : FlutterActivity() {
     private lateinit var settingsBridge: SettingsBridge
     private lateinit var sttBridge: SpeechRecognizerBridge
     private lateinit var speechBridge: SpeechBridge
+    private lateinit var playbackBridge: PlaybackBridge
+    private var sessionMonitor: MediaSessionMonitor? = null
     private lateinit var lightSensorBridge: LightSensorBridge
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,6 +43,8 @@ class MainActivity : FlutterActivity() {
         // Press-to-speak input. One-shot: press, speak, get text, stop.
         sttBridge = SpeechRecognizerBridge(this).also { it.attach(flutterEngine) }
         speechBridge = SpeechBridge(applicationContext).also { it.attach(flutterEngine) }
+        playbackBridge = PlaybackBridge(applicationContext).also { it.attach(flutterEngine) }
+        sessionMonitor = MediaSessionMonitor(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
         lightSensorBridge = LightSensorBridge(applicationContext).also { it.attach(flutterEngine) }
     }
 

@@ -108,6 +108,27 @@ class LocationService extends ChangeNotifier {
   ///
   /// [askPermission] is false when the user has already declined — asking
   /// again on every launch is exactly the behaviour people hate.
+  /// Sets the resolved place by hand and tells listeners.
+  ///
+  /// For tests and screenshot capture, in the same spirit as
+  /// [ClockService.overrideForTesting] and [ShellController.setPaletteForTest].
+  ///
+  /// This exists because the alternative is untestable: `LocationService` needs
+  /// a `PlatformBridge`, which is a `MethodChannel`, so a widget test cannot
+  /// make one resolve — and the bug this was added for was precisely that a
+  /// resolved location did not reach the screen.
+  @visibleForTesting
+  void setPlaceForTesting(GeoPlace? place, {String error = ''}) {
+    _place = place;
+    // Settled, not in flight. Without this the page keeps rendering
+    // "Working out where this is…" over a place that has already arrived,
+    // because `resolve()` left the flag set while it was waiting on a
+    // MethodChannel the test has no handler for.
+    _resolving = false;
+    _lastError = error;
+    notifyListeners();
+  }
+
   Future<GeoPlace?> resolve({bool askPermission = true}) async {
     if (_resolving) return _place;
     _resolving = true;
@@ -128,6 +149,7 @@ class LocationService extends ChangeNotifier {
       }
 
       final device = await _devicePlace(askPermission: askPermission);
+      debugPrint('SNLOC device place -> $device (ask=$askPermission)');
       if (device != null) {
         await _cache(device);
         _place = device;
@@ -135,7 +157,9 @@ class LocationService extends ChangeNotifier {
         return _place;
       }
 
+      debugPrint('SNLOC no device place; falling back to IP');
       final ip = await _ipPlace();
+      debugPrint('SNLOC ip place -> $ip');
       if (ip != null) {
         await _cache(ip);
         _place = ip;
@@ -234,7 +258,11 @@ class LocationService extends ChangeNotifier {
         if (response.statusCode != 200) return null;
         final body = await response.transform(utf8.decoder).join();
         final decoded = jsonDecode(body);
-        if (decoded is! Map || decoded['success'] != true) return null;
+        if (decoded is! Map || decoded['success'] != true) {
+          debugPrint('SNLOC ipwho.is declined: '
+              '${body.substring(0, body.length < 200 ? body.length : 200)}');
+          return null;
+        }
         final lat = (decoded['latitude'] as num?)?.toDouble();
         final lon = (decoded['longitude'] as num?)?.toDouble();
         if (lat == null || lon == null) return null;
