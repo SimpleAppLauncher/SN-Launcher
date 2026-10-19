@@ -81,10 +81,22 @@ void main() {
         clock.setShowSeconds(false);
         final before = ticks;
         async.elapse(const Duration(seconds: 3));
+        // Zero, or at most one.
+        //
+        // `fakeAsync` starts from the real wall clock, so a three-second
+        // window is not a fixed distance from a minute boundary — it lands
+        // somewhere different on every run. If a minute boundary genuinely
+        // falls inside the window, the clock correctly ticks once, and
+        // asserting a hard zero fails about one run in twenty for no reason
+        // other than what time it was.
+        //
+        // The property under test is the *rate*: minute resolution means a
+        // tick at most once per minute, not three times in three seconds.
         expect(
           ticks - before,
-          0,
-          reason: 'seconds off means back to waking on the minute',
+          lessThanOrEqualTo(1),
+          reason: 'seconds off means back to waking on the minute — at most '
+              'one tick, and only if a minute boundary falls in the window',
         );
         clock.dispose();
       });
