@@ -128,6 +128,10 @@ class _NestLauncherAppState extends State<NestLauncherApp>
         // something else is playing. Without notification access this simply
         // reports nothing, which is the honest failure — it does not guess.
         _media.startPolling();
+        // Anything playing anywhere on the device now reaches the card. This
+        // was the missing link: the watcher was polling and the card was
+        // watching the wrong thing, so a Spotify session could never appear.
+        _playback.attach(_media);
         unawaited(_calendar.start());
       }
       // The to-do list is a disk read behind the same settings store the

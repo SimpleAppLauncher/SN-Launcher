@@ -48,6 +48,58 @@ android {
         resValues = true
     }
 
+    // ── Sensitive permissions ────────────────────────────────────────────────
+    //
+    // Off by default. The base manifest declares no microphone, no calendar,
+    // no location and no notification listener, because Google Play Protect
+    // warns about all four at install time and the warning is correct: each
+    // can read something private.
+    //
+    // A build that wants them merges src/sensitive/manifest-fragment.xml in:
+    //
+    //     flutter build apk --release -PsnSensitive=true
+    //
+    // The merge is done here rather than by keeping two hand-written manifests
+    // so the two cannot drift. The fragment is the single place the sensitive
+    // declarations live.
+    val sensitive: Boolean =
+        (project.findProperty("snSensitive") as String?)?.toBoolean() ?: false
+
+    // The sensitive manifest is *generated* from the base one plus the
+    // fragment, at configuration time, so the two can never drift. A
+    // hand-kept copy is a copy that lies the first time someone edits the
+    // base manifest and forgets the other file.
+    val sensitiveManifest = layout.buildDirectory.file("generated/sensitive/AndroidManifest.xml")
+    if (sensitive) {
+        val base = file("src/main/AndroidManifest.xml")
+        val fragment = file("src/sensitive/manifest-fragment.xml")
+        // A plain text splice at a marker. Deliberately not XML parsing: the
+        // fragment is a list of manifest elements, and the simplest thing that
+        // cannot fail is a string replacement. The *result* is what gets
+        // validated, by the manifest merger, and by the permission dump in
+        // tool/verify_permissions.sh.
+        val serviceFragment = file("src/sensitive/manifest-service.xml")
+        val merged = base.readText()
+            .replace("<!-- SENSITIVE-PERMISSIONS -->", fragment.readText().trimEnd())
+            .replace("<!-- SENSITIVE-SERVICE -->", serviceFragment.readText().trimEnd())
+        sensitiveManifest.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText(merged)
+        }
+    }
+
+    sourceSets {
+        getByName("main") {
+            manifest.srcFile(
+                if (sensitive) {
+                    sensitiveManifest.get().asFile.path
+                } else {
+                    "src/main/AndroidManifest.xml"
+                },
+            )
+        }
+    }
+
     defaultConfig {
         applicationId = "dev.snlauncher.snlauncher"
         applicationIdSuffix = appIdSuffix

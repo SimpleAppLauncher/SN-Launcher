@@ -73,6 +73,23 @@ build_one() {
   # findProperty returns an empty string either way.
   local id_arg=("-PsnAppIdSuffix=$suffix")
 
+  # Sensitive permissions are OFF unless a build asks for them.
+  #
+  # The microphone, the calendar, the location and the notification listener
+  # are what make Google Play Protect warn on install. The warning is right, so
+  # the default build declares none of them and the features that want them
+  # degrade honestly instead of asking.
+  #
+  #   tool/build_variants.sh both sensitive   # opt in
+  #
+  # `flutter clean` is required when switching, because Gradle does not
+  # reliably notice that the manifest source set changed and will happily
+  # reuse the previous APK — with the previous build's permissions. That is
+  # the same trap as the applicationId check below, one level up.
+  if [ "${SN_SENSITIVE:-0}" = "1" ]; then
+    id_arg+=("-PsnSensitive=true")
+  fi
+
   echo "=== building $name (features: $features, applicationId suffix: '${suffix}') ==="
   flutter build apk \
     --release \

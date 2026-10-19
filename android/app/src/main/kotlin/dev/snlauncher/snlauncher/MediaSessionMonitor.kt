@@ -78,6 +78,27 @@ class MediaSessionMonitor(
 
     init {
         MediaSessionListener.bound = this
+        // The Dart->native direction was missing entirely: the channel was
+        // created but never given a handler, so every `invokeMethod` from Dart
+        // — hasPermission, sessions — raised MissingPluginException. That made
+        // hasPermission report false on a device where the user *had* granted
+        // notification access, and the watcher never polled. So a Spotify
+        // session could never reach the card, and nothing said why.
+        channel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "hasPermission" -> result.success(hasPermission())
+                "sessions" -> result.success(best())
+                "openSettings" -> {
+                    try {
+                        context.startActivity(settingsIntent())
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.success(false)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     // ── Permission ───────────────────────────────────────────────────────────

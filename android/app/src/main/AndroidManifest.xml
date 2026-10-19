@@ -1,10 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Launching real apps from the grid, and (optionally) a geolocation fix
-         for weather. Both are optional: the launcher degrades gracefully when
-         neither is granted. -->
+    <!-- This manifest declares NO sensitive permissions.
+
+         Google Play Protect warns on install when an app asks for the
+         microphone, the calendar, the location, or the notification listener.
+         The warning is right: each of those can read something private, and
+         the notification listener can read every notification on the device.
+
+         So the base build asks for none of them. The ones that genuinely need
+         them live in src/sensitive/manifest-fragment.xml and are merged in
+         only by a build that asks for them with -PsnSensitive=true.
+
+         Everything this app does without them still works: the launcher, the
+         clock, the photo frame, the radio, the to-do list, the weather's
+         current conditions. What is lost is the location fix, the calendar,
+         press-to-talk, and seeing what another app is playing. -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.KEEP_SCREEN_ON"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
@@ -18,13 +29,9 @@
     <!-- API 33+: without this the media notification is silently dropped and
          there are no lock-screen controls. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.READ_CALENDAR"/>
     <!-- Let the assistant give a short haptic tick when it starts listening, so a
          wall display says something even when nobody is looking at it. -->
     <uses-permission android:name="android.permission.VIBRATE"/>
-    <!-- Press-to-speak. Only ever held while the user is actively talking:
-         recognition is one-shot, never a background session. -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <!-- Touchscreen, but not required to be a phone: Nest Hubs, Raspberry Pi
          panels, HDMI sticks and repurposed tablets all qualify. -->
@@ -46,24 +53,11 @@
         android:largeHeap="false"
         android:enableOnBackInvokedCallback="true"
         android:isGame="false">
+        <!-- SENSITIVE-SERVICE -->
 
         <!-- The playback service. mediaPlayback is the one foreground service type
          that survives Android 14's new FGS-type requirement and Android 15's
          tightened rules. -->
-    <!-- Lets the launcher see what is playing, whoever is playing it.
-         This is the officially sanctioned way to read another app's media
-         session, and it is a permission the user grants once and can revoke
-         from Settings. Without it the card shows only this app's own playback. -->
-    <service
-        android:name=".MediaSessionListener"
-        android:exported="false"
-        android:label="@string/app_name"
-        android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-        <intent-filter>
-            <action android:name="android.service.notification.NotificationListenerService"/>
-        </intent-filter>
-    </service>
-
     <service
         android:name=".PlaybackService"
         android:exported="true"
@@ -149,4 +143,5 @@
             <data android:scheme="http" />
         </intent>
     </queries>
+    <!-- SENSITIVE-PERMISSIONS -->
 </manifest>

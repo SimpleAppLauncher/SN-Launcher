@@ -8,6 +8,7 @@ import '../services/feature_flags.dart';
 import '../services/location_service.dart';
 import '../services/device_media_watcher.dart';
 import '../services/playback_service.dart';
+import '../services/radio_stations.dart';
 import '../services/todo_service.dart';
 import '../services/photo_frame_service.dart';
 import '../models/photo_credit.dart';
@@ -646,6 +647,7 @@ class _NestShellState extends State<NestShell> {
         }
         return _DigestPage(
           playback: widget.playback,
+          musicEnabled: flags.isOn('music'),
           media: widget.media,
           metrics: _m,
           type: type,
@@ -840,6 +842,79 @@ class _NestShellState extends State<NestShell> {
 
 /// A single carousel page with the Nest's parallax + scale treatment.
 /// A single carousel page with the Nest's parallax + scale treatment.
+/// One radio station, as a row in the music card.
+class _StationButton extends StatelessWidget {
+  const _StationButton({
+    required this.station,
+    required this.metrics,
+    required this.type,
+    required this.palette,
+    required this.playing,
+    required this.onTap,
+  });
+
+  final RadioStation station;
+  final NestMetrics metrics;
+  final NestType type;
+  final AmbientPalette palette;
+  final bool playing;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: metrics.px(6)),
+      child: Material(
+        color: playing
+            ? palette.onSurface.withValues(alpha: 0.16)
+            : palette.onSurface.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(metrics.px(10)),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(metrics.px(10)),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: metrics.px(12),
+              vertical: metrics.px(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  playing ? Icons.graphic_eq : Icons.play_arrow_rounded,
+                  size: metrics.px(18),
+                  color: palette.onSurface,
+                ),
+                SizedBox(width: metrics.px(8)),
+                Expanded(
+                  child: Text(
+                    station.name,
+                    style: type.caption(color: palette.onSurface),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                SizedBox(width: metrics.px(8)),
+                // Flexible, or the row overflows: the card is narrow and the
+                // blurb was not allowed to shrink.
+                Flexible(
+                  child: Text(
+                    station.blurb,
+                    style: type.caption(
+                      color: palette.onSurfaceVariant.withValues(alpha: 0.7),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PageLayer extends StatelessWidget {
   const _PageLayer({required this.offset, required this.child, required this.visible});
 
@@ -896,6 +971,7 @@ class _DigestPage extends StatelessWidget {
     required this.now,
     required this.weather,
     required this.weatherEnabled,
+    required this.musicEnabled,
     required this.weatherLoading,
     required this.calendar,
     required this.todo,
@@ -913,6 +989,11 @@ class _DigestPage extends StatelessWidget {
   final DateTime now;
   final WeatherNow weather;
   final bool weatherEnabled;
+
+  /// Whether radio is offered. ef only.
+  final bool musicEnabled;
+
+  /// Whether radio is offered. ef only.
   final bool weatherLoading;
   final CalendarService? calendar;
   final TodoService? todo;
@@ -1088,6 +1169,25 @@ class _DigestPage extends StatelessWidget {
             // before that has happened, and a card that claims a thing has
             // already happened is the exact thing this project keeps refusing
             // to do.
+            // Radio, in the ef build.
+            //
+            // These are the buttons that actually work. The YouTube and
+            // Spotify buttons below open a WebView, and a WebView cannot play
+            // audio once the screen locks — so anything promising background
+            // music has to be a real media stream, and a radio station is
+            // exactly that.
+            if (musicEnabled) ...[
+              SizedBox(height: m.px(10)),
+              for (final station in kRadioStations.take(4))
+                _StationButton(
+                  station: station,
+                  metrics: m,
+                  type: type,
+                  palette: palette,
+                  playing: playback?.state.track?.url == station.streamUrl,
+                  onTap: () => _playStation(station),
+                ),
+            ],
             Text(
               'YouTube: ads blocked\nSpotify: not blocked',
               style: type.caption(color: palette.onSurfaceVariant),
@@ -1241,6 +1341,34 @@ class _DigestPage extends StatelessWidget {
           if (i < cards.length - 1) SizedBox(width: g),
         ],
       ],
+    );
+  }
+
+  /// Plays a station through the native player.
+  ///
+  /// The track is put into the player *before* the first poll, so the card
+  /// appears the instant the user taps rather than a second later when the
+  /// station's song info arrives. The station name is a real title; the
+  /// artist/title line fills in when the station tells us.
+  Future<void> _playStation(RadioStation station) async {
+    final player = playback;
+    if (player == null) return;
+    await player.play(
+      Track(
+        url: station.streamUrl,
+        title: station.name,
+        artist: station.blurb,
+      ),
+    );
+    // Then ask what is actually playing and correct the label.
+    final now = await RadioNowPlaying.fetch(station);
+    if (now == null) return;
+    await player.play(
+      Track(
+        url: station.streamUrl,
+        title: now.displayTitle,
+        artist: now.displayArtist,
+      ),
     );
   }
 

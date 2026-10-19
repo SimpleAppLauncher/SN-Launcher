@@ -1,0 +1,13 @@
+        <!-- Reading other apps' media sessions is the "see what Spotify is
+             playing" feature. It is a notification listener, which is the
+             single most sensitive thing this app can ask for: the service can
+             see every notification on the device, not just the media one. -->
+        <service
+            android:name=".MediaSessionListener"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService"/>
+            </intent-filter>
+        </service>

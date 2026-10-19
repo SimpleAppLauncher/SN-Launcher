@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'device_media_watcher.dart';
+
 /// One thing to play.
 @immutable
 class Track {
@@ -111,6 +113,40 @@ class PlaybackService extends ChangeNotifier {
 
   final MethodChannel _channel;
 
+  /// Presents another app's session as the current track.
+  ///
+  /// This is what makes the card appear when something is playing in Spotify
+  /// or SoundCloud rather than in this app. The card already knows how to show
+  /// a track and a transport; it just needed to be told about one it did not
+  /// start. Called by [DeviceMediaWatcher] on every change.
+  void adoptExternalSession(ExternalSession session) {
+    final ours = _state.track;
+    // Our own player wins if it is actually playing something; an external
+    // session must not stomp on our own playback.
+    if (ours != null && _state.playing) return;
+    _state = PlaybackState(
+      playing: session.playing,
+      loading: false,
+      position: session.position,
+      duration: session.duration,
+      track: Track(
+        url: 'external:${session.package}',
+        title: session.title,
+        artist: session.artist,
+        album: session.album,
+      ),
+    );
+    notifyListeners();
+  }
+
+  /// Clears the adopted track when the other app stops.
+  void clearExternalSession() {
+    if (_state.track?.url.startsWith('external:') ?? false) {
+      _state = const PlaybackState();
+      notifyListeners();
+    }
+  }
+
   /// Whether the platform has a playback service at all.
   ///
   /// False on the reduced build's desktop targets and in tests. Callers should
@@ -161,6 +197,30 @@ class PlaybackService extends ChangeNotifier {
 
   /// Called by the platform when the user presses a headset button, so the
   /// launcher controls follow the system rather than fighting it.
+  /// Wires this player to a watcher, so anything playing anywhere on the device
+  /// reaches the card.
+  void attach(DeviceMediaWatcher watcher) {
+    _watcher = watcher;
+    watcher.addListener(_onWatchedSession);
+    // Adopt whatever is already playing, rather than waiting for the next
+    // change — the common case is that music was already going when the app
+    // started, and the card should be there immediately.
+    _onWatchedSession();
+  }
+
+  DeviceMediaWatcher? _watcher;
+
+  void _onWatchedSession() {
+    final watcher = _watcher;
+    if (watcher == null) return;
+    final session = watcher.session;
+    if (session == null) {
+      clearExternalSession();
+      return;
+    }
+    adoptExternalSession(session);
+  }
+
   @visibleForTesting
   void handleExternalCommand(String action) {
     switch (action) {
