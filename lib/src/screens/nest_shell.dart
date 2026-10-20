@@ -7,6 +7,7 @@ import '../services/assistant_service.dart';
 import '../services/feature_flags.dart';
 import '../services/location_service.dart';
 import '../services/device_media_watcher.dart';
+import '../services/place_photo_service.dart';
 import '../services/playback_service.dart';
 import '../services/radio_stations.dart';
 import '../services/todo_service.dart';
@@ -60,6 +61,7 @@ class NestShell extends StatefulWidget {
     this.todo,
     this.location,
     this.playback,
+    this.placePhoto,
     this.media,
     this.suggested,
     this.actions,
@@ -86,6 +88,9 @@ class NestShell extends StatefulWidget {
   /// with controls that cannot work. A music card full of dead buttons is worse
   /// than no transport at all.
   final PlaybackService? playback;
+
+  /// Photographs of the place, for the weather page's background.
+  final PlacePhotoService? placePhoto;
 
   /// Active media sessions belonging to other apps.
   final DeviceMediaWatcher? media;
@@ -168,6 +173,16 @@ class _NestShellState extends State<NestShell> {
     final place = await location.resolve();
     debugPrint('SNLOC resolve -> place=$place error="${location.lastError}" '
         'resolving=${location.resolving}');
+    // Now that we know where we are, find a photograph of it for the weather
+    // page's background. A photograph of a place is only interesting if it is
+    // of *this* place.
+    //
+    // Only when it has been asked for. A launcher that decides on its own to
+    // look up where the device is and download a picture of it is doing
+    // something the user did not agree to.
+    if (widget.controller.placePhotoEnabled) {
+      widget.placePhoto?.update(place);
+    }
     if (!mounted) return;
     if (place == null) return;
     // The weather service needs the coordinates. Configuring it also kicks off
@@ -650,7 +665,14 @@ class _NestShellState extends State<NestShell> {
               use24Hour: _c.use24Hour,
               showSeconds: _c.showSeconds,
               zoom: _c.zoom,
-              animateWeather: widget.animateDecorations,
+              // The clock's glyph does not animate.
+              //
+              // It is about thirty pixels across on a screen that is read from
+              // across a room, so nobody can see it move — and a looping
+              // animation keeps the pipeline awake for the whole time the app
+              // is on screen. The weather page's glyph animates, because that
+              // is the one being looked at.
+              animateWeather: false,
               forceLightText: true,
               albumTitle: _c.albumTitle,
               photoCredit: (widget.photos?.credit ?? _credit).displayCredit,
@@ -689,11 +711,25 @@ class _NestShellState extends State<NestShell> {
         return WeatherPage(
           weather: widget.weather.current,
           place: widget.location?.place,
+          backgroundFile: widget.controller.placePhotoEnabled
+              ? widget.placePhoto?.displayFile
+              : null,
+          backgroundCredit: widget.controller.placePhotoEnabled
+              ? widget.placePhoto?.credit?.displayCredit
+              : null,
           metrics: _m,
           palette: palette,
           type: type,
           locating: widget.location?.resolving ?? false,
           locationError: widget.location?.lastError ?? '',
+          // The glyph animates only while this page is the one on screen, and
+          // only when decorative animation is wanted at all. The second
+          // condition is what lets a test — or a screenshot capture — settle:
+          // a looping animation never lets the tree go idle, so
+          // `pumpAndSettle` would time out waiting for a quiescence that is
+          // never coming.
+          isCurrent: widget.controller.page == ShellPage.weather &&
+              widget.animateDecorations,
         );
       case ShellPage.homeControl:
         return _HomeControlPage(metrics: _m, type: type, palette: palette);

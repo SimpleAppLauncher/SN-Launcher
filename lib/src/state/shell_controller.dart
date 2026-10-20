@@ -102,6 +102,8 @@ class ShellController extends ChangeNotifier {
   /// immediately and corrects itself a moment later if the platform answers.
   Future<void> restore() async {
     await _settings.load();
+    _placePhotoEnabled =
+        _settings.read(SettingKeys.placePhoto, false, (v) => v == 'true');
     if (_disposed) return;
     final stored = _settings.get(SettingKeys.theme);
     if (stored != null) {
@@ -179,6 +181,10 @@ class ShellController extends ChangeNotifier {
   bool get themeIsDynamic => _theme == NestTheme.dynamic;
 
   bool get darkThemeEnabled => _palette.isDark;
+
+  /// Whether the weather page's background photograph is wanted.
+  bool _placePhotoEnabled = false;
+  bool get placePhotoEnabled => _placePhotoEnabled;
 
   bool _doNotDisturb = false;
   bool get doNotDisturb => _doNotDisturb;
@@ -549,6 +555,16 @@ class ShellController extends ChangeNotifier {
     // A theme stored from a previous install may not exist in this build.
     final at = values.indexOf(_theme);
     setTheme(values[(at < 0 ? 0 : at + 1) % values.length]);
+  }
+
+  /// Turns the weather page's background photograph on or off.
+  void togglePlacePhoto() {
+    _placePhotoEnabled = !_placePhotoEnabled;
+    _settings.put(SettingKeys.placePhoto, '$_placePhotoEnabled');
+    showToast(_placePhotoEnabled
+        ? 'Place photograph on'
+        : 'Place photograph off');
+    notifyListeners();
   }
 
   void toggleDoNotDisturb() {

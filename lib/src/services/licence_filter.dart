@@ -118,11 +118,26 @@ class _RustLicence {
 
   final _AllowsDart _allows;
 
+  /// Opens the library.
+  ///
+  /// The name matters and getting it wrong is silent: Android's linker does
+  /// **not** do the glibc `foo` -> `libfoo.so` transformation, so
+  /// `dlopen("licence_filter")` fails with "No such file or directory" and
+  /// the Dart implementation quietly takes over. Both spellings are tried, and
+  /// the exact one is what works on a device.
   static _RustLicence? open() {
-    final lib = DynamicLibrary.open('licence_filter');
-    return _RustLicence(
-      lib.lookupFunction<_AllowsNative, _AllowsDart>('licence_allows'),
-    );
+    Object? lastError;
+    for (final name in ['liblicence_filter.so', 'licence_filter.so', 'licence_filter']) {
+      try {
+        final lib = DynamicLibrary.open(name);
+        return _RustLicence(
+          lib.lookupFunction<_AllowsNative, _AllowsDart>('licence_allows'),
+        );
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    throw lastError ?? StateError('no dynamic library');
   }
 
   /// Passes UTF-8, matching what the Rust side does — it calls

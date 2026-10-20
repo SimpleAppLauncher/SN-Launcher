@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../services/location_service.dart';
@@ -31,6 +33,9 @@ class WeatherPage extends StatelessWidget {
     required this.weather,
     required this.place,
     this.locationError = '',
+    this.isCurrent = true,
+    this.backgroundFile,
+    this.backgroundCredit,
     required this.metrics,
     required this.palette,
     required this.type,
@@ -47,6 +52,24 @@ class WeatherPage extends StatelessWidget {
   /// looks authoritative and is not. If we cannot place the reading, the page
   /// says so instead of implying the number is about wherever you are.
   final String locationError;
+
+  /// Whether this page is the one currently on screen.
+  ///
+  /// The condition glyph only animates while this is true. The page stays
+  /// alive in the carousel when you swipe away, so an always-animating glyph
+  /// would keep the pipeline awake for as long as the app is open, for
+  /// something nobody is looking at.
+  final bool isCurrent;
+
+  /// A photograph of the place, painted behind the sky.
+  ///
+  /// Null when there is none — no picture found, or the feature is off. The
+  /// sky gradient is still there underneath, so the page never depends on the
+  /// picture existing.
+  final File? backgroundFile;
+
+  /// The credit for [backgroundFile], rendered beside the place.
+  final String? backgroundCredit;
   final NestMetrics metrics;
   final AmbientPalette palette;
   final NestType type;
@@ -59,7 +82,25 @@ class WeatherPage extends StatelessWidget {
     final m = metrics;
     final sky = _sky(weather.condition);
 
-    return Container(
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // The photograph of the place, behind everything.
+        if (backgroundFile != null)
+          Positioned.fill(
+            child: Image.file(
+              backgroundFile!,
+              fit: BoxFit.cover,
+              // A photograph of a rainy city and a sky-coloured page are two
+              // different visual languages. The scrim below is what joins
+              // them: it is the sky, laid over the picture, at high opacity,
+              // so the picture reads as the world's colour rather than as
+              // wallpaper.
+              color: sky.first.withValues(alpha: 0.55),
+              colorBlendMode: BlendMode.srcOver,
+            ),
+          ),
+        Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -110,7 +151,7 @@ class WeatherPage extends StatelessWidget {
                   WeatherGlyph(
                     condition: weather.condition,
                     color: _ink(sky),
-                    animate: false,
+                    animate: isCurrent,
                     size: Size(m.px(120), m.px(120)),
                   ),
                   SizedBox(height: m.px(18)),
@@ -152,6 +193,8 @@ class WeatherPage extends StatelessWidget {
           ),
         ],
       ),
+        ),
+      ],
     );
   }
 

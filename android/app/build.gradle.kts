@@ -42,6 +42,24 @@ android {
     // and try to install a different one.
     ndkVersion = "28.2.13676358"
 
+    // Extract the native libraries rather than mapping them straight out of
+    // the APK.
+    //
+    // This is what makes the Rust licence filter loadable at all. With the
+    // default packaging, `dlopen("liblicence_filter.so")` fails — the linker
+    // can only reach a library by its path inside the APK, not by name — so
+    // the .so shipped in every build and could never be opened, and the Dart
+    // implementation quietly did all the work. The manifest attribute
+    // `android:extractNativeLibs` does NOT work here: the Flutter Gradle
+    // plugin's packaging block overrides it.
+    //
+    // The cost is a few hundred KB of extracted libraries on disk.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

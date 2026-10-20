@@ -10,8 +10,10 @@ import 'src/services/calendar_service.dart';
 import 'src/services/feature_flags.dart';
 import 'src/services/location_service.dart';
 import 'src/services/todo_service.dart';
+import 'src/services/licence_filter.dart';
 import 'src/services/photo_frame_service.dart';
 import 'src/services/device_media_watcher.dart';
+import 'src/services/place_photo_service.dart';
 import 'src/services/playback_service.dart';
 import 'src/services/platform_bridge.dart';
 import 'src/services/settings_store.dart';
@@ -23,6 +25,16 @@ import 'src/state/shell_controller.dart';
 import 'src/theme/nest_metrics.dart';
 
 Future<void> main() async {
+  // Load the Rust licence filter before anything can ask it a question.
+  //
+  // Without this the library was shipped in the APK and never opened, so
+  // every device silently ran the Dart fallback and the Rust path had never
+  // executed outside a test. The load is synchronous and costs nothing: the
+  // library is already in the APK, and if it is missing the Dart
+  // implementation — the same rules, checked against the Rust one by
+  // tool/verify_licence_parity.sh — takes over.
+  LicenceFilter.load();
+
   WidgetsFlutterBinding.ensureInitialized();
 
   // Surface build/layout errors on stderr so they land in `adb logcat` with the
@@ -87,6 +99,9 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   /// and the transport never appears — a card with dead controls is worse than
   /// no card.
   late final PlaybackService _playback = PlaybackService();
+
+  /// Photographs of the place the weather is about. ef only.
+  late final PlacePhotoService _placePhoto = PlacePhotoService();
 
   /// Notices whatever is playing on the device, whoever is playing it.
   late final DeviceMediaWatcher _media = DeviceMediaWatcher();
@@ -208,6 +223,7 @@ class _NestLauncherAppState extends State<NestLauncherApp>
     _location.dispose();
     _photos.dispose();
     _playback.dispose();
+    _placePhoto.dispose();
     _media.dispose();
     _assistant.dispose();
     _clock.dispose();
@@ -247,6 +263,7 @@ class _NestLauncherAppState extends State<NestLauncherApp>
               calendar: _calendar,
               photos: _photos,
               playback: _playback,
+              placePhoto: _placePhoto,
               media: _media,
               assistant: _assistant,
               todo: _todo,

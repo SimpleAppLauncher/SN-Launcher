@@ -115,6 +115,12 @@ abstract final class SettingKeys {
   static const longitude = 'longitude';
   static const placeName = 'placeName';
   static const rotatePhotos = 'rotatePhotos';
+
+  /// Whether the weather page shows a photograph of the place.
+  ///
+  /// ef only. Off by default, because a photograph of wherever the device
+  /// thinks it is should be something you asked for.
+  static const placePhoto = 'placePhoto';
   static const rotateMinutes = 'rotateMinutes';
 
   /// The to-do list, as a JSON array. Kept in one string rather than one key

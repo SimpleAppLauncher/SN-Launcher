@@ -43,6 +43,20 @@ class _WeatherGlyphState extends State<WeatherGlyph>
   }
 
   @override
+  void didUpdateWidget(WeatherGlyph oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The animation is now started and stopped rather than started once, so
+    // the glyph can be quiet until the page it is on is actually being looked
+    // at. A forever-looping animation on a page that is off-screen is a
+    // pipeline that never idles, for nobody.
+    if (widget.animate && !oldWidget.animate) {
+      _c.repeat();
+    } else if (!widget.animate && oldWidget.animate) {
+      _c.stop();
+    }
+  }
+
+  @override
   void dispose() {
     _c.dispose();
     super.dispose();

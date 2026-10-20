@@ -879,6 +879,87 @@ smaller change and the more honest description of what the number means.
 
 ---
 
+## 15b. Hardware — what this runs on, and what it costs
+
+Written for whoever is about to put it on a tablet they found in a drawer.
+
+### The short version
+
+| | Minimum | Comfortable | What it is |
+| --- | --- | --- | --- |
+| RAM | 1 GB | 2 GB | 1 GB runs. It is tight, and the WebView is the reason. |
+| CPU | Any armv7 or arm64 | arm64 | 32-bit arm is supported and tested in the build. |
+| Android | 7.0 (API 21) | 10+ | API 21 is the floor. |
+| Screen | 800 × 1280 | 1024 × 600 landscape | The layout is designed for a 1024 × 600 panel, which is the Nest Hub's. |
+| Storage | 100 MB free | 500 MB | For the app, the downloaded photographs and the caches. |
+| Network | None needed | Any | Everything except the photo rotation and the weather works offline. |
+
+### The two builds, and why they are not the same size
+
+**The reduced build** (`SN-Launcher-0.3.0-rc1.apk`, 32 MB) is the one to put on
+something you are not sure about. It has the launcher, the clock, the calendar,
+the to-do list, the photo frame and the weather's current conditions. It asks
+for **no sensitive permissions at all** — no microphone, no calendar, no
+location, no notification listener — so it installs without a Play Protect
+warning and cannot read anything private. That is checked against the built
+APK, not against the manifest, by `tool/verify_permissions.sh`.
+
+**The ef build** (`SN-Launcher-0.3.0-rc1-beta-arm64.apk`, 20 MB for arm64
+only) adds the radio player, the weather page with its artwork, the voice
+assistant, the theme picker and the Sun theme. It is the one to put on a device
+you own, where you have decided what it may look at.
+
+### What actually costs memory
+
+The honest answer is that the **WebView costs more than everything else in the
+app put together** — roughly 300 MB of browser engine and renderer for a screen
+you are using to show a YouTube page. On a 1 GB tablet that is a third of the
+device.
+
+This is why the radio player exists. A native Media3 player is tens of
+megabytes, not hundreds, and it keeps playing with the app closed and the
+screen off — which a WebView cannot do, because Android suspends the WebView
+renderer about five minutes after the app is backgrounded, even with a
+foreground service running, and stops the audio when the screen locks.
+
+The Rust licence filter is **445 KB** on arm64, 317 KB on armv7, 428 KB on
+x86_64. It is optional at runtime: if the library is missing, the Dart
+implementation of the same rules runs instead, and the two are checked against
+each other by `tool/verify_licence_parity.sh`.
+
+### What has actually been run on
+
+**Samsung Galaxy Tab A7 Lite (SM-X110)** — MediaTek Helio A22 (MT6789), Android
+15, 800 × 1340 portrait, which the app rotates to landscape. This is the device
+everything that has been verified was verified on. It is a 2 GB tablet, so it
+is the "comfortable" column, not the minimum.
+
+**Nokia T20** — unreachable for the entire development session. It was never
+tested. If you are the one who has it, it is the most valuable thing you could
+do: install the arm64 APK and say what breaks.
+
+### Known to be tight
+
+- **1 GB devices.** Everything works, but the WebView is tight and the system
+  will kill it under pressure. The reduced build, without the WebView's ad
+  blocking path being used, is noticeably happier.
+- **The Nokia T20's screen is 720 × 1280**, which is narrower than the layout
+  assumes. The card row is designed not to scroll — a scrolling card row eats
+  the horizontal gesture and the page after it becomes unreachable, which is
+  exactly what happened — so on a narrow screen the cards may not fit.
+  **This is untested and is a real risk.**
+- **Devices without Google Play Services.** The location fix uses the platform
+  `LocationManager`, not Play Services, so it degrades to the network provider
+  and then to an IP lookup. The IP lookup is city-level and tells a third party
+  where the device is, which is a decision, not a technicality.
+
+### Battery
+
+A foreground service with a foreground-service type of `mediaPlayback` runs
+while music plays, by definition. The launcher itself is idle apart from a
+one-minute clock tick and the photo rotation, which by default changes every
+ten minutes.
+
 ## 16. How this was built
 
 See [`docs/MODELS.md`](docs/MODELS.md) for model routing and the per-file

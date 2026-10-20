@@ -159,7 +159,13 @@ Future<_WeatherReading?> _fetchOnWorker(double lat, double lon) {
 /// Weather source. Uses Open-Meteo (no API key, no tracking, small payloads).
 /// Falls back to the placeholder when offline rather than blocking the UI.
 class WeatherService extends ChangeNotifier {
-  static const Duration refreshInterval = Duration(minutes: 15);
+  /// How often the weather is refreshed.
+  ///
+  /// An hour, because the picture behind the page changes on the same clock:
+  /// a temperature that updates every fifteen minutes under a photograph that
+  /// changes every hour is two clocks running at once, and the number is
+  /// rarely the thing that is actually wrong.
+  static const Duration refreshInterval = Duration(hours: 1);
 
   Timer? _timer;
   Timer? _inFlight;

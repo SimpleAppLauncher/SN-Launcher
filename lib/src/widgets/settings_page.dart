@@ -296,6 +296,17 @@ class SettingsPage extends StatelessWidget {
           value: c.doNotDisturb,
           onChanged: (_) => c.toggleDoNotDisturb(),
         ),
+        if (FeatureFlags.current.isOn('weather'))
+          _ToggleRow(
+            label: 'Place photograph',
+            note: 'Shows a photograph of where this device is, behind the '
+                'weather. Found on Wikimedia Commons, refreshed hourly.',
+            metrics: m,
+            type: type,
+            palette: palette,
+            value: c.placePhotoEnabled,
+            onChanged: (_) => c.togglePlacePhoto(),
+          ),
         _ToggleRow(
           label: 'Ambient EQ',
           note: 'Tints the screen by time of day.',
