@@ -99,10 +99,21 @@ jobs:
             --dart-define=SN_BUILD_NAME=ef
 
       - name: Collect
+        # The bundle is named after PRODUCT_NAME, which is `nestlaunch` --
+        # not after the project. Hard-coding a name here is how this step
+        # fails with "No such file or directory" while both builds above it
+        # succeeded.
         run: |
+          APP="$(find build/macos/Build/Products/Release -maxdepth 1 -name '*.app' | head -1)"
+          if [ -z "$APP" ]; then
+            echo "no .app bundle was produced" >&2
+            find build/macos/Build/Products/Release -maxdepth 2 | head -20
+            exit 1
+          fi
+          echo "bundling $APP"
           mkdir -p dist/macos
-          cp -R build/macos/Build/Products/Release/SN-Launcher.app dist/macos/
-          ditto -c -k --keepParent dist/macos/SN-Launcher.app \
+          cp -R "$APP" dist/macos/
+          ditto -c -k --keepParent "dist/macos/$(basename "$APP")" \
             dist/SN-Launcher-macos.zip
           rm -rf dist/macos
 

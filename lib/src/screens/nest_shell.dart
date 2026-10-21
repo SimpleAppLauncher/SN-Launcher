@@ -654,6 +654,23 @@ class _NestShellState extends State<NestShell> {
               palette: palette,
               file: widget.photos?.currentFile,
             ),
+            // A now-playing indicator, when something is playing.
+            //
+            // The real Nest shows one: the launcher keeps a small strip
+            // visible so you can see what the room is playing without going
+            // looking for it. It sits at the top of the home page, out of the
+            // way of the clock.
+            if (widget.playback != null && widget.playback!.state.hasTrack)
+              Positioned(
+                top: _m.px(18),
+                right: _m.px(18),
+                child: _MiniNowPlaying(
+                  metrics: _m,
+                  type: type,
+                  palette: palette,
+                  playback: widget.playback!,
+                ),
+              ),
             // Over a photograph the clock is always white, like the device — the
             // scrim in PhotoFrameBackground is what keeps it legible.
             ClockBlock(
@@ -915,6 +932,77 @@ class _NestShellState extends State<NestShell> {
 /// A single carousel page with the Nest's parallax + scale treatment.
 /// A single carousel page with the Nest's parallax + scale treatment.
 /// One radio station, as a row in the music card.
+/// A small strip showing what is playing, on the launcher's home page.
+///
+/// Deliberately not the full card: the home page is a photograph with a clock
+/// on it, and a large panel in the corner would fight both. This is the
+/// smallest thing that answers "what is the room playing?" without asking the
+/// user to navigate.
+class _MiniNowPlaying extends StatelessWidget {
+  const _MiniNowPlaying({
+    required this.metrics,
+    required this.type,
+    required this.palette,
+    required this.playback,
+  });
+
+  final NestMetrics metrics;
+  final NestType type;
+  final AmbientPalette palette;
+  final PlaybackService playback;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = metrics;
+    final track = playback.state.track;
+    if (track == null) return const SizedBox.shrink();
+    final title = track.title.isEmpty ? 'Playing' : track.title;
+
+    return Container(
+      constraints: BoxConstraints(maxWidth: m.px(320)),
+      padding: EdgeInsets.symmetric(horizontal: m.px(12), vertical: m.px(8)),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(m.px(20)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            playback.state.playing ? Icons.graphic_eq : Icons.pause,
+            size: m.px(16),
+            color: Colors.white,
+          ),
+          SizedBox(width: m.px(8)),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: type.caption(color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (track.artist.isNotEmpty)
+                  Text(
+                    track.artist,
+                    style: type.caption(
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// The box a web page appears in.
 ///
 /// A rounded panel with the launcher's own surface colour, sitting on a
