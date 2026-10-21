@@ -960,6 +960,63 @@ while music plays, by definition. The launcher itself is idle apart from a
 one-minute clock tick and the photo rotation, which by default changes every
 ten minutes.
 
+## 15c. Desktop — Linux and macOS
+
+Both versions build for desktop. The same Dart, the same two feature JSON
+files, the same code.
+
+**Neither can be built from a Mac.** Linux cannot be cross-compiled at all —
+Flutter does not build a Linux desktop binary on macOS or Windows, because the
+toolchain is the toolchain. And macOS needs the *full* Xcode, not just the
+Command Line Tools: the build needs the macOS SDK and an AppKit build phase,
+and `flutter build macos` stops with "Xcode not installed" when
+`xcode-select -p` points at `/Library/Developer/CommandLineTools`.
+
+So CI builds them. `.github/workflows/desktop.yml` runs `ubuntu-24.04` and
+`macos-14` runners, builds both feature sets on each, and uploads the
+binaries as artefacts.
+
+The codebase was already written for this. Every method channel catches
+`MissingPluginException` and answers with a null rather than throwing, and
+`SettingsStore` falls back to a file in the system temp directory when the
+platform channel is absent — the app's private cache on Android, `/tmp`
+elsewhere.
+
+What does **not** work on a desktop: the radio player (a Media3 foreground
+service is an Android thing) and the voice assistant (the speech recogniser
+is Android only). Everything else does.
+
+### The now-playing file contract
+
+The desktop counterpart to the Android media-session watcher, and the route by
+which **NCS-SMLauncher** — a Python application, which cannot publish an
+Android `MediaSession` because it is not an Android application — shows up on
+the launcher card.
+
+Any application on the machine may write a JSON object to a known path and
+the card will show it:
+
+```json
+{
+  "title": "Some track", "artist": "Some artist", "album": "Some album",
+  "positionMs": 61500, "durationMs": 240000, "playing": true,
+  "source": "NCS-SMLauncher"
+}
+```
+
+The path is `$SN_LAUNCHER_NOW_PLAYING` if set, otherwise
+`$XDG_CACHE_HOME/sn_launcher/now_playing.json` on Linux or
+`~/Library/Caches/sn_launcher/now_playing.json` on macOS.
+
+The writer must write **atomically** — a temporary file in the same directory,
+renamed over the target — because a half-written file is a parse error and a
+parse error reads as "nothing is playing".
+
+Everything, including the Python side and the failure modes, is in
+[`docs/DESKTOP.md`](docs/DESKTOP.md). The reader is covered by
+`test/external_now_playing_test.dart`: the file missing, empty, malformed, an
+array, having no title, and being too old.
+
 ## 16. How this was built
 
 See [`docs/MODELS.md`](docs/MODELS.md) for model routing and the per-file

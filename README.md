@@ -136,6 +136,21 @@ what makes matching it realistic at all.
 flutter build apk --release --target-platform android-arm,android-arm64
 ```
 
+### Linux and macOS
+
+Both versions build for desktop too. The same Dart, the same two feature
+JSON files.
+
+Neither can be built from a Mac: **Linux cannot be cross-compiled at all**,
+and **macOS needs the full Xcode**, not just the Command Line Tools. So CI
+builds them — `.github/workflows/desktop.yml` runs an `ubuntu-24.04` and a
+`macos-14` runner and uploads the binaries as artefacts.
+
+**[docs/DESKTOP.md](docs/DESKTOP.md)** has the build commands, what works on
+a desktop and what does not, and the now-playing file contract that lets
+another application on the machine — NCS-SMLauncher, chiefly — show its track
+on the launcher's card.
+
 **[INFO.md](INFO.md)** has everything else: how the pixel measurements were
 taken and what is *not* measured, the rendering architecture, the photo
 licensing pipeline, the Gradle quirks, the signing situation, and the honest

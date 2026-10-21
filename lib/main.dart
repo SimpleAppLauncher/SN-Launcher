@@ -8,6 +8,7 @@ import 'src/models/photo_credit.dart';
 import 'src/services/assistant_service.dart';
 import 'src/services/calendar_service.dart';
 import 'src/services/feature_flags.dart';
+import 'src/services/external_now_playing.dart';
 import 'src/services/location_service.dart';
 import 'src/services/todo_service.dart';
 import 'src/services/licence_filter.dart';
@@ -103,6 +104,14 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   /// Photographs of the place the weather is about. ef only.
   late final PlacePhotoService _placePhoto = PlacePhotoService();
 
+  /// Now-playing from another application on this machine.
+  ///
+  /// The desktop counterpart to the Android media-session watcher, and the
+  /// route by which NCS-SMLauncher — a Python application, which cannot
+  /// publish an Android media session because it is not an Android application
+  /// — shows up on the card.
+  late final ExternalNowPlaying _external = ExternalNowPlaying();
+
   /// Notices whatever is playing on the device, whoever is playing it.
   late final DeviceMediaWatcher _media = DeviceMediaWatcher();
 
@@ -147,6 +156,9 @@ class _NestLauncherAppState extends State<NestLauncherApp>
         // was the missing link: the watcher was polling and the card was
         // watching the wrong thing, so a Spotify session could never appear.
         _playback.attach(_media);
+        // And the desktop bridge: a file another application writes.
+        _external.addListener(_onExternalNowPlaying);
+        _external.start();
         unawaited(_calendar.start());
       }
       // The to-do list is a disk read behind the same settings store the
@@ -161,6 +173,16 @@ class _NestLauncherAppState extends State<NestLauncherApp>
       }
       unawaited(_restoreAssistant());
     });
+  }
+
+  /// A reading arrived from the file bridge.
+  void _onExternalNowPlaying() {
+    final reading = _external.reading;
+    if (reading == null) {
+      _playback.clearExternalSession();
+      return;
+    }
+    _playback.adoptExternalSession(ExternalSession.fromReading(reading));
   }
 
   /// Restore assistant config. Reads settings, pushes them into the service.
@@ -225,6 +247,7 @@ class _NestLauncherAppState extends State<NestLauncherApp>
     _playback.dispose();
     _placePhoto.dispose();
     _media.dispose();
+    _external.dispose();
     _assistant.dispose();
     _clock.dispose();
     _weather.dispose();

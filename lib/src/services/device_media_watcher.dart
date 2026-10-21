@@ -200,6 +200,26 @@ class ExternalSession {
     return (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
   }
 
+  /// Builds a session from a plain JSON reading.
+  ///
+  /// So the desktop bridge and the Android media-session watcher produce the
+  /// same thing, and the card does not have to know which one it is looking
+  /// at. The file contract and the platform API are two routes to one place.
+  factory ExternalSession.fromReading(Map<String, Object?> reading) {
+    final position = (reading['positionMs'] as num?)?.toInt() ?? 0;
+    final duration = (reading['durationMs'] as num?)?.toInt() ?? 0;
+    return ExternalSession(
+      package: reading['source'] as String? ?? 'external',
+      title: reading['title'] as String? ?? '',
+      artist: reading['artist'] as String? ?? '',
+      album: reading['album'] as String? ?? '',
+      artworkPath: reading['artworkPath'] as String? ?? '',
+      playing: reading['playing'] == true,
+      position: Duration(milliseconds: position),
+      duration: Duration(milliseconds: duration),
+    );
+  }
+
   /// A short label for which app this is.
   String get appLabel => package.split('.').last;
 }

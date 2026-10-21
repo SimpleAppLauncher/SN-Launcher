@@ -1,0 +1,113 @@
+name: desktop
+
+# Builds the Linux and macOS versions of both SN-Launcher builds.
+#
+# Why CI does this rather than a developer machine:
+#
+#   Linux cannot be cross-compiled. Flutter cannot build a Linux desktop
+#   binary on macOS or Windows at all — the toolchain is the toolchain. So a
+#   Linux build needs a Linux machine, and GitHub's ubuntu runner is one.
+#
+#   macOS needs the *full* Xcode, not just the Command Line Tools: the build
+#   needs the macOS SDK and an AppKit build phase. The Command Line Tools are
+#   not enough, which is why this is a workflow and not a shell script.
+#
+# Both variants are built from the same source, differing only in which
+# features JSON is passed in — the same rule the Android build follows.
+
+on:
+  push:
+    branches: [master, main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    name: linux
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.7
+          channel: stable
+          cache: true
+
+      - name: Install the build dependencies
+        # The GTK and NSS packages the Linux runner needs. Without these the
+        # CMake configure step fails with a message about pkg-config not
+        # finding gtk+-3.0, which says nothing about what to install.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            libstdc++-12-dev
+
+      - name: Build — reduced
+        run: |
+          flutter pub get
+          flutter build linux --release \
+            --dart-define=SN_FEATURES=assets/features.json \
+            --dart-define=SN_BUILD_NAME=reduced
+
+      - name: Build — ef
+        run: |
+          flutter build linux --release \
+            --dart-define=SN_FEATURES=assets/features.ef.json \
+            --dart-define=SN_BUILD_NAME=ef
+
+      - name: Collect
+        run: |
+          mkdir -p dist/linux
+          cp -R build/linux/x64/release/bundle/* dist/linux/
+          tar -czf dist/SN-Launcher-linux-x64.tar.gz -C dist/linux .
+          rm -rf dist/linux
+          # The per-ABI Android builds belong to another workflow; this one
+          # only ships what it built.
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SN-Launcher-linux-x64
+          path: dist/SN-Launcher-linux-x64.tar.gz
+          if-no-files-found: error
+
+  macos:
+    name: macos
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.7
+          channel: stable
+          cache: true
+
+      - name: Build — reduced
+        run: |
+          flutter pub get
+          flutter build macos --release \
+            --dart-define=SN_FEATURES=assets/features.json \
+            --dart-define=SN_BUILD_NAME=reduced
+
+      - name: Build — ef
+        run: |
+          flutter build macos --release \
+            --dart-define=SN_FEATURES=assets/features.ef.json \
+            --dart-define=SN_BUILD_NAME=ef
+
+      - name: Collect
+        run: |
+          mkdir -p dist/macos
+          cp -R build/macos/Build/Products/Release/SN-Launcher.app dist/macos/
+          ditto -c -k --keepParent dist/macos/SN-Launcher.app \
+            dist/SN-Launcher-macos.zip
+          rm -rf dist/macos
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SN-Launcher-macos
+          path: dist/SN-Launcher-macos.zip
+          if-no-files-found: error
