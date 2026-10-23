@@ -189,9 +189,16 @@ void main() {
     test('a server with no library is still a working player', () async {
       final client = NcsClient(baseUrl: player.url);
       addTearDown(client.dispose);
+      await client.refresh();
+      expect(client.connected, isTrue);
       player.hasLibrary = false;
 
       expect(await client.browse(), isEmpty);
+      // The 404 was on an endpoint the protocol calls optional. It must not
+      // take the player from "connected" to "no player at" while the music
+      // is playing.
+      expect(client.connected, isTrue);
+      expect(client.error, isEmpty);
     });
 
     test('an error is reported, not thrown', () async {

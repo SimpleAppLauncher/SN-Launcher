@@ -7,7 +7,7 @@
     "settings": true,
     "assistant": true,
     "music": true,
-      "ncsPlayer": true,
+    "ncsPlayer": true,
     "photoRotation": true,
     "photoDiscovery": true,
     "themePicker": true,

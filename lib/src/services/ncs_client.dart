@@ -274,7 +274,7 @@ class NcsClient extends ChangeNotifier {
   /// still a working player.
   Future<List<NcsTrack>> browse() async {
     if (!configured) return const [];
-    final json = await _getJson('/browse');
+    final json = await _getJson('/browse', quiet: true);
     if (json == null) return const [];
     final raw = json['tracks'] ?? json['albums'] ?? json['items'];
     if (raw is! List) return const [];
@@ -301,7 +301,16 @@ class NcsClient extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, Object?>?> _getJson(String path) async {
+  /// [quiet] is for the optional endpoints.
+  ///
+  /// A 404 on `/browse` means the server never implemented a library, not that
+  /// the player has gone away. Reporting it through [_fail] would turn a
+  /// working player into a "not connected" page the moment the feed asked for
+  /// a library it was never going to get.
+  Future<Map<String, Object?>?> _getJson(
+    String path, {
+    bool quiet = false,
+  }) async {
     try {
       final request = await _client.getUrl(Uri.parse('$_baseUrl$path'));
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
@@ -310,7 +319,7 @@ class NcsClient extends ChangeNotifier {
       );
       if (response.statusCode != 200) {
         await response.drain<void>();
-        _fail('The player answered ${response.statusCode}');
+        if (!quiet) _fail('The player answered ${response.statusCode}');
         return null;
       }
       final body = await response.transform(utf8.decoder).join();
@@ -318,16 +327,16 @@ class NcsClient extends ChangeNotifier {
       if (decoded is! Map) return null;
       return Map<String, Object?>.from(decoded);
     } on SocketException {
-      _fail(_unreachable());
+      if (!quiet) _fail(_unreachable());
       return null;
     } on TimeoutException {
-      _fail('The player did not answer');
+      if (!quiet) _fail('The player did not answer');
       return null;
     } on FormatException {
-      _fail('The player sent something that is not JSON');
+      if (!quiet) _fail('The player sent something that is not JSON');
       return null;
     } catch (e) {
-      _fail('Could not reach the player');
+      if (!quiet) _fail('Could not reach the player');
       return null;
     }
   }
