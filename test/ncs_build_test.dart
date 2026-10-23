@@ -50,6 +50,30 @@ void main() {
     expect(c.availablePages, isNot(contains(ShellPage.music)));
   });
 
+  test('discover is the sheet sentinel, not a carousel page', () {
+    // It has no content (`_pageContent` returns a shrink): it only marks that
+    // the launcher sheet is covering the carousel. In the reduced build it was
+    // a blank fourth page after "Home" until the tablet showed it.
+    FeatureFlags.forTesting = flags('{"features":{}}');
+    final c = controller();
+    addTearDown(c.dispose);
+    expect(c.availablePages, isNot(contains(ShellPage.discover)));
+
+    // The marker still has to take effect, or the dock stays visible under
+    // the fully open sheet.
+    c.goToPage(ShellPage.discover);
+    expect(c.page, ShellPage.discover);
+  });
+
+  test('without digestPage the carousel drops the digest too', () {
+    // `_pageContent` already returned a shrink for this case; the page list
+    // was the other half of the same gate.
+    FeatureFlags.forTesting = flags('{"features":{"digestPage":false}}');
+    final c = controller();
+    addTearDown(c.dispose);
+    expect(c.availablePages, isNot(contains(ShellPage.digest)));
+  });
+
   test('the page sits after the weather and before the home controls', () {
     FeatureFlags.forTesting = flags(
       '{"features":{"weather":true,"music":true,"ncsPlayer":true}}',

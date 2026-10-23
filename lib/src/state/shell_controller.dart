@@ -14,7 +14,6 @@ import '../theme/nest_motion.dart';
 
 /// Material 1 standard easing — the curve the Nest's Flutter UI uses.
 
-
 /// The four top-level pages of the shell, in the device's carousel order.
 enum ShellPage {
   /// Photo Frame / clock — far left.
@@ -67,8 +66,8 @@ class ShellController extends ChangeNotifier {
     PlatformBridge platform = const PlatformBridge(),
     SettingsStore? settings,
     // ignore: prefer_initializing_formals
-  })  : _platform = platform,
-        _settings = settings ?? SettingsStore() {
+  }) : _platform = platform,
+       _settings = settings ?? SettingsStore() {
     _palette = AmbientPalette.of(_theme);
 
     // UNBOUNDED, and that is load-bearing.
@@ -84,7 +83,10 @@ class ShellController extends ChangeNotifier {
     // Bounds would need the page count, which the feature flags change at
     // runtime, so unbounded is both the smaller fix and the honest one: the
     // value is a page offset, not a 0..1 progress.
-    _pageAnim = AnimationController.unbounded(vsync: vsync, duration: kNestSlow);
+    _pageAnim = AnimationController.unbounded(
+      vsync: vsync,
+      duration: kNestSlow,
+    );
     _sheetAnim = AnimationController(vsync: vsync, duration: kNestMedium);
   }
 
@@ -95,6 +97,7 @@ class ShellController extends ChangeNotifier {
   /// Exposed so the quick-settings row can fall back to the plugin's URL path
   /// when the native one is unavailable (desktop, or an older Android build).
   ActionLauncher get actionLauncher => _launcher;
+
   /// Private with a public getter: the constructor takes a named parameter for
   /// testability but the field name must stay private.
   final PlatformBridge _platform;
@@ -110,8 +113,11 @@ class ShellController extends ChangeNotifier {
   /// immediately and corrects itself a moment later if the platform answers.
   Future<void> restore() async {
     await _settings.load();
-    _placePhotoEnabled =
-        _settings.read(SettingKeys.placePhoto, false, (v) => v == 'true');
+    _placePhotoEnabled = _settings.read(
+      SettingKeys.placePhoto,
+      false,
+      (v) => v == 'true',
+    );
     if (_disposed) return;
     final stored = _settings.get(SettingKeys.theme);
     if (stored != null) {
@@ -301,10 +307,19 @@ class ShellController extends ChangeNotifier {
   /// whole reason this is a predicate and not a `where` on the enum with the
   /// pages still present.
   bool _pageAvailable(ShellPage page, FeatureFlags f) => switch (page) {
-        ShellPage.weather => f.isOn('weather'),
-        ShellPage.music => f.isOn('music') && f.isOn('ncsPlayer'),
-        _ => true,
-      };
+    // The content is gated too (`_pageContent` returns a shrink), so a
+    // build without it would otherwise have a blank page in the swipe.
+    ShellPage.digest => f.isOn('digestPage'),
+    ShellPage.weather => f.isOn('weather'),
+    ShellPage.music => f.isOn('music') && f.isOn('ncsPlayer'),
+    // Not a page: `discover` is the marker the shell sets while the
+    // launcher sheet is fully open, so the carousel behind it draws
+    // nothing. It has no content of its own, and leaving it in this list
+    // put a blank fourth page after "Home" in the reduced build — found by
+    // installing that build on the tablet and swiping to the end.
+    ShellPage.discover => false,
+    _ => true,
+  };
 
   /// Moves the carousel to [p].
   ///
@@ -319,15 +334,31 @@ class ShellController extends ChangeNotifier {
   void goToPage(ShellPage p, {Duration? duration, double velocity = 0}) {
     final pages = availablePages;
     final index = pages.indexOf(p);
-    if (index < 0) return;
+    if (index < 0) {
+      // `discover` is the sheet's sentinel, not a page. The shell still needs
+      // `_page` set so the dock hides while the launcher sheet covers the
+      // carousel, but there is nothing to slide to, so leave the animation on
+      // the page that is already showing behind the sheet.
+      if (p == ShellPage.discover) {
+        _page = p;
+        notifyListeners();
+      }
+      return;
+    }
     if (_page == p && _pageAnim.isAnimating) return;
     _page = p;
     final target = index.toDouble();
     if (duration != null) {
       _pageAnim.animateTo(target, duration: duration, curve: kNestEase);
     } else {
-      _pageAnim.animateWith(nestSpring(kNestPageSpring, _pageAnim.value, target,
-          clampNestVelocity(velocity, max: 3.0)));
+      _pageAnim.animateWith(
+        nestSpring(
+          kNestPageSpring,
+          _pageAnim.value,
+          target,
+          clampNestVelocity(velocity, max: 3.0),
+        ),
+      );
     }
     notifyListeners();
   }
@@ -431,18 +462,22 @@ class ShellController extends ChangeNotifier {
   /// speed, which is the "it appears slowly" half of the report.
   void onSheetDragUpdate(double dyFromStart, double travelHeight) {
     if (!_draggingSheet) return;
-    _sheetAnim.value =
-        (_dragStart - dyFromStart / math.max(1.0, travelHeight)).clamp(0.0, 1.0);
+    _sheetAnim.value = (_dragStart - dyFromStart / math.max(1.0, travelHeight))
+        .clamp(0.0, 1.0);
   }
 
   /// Release settles the sheet. Called on pointer-up *and* pointer-cancel —
   /// Android claims bottom-edge drags for its own gesture, so a cancel is the
   /// normal way a drag ends here.
-  void onSheetDragEnd(double velocity, double travelHeight, {required bool isDiscover}) {
+  void onSheetDragEnd(
+    double velocity,
+    double travelHeight, {
+    required bool isDiscover,
+  }) {
     _draggingSheet = false;
     final travel = math.max(1.0, travelHeight);
-    final projected =
-        (_sheetAnim.value - velocity / travel * _flingProjection).clamp(0.0, 1.0);
+    final projected = (_sheetAnim.value - velocity / travel * _flingProjection)
+        .clamp(0.0, 1.0);
 
     final bool shouldOpen;
     if (velocity < -sheetFlingVelocity) {
@@ -460,7 +495,10 @@ class ShellController extends ChangeNotifier {
       // gesture, so this is a hint rather than a throw. The carousel clamp
       // inside goToPage keeps a hard fling from overshooting the page.
       final width = math.max(1.0, metrics.size.width);
-      goToPage(isDiscover ? ShellPage.discover : _page, velocity: velocity / width);
+      goToPage(
+        isDiscover ? ShellPage.discover : _page,
+        velocity: velocity / width,
+      );
       _springSheet(true, releaseVelocity: velocity);
     } else {
       _springSheet(false, releaseVelocity: velocity);
@@ -476,14 +514,17 @@ class ShellController extends ChangeNotifier {
   /// difference between a sheet that follows your finger and one that runs a
   /// fixed animation after letting go of it.
   void _springSheet(bool open, {double releaseVelocity = 0}) {
-    final SpringDescription spring =
-        open ? kNestSheetSpring : kNestSheetCloseSpring;
-    _sheetAnim.animateWith(nestSpring(
-      spring,
-      _sheetAnim.value,
-      open ? 1.0 : 0.0,
-      clampNestVelocity(releaseVelocity / _nominalSheetTravel),
-    ));
+    final SpringDescription spring = open
+        ? kNestSheetSpring
+        : kNestSheetCloseSpring;
+    _sheetAnim.animateWith(
+      nestSpring(
+        spring,
+        _sheetAnim.value,
+        open ? 1.0 : 0.0,
+        clampNestVelocity(releaseVelocity / _nominalSheetTravel),
+      ),
+    );
   }
 
   /// A full sheet height in logical pixels, used only to convert a gesture's
@@ -581,9 +622,9 @@ class ShellController extends ChangeNotifier {
   void togglePlacePhoto() {
     _placePhotoEnabled = !_placePhotoEnabled;
     _settings.put(SettingKeys.placePhoto, '$_placePhotoEnabled');
-    showToast(_placePhotoEnabled
-        ? 'Place photograph on'
-        : 'Place photograph off');
+    showToast(
+      _placePhotoEnabled ? 'Place photograph on' : 'Place photograph off',
+    );
     notifyListeners();
   }
 
@@ -633,9 +674,11 @@ class ShellController extends ChangeNotifier {
     closeSheet();
     final outcome = await _launcher.launch(action);
     if (outcome != LaunchOutcome.launched) {
-      showToast(outcome == LaunchOutcome.notInstalled
-          ? '${action.label} is not installed'
-          : "Couldn't open ${action.label}");
+      showToast(
+        outcome == LaunchOutcome.notInstalled
+            ? '${action.label} is not installed'
+            : "Couldn't open ${action.label}",
+      );
     }
   }
 

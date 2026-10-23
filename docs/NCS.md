@@ -168,6 +168,9 @@ against `tool/ncs_mock_server.py` on the LAN:
   without scrolling.
 - A frozen player: the feed and mini player stay, the chip turns amber and says
   "Reconnecting…", and returns to the player's name when it answers again.
+- The reduced build, installed alongside ef: its carousel has three pages and
+  the last swipe stays on "Home" — before the fix both builds showed a blank
+  page there. The fully open launcher sheet still covers the carousel.
 
 Verified by tests:
 
@@ -180,7 +183,8 @@ Verified by tests:
   `pause`; the card fits above a simulated keyboard; a missed poll keeps the
   feed and says "Reconnecting…"; an unreachable player keeps the address.
 - `test/ncs_build_test.dart` — the music page is gated on `music` and
-  `ncsPlayer`, and the reduced build has no hole in the carousel.
+  `ncsPlayer`, the reduced build has no hole in the carousel, and `discover`
+  is a sheet marker rather than a page.
 
 Not verified:
 
