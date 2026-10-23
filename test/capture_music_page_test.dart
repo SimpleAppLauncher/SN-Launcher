@@ -12,11 +12,14 @@ import 'package:sn_launcher/src/widgets/ncs_music_page.dart';
 
 import 'ncs_client_test.dart' show FakePlayer;
 
-/// Renders the music page to the PNGs in `docs/shots`.
+/// Renders the music page to the PNGs in `build/shots`.
 ///
 ///     SN_CAPTURE=1 flutter test test/capture_music_page_test.dart
 ///
-/// Skipped by default. This writes screenshots; it does not assert them. A
+/// Skipped by default. Writes to `build/shots`, not `docs/shots`: these are a
+/// layout harness for working without the tablet, and their covers are the
+/// gradient placeholder because a test binding does not decode network images.
+/// The screenshots in the docs are from the device. A
 /// golden that has to match byte for byte would fail here on the elapsed time
 /// alone — the clock ticks between two runs, which is the one thing this page
 /// is meant to do — and a test that cries wolf is a test people learn to
@@ -47,20 +50,23 @@ void main() {
   final capture = Platform.environment['SN_CAPTURE'] == '1';
 
   testWidgets('the music page', skip: !capture, (tester) async {
-    tester.view.physicalSize = const Size(800, 1340);
+    tester.view.physicalSize = const Size(1340, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final client = NcsClient(baseUrl: player.url);
     await tester.runAsync(() async => client.refresh());
-    final metrics = NestMetrics.forSize(const Size(800, 1340));
+    final metrics = NestMetrics.forSize(const Size(1340, 800));
     final key = GlobalKey();
 
     await tester.pumpWidget(
       RepaintBoundary(
         key: key,
         child: MaterialApp(
+          // A screenshot with Flutter's debug ribbon across the corner is
+          // not a screenshot of this app.
+          debugShowCheckedModeBanner: false,
           home: NcsMusicPage(
             client: client,
             metrics: metrics,
@@ -72,7 +78,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    await tester.runAsync(() => _write(tester, key, 'docs/shots/music.png'));
+    await tester.runAsync(() => _write(tester, key, 'build/shots/music.png'));
 
     // And the full player, which is the other half of the design.
     await tester.tap(find.text('Everything In Its Right Place'));
@@ -80,7 +86,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     await tester.runAsync(
-      () => _write(tester, key, 'docs/shots/music-player.png'),
+      () => _write(tester, key, 'build/shots/music-player.png'),
     );
 
     client.stop();

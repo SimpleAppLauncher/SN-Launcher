@@ -155,6 +155,9 @@ void main() {
       await client.control('pause');
 
       expect(player.controls.single, {'action': 'pause'});
+      // Chunked would be -1 here. The mock player (and any server that only
+      // reads Content-Length) would then parse an empty body and answer 400.
+      expect(player.lastControlLength, greaterThan(0));
     });
 
     test('sends the track it was asked to play', () async {
@@ -235,6 +238,21 @@ void main() {
       expect(client.connected, isFalse);
       expect(client.error, isNotEmpty);
     });
+
+    test('a refresh during a poll waits for that poll', () async {
+      // The Connect button asks for a refresh while the two-second timer may
+      // already have one in flight. Returning immediately there made the button
+      // read `connected` before the answer landed, and the tablet showed
+      // "No player at ..." underneath a header that was about to say connected.
+      player.stateDelay = const Duration(milliseconds: 120);
+      final client = NcsClient(baseUrl: player.url);
+      addTearDown(client.dispose);
+
+      await Future.wait([client.refresh(), client.refresh()]);
+
+      expect(client.connected, isTrue);
+      expect(player.stateRequests, 1);
+    });
   });
 }
 
@@ -253,6 +271,22 @@ class FakePlayer {
   bool hasLibrary = true;
   bool malformed = false;
   int stateStatus = 200;
+
+  /// How long `/state` waits before answering.
+  Duration stateDelay = Duration.zero;
+
+  /// How many times the client asked for the state.
+  int stateRequests = 0;
+
+  /// The Content-Length the last control arrived with. -1 means the client
+  /// chunked it, which this kind of server would read as an empty body.
+  int lastControlLength = -1;
+
+  /// One transparent pixel, so `/art/...` answers with a decodable image.
+  static final List<int> _pixel = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk'
+    'YPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  );
 
   int get port => _server.port;
 
@@ -275,18 +309,21 @@ class FakePlayer {
       'artist': 'Radiohead',
       'album': 'Kid A',
       'durationMs': 240000,
+      'artwork': '/art/track-1.png',
     },
     'queue': [
       {
         'id': 'track-2',
         'title': 'Kid A',
         'artist': 'Radiohead',
+        'artwork': '/art/track-2.png',
         'durationMs': 250000,
       },
       {
         'id': 'track-3',
         'title': 'The National Anthem',
         'artist': 'Radiohead',
+        'artwork': '/art/track-3.png',
         'durationMs': 320000,
       },
       {
@@ -313,6 +350,8 @@ class FakePlayer {
   Future<void> _handle(HttpRequest request) async {
     final path = request.uri.path;
     if (request.method == 'GET' && path == '/state') {
+      stateRequests++;
+      if (stateDelay > Duration.zero) await Future<void>.delayed(stateDelay);
       if (malformed) {
         request.response.write('{this is not json');
         await request.response.close();
@@ -325,9 +364,17 @@ class FakePlayer {
       return;
     }
     if (request.method == 'POST' && path == '/control') {
+      // A server that only reads Content-Length must still see the body.
+      lastControlLength = request.contentLength;
       final body = await utf8.decoder.bind(request).join();
       controls.add(Map<String, Object?>.from(jsonDecode(body) as Map));
       request.response.statusCode = 204;
+      await request.response.close();
+      return;
+    }
+    if (request.method == 'GET' && path.startsWith('/art/')) {
+      request.response.headers.contentType = ContentType('image', 'png');
+      request.response.add(_pixel);
       await request.response.close();
       return;
     }

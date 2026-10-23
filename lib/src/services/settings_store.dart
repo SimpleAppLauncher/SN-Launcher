@@ -36,13 +36,16 @@ class SettingsStore {
 
   String? get(String key) => _cache[key];
 
-  /// Whether [load] has already run. Makes it idempotent, so a second caller
-  /// cannot re-read the platform and clobber a value written in between.
-  bool _loaded = false;
+  /// The load in progress, or the one that already ran.
+  ///
+  /// Callers share the future. Returning immediately from a second call while
+  /// the first was still reading would hand back an empty cache, which is how
+  /// the music page's saved address went missing on the next launch.
+  Future<void>? _loading;
 
-  Future<void> load() async {
-    if (_loaded) return;
-    _loaded = true;
+  Future<void> load() => _loading ??= _load();
+
+  Future<void> _load() async {
     try {
       final raw = await _channel.invokeMethod<String>('getAll');
       if (raw != null && raw.isNotEmpty) {

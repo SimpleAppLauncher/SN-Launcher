@@ -85,6 +85,12 @@ class _NcsMusicPageState extends State<NcsMusicPage> {
 
   void _onClient() {
     if (!widget.isCurrent) return;
+    // The address can arrive from settings after this page was built — the
+    // client is constructed during the first frame, the store lands after it.
+    // `start()` is a no-op once the timer exists, so this does not restart it.
+    if (widget.client.configured && !widget.client.polling) {
+      widget.client.start();
+    }
     if (widget.client.connected && _library.isEmpty && !_loadingLibrary) {
       unawaited(_loadLibrary());
     }
@@ -117,15 +123,50 @@ class _NcsMusicPageState extends State<NcsMusicPage> {
   Widget build(BuildContext context) {
     final m = widget.metrics;
     final type = widget.type;
+    // Read above the Scaffold: `Scaffold` removes the keyboard inset from the
+    // MediaQuery it hands its body, so a widget inside the body always reads
+    // zero. The compact card needs the truth to drop the decoration and let the
+    // Connect button sit above the keys.
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
-    return Material(
-      color: _bg,
-      child: SafeArea(
+    // A Scaffold, not a bare Material, for one reason: `resizeToAvoidBottomInset`.
+    // The first thing anyone does on this page is type a server address, and on
+    // the tablet the soft keyboard covered the field completely — the card is
+    // centred in the full height, so the keyboard sat on top of it. Found by
+    // looking at the device, not by a test.
+    return Scaffold(
+      backgroundColor: _bg,
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
         child: ListenableBuilder(
           listenable: widget.client,
           builder: (context, _) {
             final client = widget.client;
             final snapshot = client.snapshot;
+            // The connect card is for "nothing is known yet", not for "the last
+            // poll missed". One dropped packet on the tablet's Wi-Fi used to
+            // replace a perfectly good feed with the card, while the mini player
+            // kept playing underneath it. With a snapshot in hand the page keeps
+            // showing it and the header says it is reconnecting.
+            final Widget body;
+            if (snapshot == null) {
+              body = _ConnectCard(
+                metrics: m,
+                type: type,
+                error: client.configured ? client.error : '',
+                initial: client.baseUrl,
+                compact: keyboardVisible,
+                onSubmit: (value) => _connect(context, value),
+              );
+            } else {
+              body = _Feed(
+                metrics: m,
+                type: type,
+                client: client,
+                snapshot: snapshot,
+                quickPicks: _quickPicks,
+              );
+            }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -133,35 +174,12 @@ class _NcsMusicPageState extends State<NcsMusicPage> {
                   metrics: m,
                   type: type,
                   connected: client.connected,
+                  reconnecting: snapshot != null && !client.connected,
                   serverName: snapshot?.serverName ?? '',
                   address: client.baseUrl,
                   onSettings: () => _editAddress(context),
                 ),
-                Expanded(
-                  child: !client.configured
-                      ? _ConnectCard(
-                          metrics: m,
-                          type: type,
-                          error: '',
-                          initial: '',
-                          onSubmit: (value) => _connect(context, value),
-                        )
-                      : !client.connected
-                      ? _ConnectCard(
-                          metrics: m,
-                          type: type,
-                          error: client.error,
-                          initial: client.baseUrl,
-                          onSubmit: (value) => _connect(context, value),
-                        )
-                      : _Feed(
-                          metrics: m,
-                          type: type,
-                          client: client,
-                          snapshot: snapshot!,
-                          quickPicks: _quickPicks,
-                        ),
-                ),
+                Expanded(child: body),
                 if (snapshot?.current != null)
                   _MiniPlayer(
                     metrics: m,
@@ -217,6 +235,7 @@ class _NcsMusicPageState extends State<NcsMusicPage> {
           controller: controller,
           autofocus: true,
           keyboardType: TextInputType.url,
+          textInputAction: TextInputAction.done,
           style: widget.type.body(color: _onSurface),
           decoration: InputDecoration(
             hintText: NcsClient.exampleAddress,
@@ -278,6 +297,7 @@ class _Header extends StatelessWidget {
     required this.metrics,
     required this.type,
     required this.connected,
+    required this.reconnecting,
     required this.serverName,
     required this.address,
     required this.onSettings,
@@ -286,6 +306,9 @@ class _Header extends StatelessWidget {
   final NestMetrics metrics;
   final NestType type;
   final bool connected;
+
+  /// There is a snapshot, but the last poll did not reach the player.
+  final bool reconnecting;
   final String serverName;
   final String address;
   final VoidCallback onSettings;
@@ -307,9 +330,15 @@ class _Header extends StatelessWidget {
           _ConnectionChip(
             metrics: m,
             type: type,
-            connected: connected,
+            dot: connected
+                ? const Color(0xFF3DDC84)
+                : reconnecting
+                ? const Color(0xFFFFB300)
+                : _muted,
             label: connected
                 ? (serverName.isEmpty ? 'Player' : serverName)
+                : reconnecting
+                ? 'Reconnecting…'
                 : 'Not connected',
             address: address,
           ),
@@ -329,14 +358,14 @@ class _ConnectionChip extends StatelessWidget {
   const _ConnectionChip({
     required this.metrics,
     required this.type,
-    required this.connected,
+    required this.dot,
     required this.label,
     required this.address,
   });
 
   final NestMetrics metrics;
   final NestType type;
-  final bool connected;
+  final Color dot;
   final String label;
   final String address;
 
@@ -355,7 +384,7 @@ class _ConnectionChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _Dot(color: connected ? const Color(0xFF3DDC84) : _muted),
+            _Dot(color: dot),
             SizedBox(width: m.px(8)),
             ConstrainedBox(
               constraints: BoxConstraints(maxWidth: metrics.px(220)),
@@ -407,6 +436,15 @@ class _Feed extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = metrics;
+    // Columns and cell height are worked out from the design width, not from
+    // a fixed aspect ratio. An aspect ratio couples the height to the width,
+    // so a grid that grows an extra column silently takes the room the caption
+    // needed — which showed up on the tablet as an overflow strip under every
+    // title.
+    final designWidth = m.size.width / m.u;
+    final columns = designWidth >= 900 ? 4 : 2;
+    final cellWidth = (designWidth - 48 - (columns - 1) * 16) / columns;
+
     // The queue without whatever is playing right now: a list headed "Up next"
     // that starts with the track already playing is a lie.
     final upNext = [
@@ -425,10 +463,15 @@ class _Feed extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: m.px(24)),
             sliver: SliverGrid(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: m.size.width >= m.px(900) ? 3 : 2,
+                crossAxisCount: columns,
                 mainAxisSpacing: m.px(18),
                 crossAxisSpacing: m.px(16),
-                childAspectRatio: 0.78,
+                // The cover is square, so the cell is the cover plus the two
+                // lines under it. 92, not 62: the first attempt used the font
+                // size and forgot the line box, and the caption was clipped
+                // away with Flutter's overflow stripe in its place. Measured
+                // on the 1340x800 panel, not guessed twice.
+                mainAxisExtent: m.px(cellWidth) + m.px(92),
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, i) => _AlbumCard(
@@ -663,7 +706,15 @@ class _QueueRow extends StatelessWidget {
 ///
 /// The gradient is derived from the title, so the same track is always the same
 /// colour — a placeholder that changes every rebuild looks like a bug.
-class _Artwork extends StatelessWidget {
+/// A cover, with a gradient in its place while it loads or if it never does.
+///
+/// Stateful for one reason: a cover that fails once — the Wi-Fi asleep, the
+/// player restarting — used to stay a gradient for the life of the page.
+/// Flutter does not re-resolve an image whose provider compares equal, and the
+/// two-second poll rebuilt this with the same URL every time, so nothing ever
+/// tried again. Seen on the tablet on the mini player while every grid cover
+/// loaded.
+class _Artwork extends StatefulWidget {
   const _Artwork({
     required this.track,
     required this.baseUrl,
@@ -679,29 +730,76 @@ class _Artwork extends StatelessWidget {
   final double? size;
 
   @override
+  State<_Artwork> createState() => _ArtworkState();
+}
+
+class _ArtworkState extends State<_Artwork> {
+  /// Which attempt this is. Part of the image's key, so a retry builds a new
+  /// Image state and actually asks again.
+  int _attempt = 0;
+
+  Timer? _retry;
+
+  @override
+  void didUpdateWidget(_Artwork old) {
+    super.didUpdateWidget(old);
+    if (old.track.artwork != widget.track.artwork ||
+        old.baseUrl != widget.baseUrl) {
+      _retry?.cancel();
+      _retry = null;
+      _attempt = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _retry?.cancel();
+    super.dispose();
+  }
+
+  void _onError() {
+    // Two more tries, then stop. A gradient is the honest answer for a server
+    // that has no cover, and hammering it every two seconds is not.
+    if (_retry != null || _attempt >= 2) return;
+    _attempt++;
+    _retry = Timer(Duration(seconds: _attempt == 1 ? 4 : 12), () {
+      _retry = null;
+      if (!mounted) return;
+      final url = widget.track.artworkUrl(widget.baseUrl);
+      if (url != null) unawaited(NetworkImage(url).evict());
+      setState(() {});
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final url = track.artworkUrl(baseUrl);
+    final m = widget.metrics;
+    final url = widget.track.artworkUrl(widget.baseUrl);
     final fallback = _GradientTile(
-      seed: track.title,
-      iconSize: (size ?? metrics.px(140)) * 0.28,
+      seed: widget.track.title,
+      iconSize: (widget.size ?? m.px(140)) * 0.28,
     );
     final child = ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
+      borderRadius: BorderRadius.circular(widget.radius),
       child: url == null
           ? fallback
           : Image.network(
               url,
+              key: ValueKey('$url#$_attempt'),
               fit: BoxFit.cover,
               // A server that promises artwork and cannot deliver it is a
               // gradient, not a broken image icon.
-              errorBuilder: (context, error, stack) => fallback,
+              errorBuilder: (context, error, stack) {
+                _onError();
+                return fallback;
+              },
               loadingBuilder: (context, child, progress) =>
                   progress == null ? child : fallback,
             ),
     );
-    return size == null
+    return widget.size == null
         ? child
-        : SizedBox(width: size, height: size, child: child);
+        : SizedBox(width: widget.size, height: widget.size, child: child);
   }
 }
 
@@ -994,90 +1092,57 @@ class _FullPlayer extends StatelessWidget {
                   ),
                   Expanded(
                     child: LayoutBuilder(
-                      builder: (context, constraints) => SingleChildScrollView(
-                        padding: EdgeInsets.symmetric(horizontal: m.px(48)),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: constraints.maxHeight,
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(height: m.px(10)),
-                              SizedBox(
-                                width: art,
-                                height: art,
-                                child: _Artwork(
-                                  track: track,
-                                  baseUrl: client.baseUrl,
-                                  metrics: m,
-                                  radius: m.px(12),
-                                ),
+                      builder: (context, constraints) =>
+                          constraints.maxWidth > constraints.maxHeight
+                          ? _WidePlayer(
+                              metrics: m,
+                              type: type,
+                              client: client,
+                              snapshot: snapshot,
+                              space: constraints,
+                            )
+                          : SingleChildScrollView(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: m.px(48),
                               ),
-                              SizedBox(height: m.px(24)),
-                              // Everything under the cover is as wide as the cover
-                              // and sits directly under it, rather than stretching to
-                              // the screen edges while the cover floats in the
-                              // middle. That misalignment is the difference between a
-                              // player and a page with a picture on it.
-                              SizedBox(
-                                width: art,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: constraints.maxHeight,
+                                ),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Text(
-                                      track.title,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: type
-                                          .sheetTitle(color: _onSurface)
-                                          .copyWith(
-                                            fontSize: m.px(30),
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
-                                    SizedBox(height: m.px(4)),
-                                    Text(
-                                      track.artist.isEmpty
-                                          ? track.album
-                                          : track.artist,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: type.body(color: _muted),
-                                    ),
-                                    SizedBox(height: m.px(18)),
-                                    _ProgressRow(
-                                      metrics: m,
-                                      type: type,
-                                      snapshot: snapshot,
-                                      onSeek: (position) => client.control(
-                                        'seek',
-                                        value: position.inMilliseconds
-                                            .toDouble(),
+                                    SizedBox(height: m.px(10)),
+                                    SizedBox(
+                                      width: art,
+                                      height: art,
+                                      child: _Artwork(
+                                        track: track,
+                                        baseUrl: client.baseUrl,
+                                        metrics: m,
+                                        radius: m.px(12),
                                       ),
                                     ),
-                                    SizedBox(height: m.px(10)),
-                                    _Transport(
-                                      metrics: m,
-                                      client: client,
-                                      snapshot: snapshot,
+                                    SizedBox(height: m.px(24)),
+                                    // Everything under the cover is as wide as the cover
+                                    // and sits directly under it, rather than stretching to
+                                    // the screen edges while the cover floats in the
+                                    // middle. That misalignment is the difference between a
+                                    // player and a page with a picture on it.
+                                    SizedBox(
+                                      width: art,
+                                      child: _TrackDetails(
+                                        metrics: m,
+                                        type: type,
+                                        client: client,
+                                        snapshot: snapshot,
+                                      ),
                                     ),
                                     SizedBox(height: m.px(24)),
-                                    _VolumeRow(
-                                      metrics: m,
-                                      type: type,
-                                      client: client,
-                                      volume: snapshot.volume,
-                                    ),
                                   ],
                                 ),
                               ),
-                              SizedBox(height: m.px(24)),
-                            ],
-                          ),
-                        ),
-                      ),
+                            ),
                     ),
                   ),
                 ],
@@ -1085,6 +1150,122 @@ class _FullPlayer extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// The title, artist, progress, transport and volume, as one block.
+///
+/// Under the cover in portrait, beside it in landscape. Pulled out because the
+/// wide layout needs exactly the same controls, and a second copy would drift.
+class _TrackDetails extends StatelessWidget {
+  const _TrackDetails({
+    required this.metrics,
+    required this.type,
+    required this.client,
+    required this.snapshot,
+  });
+
+  final NestMetrics metrics;
+  final NestType type;
+  final NcsClient client;
+  final NcsSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = metrics;
+    final track = snapshot.current!;
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          track.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: type
+              .sheetTitle(color: _onSurface)
+              .copyWith(fontSize: m.px(30), fontWeight: FontWeight.w600),
+        ),
+        SizedBox(height: m.px(4)),
+        Text(
+          track.artist.isEmpty ? track.album : track.artist,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: type.body(color: _muted),
+        ),
+        SizedBox(height: m.px(18)),
+        _ProgressRow(
+          metrics: m,
+          type: type,
+          snapshot: snapshot,
+          onSeek: (position) =>
+              client.control('seek', value: position.inMilliseconds.toDouble()),
+        ),
+        SizedBox(height: m.px(10)),
+        _Transport(metrics: m, client: client, snapshot: snapshot),
+        SizedBox(height: m.px(24)),
+        _VolumeRow(
+          metrics: m,
+          type: type,
+          client: client,
+          volume: snapshot.volume,
+        ),
+      ],
+    );
+  }
+}
+
+/// The full player on a wide screen: cover on the left, controls on the right.
+///
+/// Stacked, the volume row sat below the fold of the 1340x800 panel and had to
+/// be scrolled to. A tablet held in landscape is the normal case for this app,
+/// and the real player uses the width rather than pretending to be a phone.
+class _WidePlayer extends StatelessWidget {
+  const _WidePlayer({
+    required this.metrics,
+    required this.type,
+    required this.client,
+    required this.snapshot,
+    required this.space,
+  });
+
+  final NestMetrics metrics;
+  final NestType type;
+  final NcsClient client;
+  final NcsSnapshot snapshot;
+  final BoxConstraints space;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = metrics;
+    final track = snapshot.current!;
+    final side = math.min(space.maxHeight - m.px(32), space.maxWidth * 0.44);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(m.px(56), m.px(8), m.px(72), m.px(24)),
+      child: Row(
+        children: [
+          SizedBox(
+            width: side,
+            height: side,
+            child: _Artwork(
+              track: track,
+              baseUrl: client.baseUrl,
+              metrics: m,
+              radius: m.px(12),
+            ),
+          ),
+          SizedBox(width: m.px(56)),
+          Expanded(
+            child: _TrackDetails(
+              metrics: m,
+              type: type,
+              client: client,
+              snapshot: snapshot,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1128,10 +1309,10 @@ class _FullPlayerBar extends StatelessWidget {
             ],
           ),
           const Spacer(),
-          IconButton(
-            onPressed: () {},
-            icon: Icon(NestIcons.MoreVert, size: m.px(24), color: _muted),
-          ),
+          // The back button's width, and nothing in it. A dots menu with an
+          // empty onPressed is a control that does nothing, which this project
+          // does not ship; the feed's gear already owns the player address.
+          const SizedBox(width: 48),
         ],
       ),
     );
@@ -1361,6 +1542,7 @@ class _ConnectCard extends StatefulWidget {
     required this.type,
     required this.error,
     required this.initial,
+    required this.compact,
     required this.onSubmit,
   });
 
@@ -1368,6 +1550,9 @@ class _ConnectCard extends StatefulWidget {
   final NestType type;
   final String error;
   final String initial;
+
+  /// Whether the soft keyboard is up. Drops the decoration so the button fits.
+  final bool compact;
   final ValueChanged<String> onSubmit;
 
   @override
@@ -1389,6 +1574,10 @@ class _ConnectCardState extends State<_ConnectCard> {
   Widget build(BuildContext context) {
     final m = widget.metrics;
     final type = widget.type;
+    // The soft keyboard takes half the panel. With the headset and the two-line
+    // explanation still there, the Connect button ended up underneath it; the
+    // IME's Go key works, but the button should not disappear while you type.
+    final typing = widget.compact;
     return Center(
       child: SingleChildScrollView(
         padding: EdgeInsets.all(m.px(32)),
@@ -1398,8 +1587,10 @@ class _ConnectCardState extends State<_ConnectCard> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(NestIcons.Headphones, size: m.px(52), color: _muted),
-              SizedBox(height: m.px(14)),
+              if (!typing) ...[
+                Icon(NestIcons.Headphones, size: m.px(52), color: _muted),
+                SizedBox(height: m.px(14)),
+              ],
               Text(
                 'Connect NCS-SMLauncher',
                 textAlign: TextAlign.center,
@@ -1407,17 +1598,20 @@ class _ConnectCardState extends State<_ConnectCard> {
                     .sheetTitle(color: _onSurface)
                     .copyWith(fontSize: m.px(28), fontWeight: FontWeight.w600),
               ),
-              SizedBox(height: m.px(8)),
-              Text(
-                'Your music player does the playing; this screen is the remote. '
-                'Enter the address it is listening on.',
-                textAlign: TextAlign.center,
-                style: type.caption(color: _muted),
-              ),
+              if (!typing) ...[
+                SizedBox(height: m.px(8)),
+                Text(
+                  'Your music player does the playing; this screen is the '
+                  'remote. Enter the address it is listening on.',
+                  textAlign: TextAlign.center,
+                  style: type.caption(color: _muted),
+                ),
+              ],
               SizedBox(height: m.px(20)),
               TextField(
                 controller: _controller,
                 keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.go,
                 autocorrect: false,
                 style: type.body(color: _onSurface),
                 onSubmitted: widget.onSubmit,

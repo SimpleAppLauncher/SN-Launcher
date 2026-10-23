@@ -176,7 +176,15 @@ class NcsClient extends ChangeNotifier {
 
   HttpClient? _http;
   Timer? _timer;
-  bool _polling = false;
+
+  /// The request currently in flight, if any.
+  ///
+  /// Callers that arrive while a poll is running share its future. Before this,
+  /// a second caller returned immediately, and the Connect button could read
+  /// `connected == false` while the poll that was about to succeed was still on
+  /// the wire — on the tablet the header said connected and the snackbar under
+  /// it said "No player at ..." at the same moment.
+  Future<void>? _inFlight;
   bool _disposed = false;
 
   NcsSnapshot? _snapshot;
@@ -186,6 +194,9 @@ class NcsClient extends ChangeNotifier {
   String get baseUrl => _baseUrl;
   bool get configured => _baseUrl.isNotEmpty;
   bool get connected => _connected;
+
+  /// Whether the two-second poll is running.
+  bool get polling => _timer != null;
   NcsSnapshot? get snapshot => _snapshot;
 
   /// Why the last poll failed, or an empty string.
@@ -212,6 +223,10 @@ class NcsClient extends ChangeNotifier {
   Future<void> configure(String baseUrl) async {
     final next = _normalise(baseUrl);
     if (next == _baseUrl) return;
+    // Let a request for the old address land before the address changes, so its
+    // answer is never attributed to the new server.
+    final running = _inFlight;
+    if (running != null) await running;
     _baseUrl = next;
     _snapshot = null;
     _connected = false;
@@ -238,33 +253,39 @@ class NcsClient extends ChangeNotifier {
   }
 
   /// Reads the state once.
-  Future<void> refresh() async {
-    if (_disposed || !configured || _polling) return;
-    _polling = true;
-    try {
-      final json = await _getJson('/state');
-      if (_disposed) return;
-      if (json == null) {
-        // _getJson has already said why — a 500, a timeout, a parse error.
-        // Replacing that with "no player at" would throw away the one detail
-        // that tells the user what to fix.
-        if (_error.isEmpty) _fail(_unreachable());
-        return;
-      }
-      final next = NcsSnapshot.fromJson(json, DateTime.now());
-      if (next == null) {
-        _fail('The player sent a state with no track in it');
-        return;
-      }
-      _snapshot = next;
-      _connected = true;
-      _error = '';
-      // Always notify, even when the track is the same: the position moved,
-      // and the progress bar has to move with it.
-      notifyListeners();
-    } finally {
-      _polling = false;
+  Future<void> refresh() {
+    if (_disposed || !configured) return Future<void>.value();
+    final running = _inFlight;
+    if (running != null) return running;
+    late final Future<void> tracked;
+    tracked = _refresh().whenComplete(() {
+      if (identical(_inFlight, tracked)) _inFlight = null;
+    });
+    _inFlight = tracked;
+    return tracked;
+  }
+
+  Future<void> _refresh() async {
+    final json = await _getJson('/state');
+    if (_disposed) return;
+    if (json == null) {
+      // _getJson has already said why — a 500, a timeout, a parse error.
+      // Replacing that with "no player at" would throw away the one detail
+      // that tells the user what to fix.
+      if (_error.isEmpty) _fail(_unreachable());
+      return;
     }
+    final next = NcsSnapshot.fromJson(json, DateTime.now());
+    if (next == null) {
+      _fail('The player sent a state with no track in it');
+      return;
+    }
+    _snapshot = next;
+    _connected = true;
+    _error = '';
+    // Always notify, even when the track is the same: the position moved,
+    // and the progress bar has to move with it.
+    notifyListeners();
   }
 
   /// The library, if the server offers one.
@@ -314,8 +335,13 @@ class NcsClient extends ChangeNotifier {
     try {
       final request = await _client.getUrl(Uri.parse('$_baseUrl$path'));
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      // Six seconds, not four: the first request after the tablet's Wi-Fi has
+      // been asleep can take longer than the old budget. On the device the
+      // connect attempt timed out, the server logged nothing, and the next poll
+      // two seconds later succeeded — so the card said "No player" at the one
+      // moment the player was about to answer.
       final response = await request.close().timeout(
-        const Duration(seconds: 4),
+        const Duration(seconds: 6),
       );
       if (response.statusCode != 200) {
         await response.drain<void>();
@@ -344,13 +370,20 @@ class NcsClient extends ChangeNotifier {
   Future<void> _post(String path, Map<String, Object?> body) async {
     final request = await _client.postUrl(Uri.parse('$_baseUrl$path'));
     request.headers.contentType = ContentType.json;
-    request.write(jsonEncode(body));
-    final response = await request.close().timeout(const Duration(seconds: 4));
+    // Send the length rather than chunking. Dart chunks a body of unknown
+    // length; a small server that reads Content-Length — the mock in `tool/`
+    // is one, and the real player may well be — then sees an empty body and
+    // answers 400. Every transport press was being rejected that way.
+    final bytes = utf8.encode(jsonEncode(body));
+    request.headers.contentLength = bytes.length;
+    request.add(bytes);
+    final response = await request.close().timeout(const Duration(seconds: 6));
     await response.drain<void>();
   }
 
   HttpClient get _client => _http ??= HttpClient()
-    ..connectionTimeout = const Duration(seconds: 3)
+    // The same asleep-radio allowance as the response timeout below.
+    ..connectionTimeout = const Duration(seconds: 6)
     ..idleTimeout = const Duration(seconds: 10);
 
   String _unreachable() {

@@ -183,7 +183,23 @@ class _NestLauncherAppState extends State<NestLauncherApp>
         unawaited(_photos.start());
       }
       unawaited(_restoreAssistant());
+      unawaited(_restoreNcs());
     });
+  }
+
+  /// Adopt the music page's saved address once the settings have loaded.
+  ///
+  /// The client is a lazy field first touched while the first frame is built,
+  /// which is before the store has come off disk, so it was constructed with an
+  /// empty address every launch and the connect card asked for it again. The
+  /// value was being saved; nothing ever read it. Found by force-stopping the
+  /// app on the tablet and watching the card come back.
+  Future<void> _restoreNcs() async {
+    await _settings.load();
+    if (!mounted) return;
+    final saved = _settings.get(SettingKeys.ncsBaseUrl) ?? '';
+    if (saved.isEmpty || _ncs.baseUrl.isNotEmpty) return;
+    unawaited(_ncs.configure(saved));
   }
 
   /// A reading arrived from the file bridge.

@@ -25,7 +25,10 @@ import 'ncs_client_test.dart' show FakePlayer;
 void main() {
   setUpAll(() => HttpOverrides.global = null);
 
-  const surface = Size(800, 1340);
+  // The Samsung's real shape, landscape. Not a round number picked for the
+  // test: the page had a 3-column grid and a caption that overflowed at this
+  // size, and a portrait surface hid both.
+  const surface = Size(1340, 800);
 
   // The server is started in `setUp` and not inside a `testWidgets` body. A
   // test body runs on a fake clock, and a server whose request handler was
@@ -94,11 +97,107 @@ void main() {
     expect(find.text('NCS-SMLauncher'), findsOneWidget);
 
     expect(find.text('Quick picks'), findsOneWidget);
-    expect(find.text('Up next'), findsOneWidget);
 
     // The mini player is the current track, not a queue entry.
     expect(find.text('Everything In Its Right Place'), findsOneWidget);
     expect(find.text('Kid A'), findsWidgets);
+
+    // "Up next" is below the fold on a landscape tablet, so scroll to it the
+    // way the user has to. A sliver that is off screen is not built, and the
+    // finder would report a section that is there as missing.
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -700));
+    await tester.pump();
+    expect(find.text('Up next'), findsOneWidget);
+
+    await finish(tester, client);
+  });
+
+  testWidgets('the mini player asks for the current track cover', (
+    tester,
+  ) async {
+    final client = NcsClient(baseUrl: player.url);
+    await tester.runAsync(() async => client.refresh());
+
+    await pumpPage(tester, client);
+
+    final covers = tester
+        .widgetList<Image>(find.byType(Image))
+        .map((image) => image.image)
+        .whereType<NetworkImage>()
+        .map((provider) => provider.url)
+        .toList();
+
+    // The grid draws the queue; only the mini player can ask for the track that
+    // is playing. If its URL is missing, the strip is showing the placeholder
+    // while the server has a cover for it — which is exactly what the tablet
+    // showed while the grid's covers loaded.
+    expect(covers, contains('${player.url}/art/track-1.png'));
+
+    await finish(tester, client);
+  });
+
+  testWidgets('the wide player keeps the volume on screen', (tester) async {
+    final client = NcsClient(baseUrl: player.url);
+    await tester.runAsync(() async => client.refresh());
+
+    await pumpPage(tester, client);
+    await tester.tap(find.text('Everything In Its Right Place'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    // On the 1340x800 panel the stacked layout put the volume row below the
+    // fold, so the one control with no other way to reach it had to be hunted
+    // for by scrolling. The wide layout puts the cover beside the controls.
+    final slider = tester.getRect(find.byType(Slider).last);
+    expect(slider.top, greaterThanOrEqualTo(0));
+    expect(slider.bottom, lessThanOrEqualTo(800));
+
+    await finish(tester, client);
+  });
+
+  testWidgets('the connect card fits above the keyboard', (tester) async {
+    final client = NcsClient();
+    await pumpPage(tester, client, current: true);
+
+    // The Samsung keyboard takes the lower 340 px of the 800 px panel. The card
+    // has to drop its decoration and put the Connect button above that line; it
+    // used to sit behind the keys, reachable only by dismissing the keyboard.
+    tester.view.viewInsets = const FakeViewPadding(bottom: 340);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pump();
+    await tester.pump();
+
+    final button = tester.getRect(find.widgetWithText(FilledButton, 'Connect'));
+    expect(button.bottom, lessThanOrEqualTo(800 - 340));
+
+    // The explanation is what gets dropped to make room.
+    expect(find.textContaining('this screen is the remote'), findsNothing);
+
+    await finish(tester, client);
+  });
+
+  testWidgets('a missed poll keeps the feed and says reconnecting', (
+    tester,
+  ) async {
+    final client = NcsClient(baseUrl: player.url);
+    await tester.runAsync(() async => client.refresh());
+    expect(client.connected, isTrue);
+
+    await tester.runAsync(() async {
+      await player.stop();
+      await client.refresh();
+    });
+    expect(client.connected, isFalse);
+    expect(client.snapshot, isNotNull);
+
+    await pumpPage(tester, client);
+
+    // One dropped packet used to replace the whole feed with the connect card
+    // while the mini player carried on underneath it.
+    expect(find.text('Reconnecting…'), findsOneWidget);
+    expect(find.text('Quick picks'), findsOneWidget);
+    expect(find.text('Connect NCS-SMLauncher'), findsNothing);
+    expect(find.text('Everything In Its Right Place'), findsOneWidget);
 
     await finish(tester, client);
   });
