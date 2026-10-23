@@ -16,6 +16,8 @@
     "digestPage": true,
     "weather": true,
     "quickSettings": true,
-    "sunTheme": true
+    "sunTheme": true,
+
+    "homeControl": false
   }
 }

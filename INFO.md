@@ -158,10 +158,13 @@ Two structural mismatches, both confirmed against the reference photograph in
 
 **1. Navigation is a carousel; the device uses layers.** The real Nest Hub is
 ambient photo → a **sheet that slides up over the photo** → a full app grid →
-the Assistant. There is no horizontal page carousel. This project has
-`ShellPage { home, digest, homeControl, discover }` and swipes sideways between
-them. `digest` and `homeControl` are **not Nest surfaces at all** — they are
-inventions here.
+the Assistant. There is no horizontal page carousel. This project has a
+feature-gated carousel (`ShellPage` values include home, digest, weather, music,
+homeControl and discover) and swipes sideways between the available pages. In
+the two shipped configs the Home control page is disabled
+(`homeControl: false`) and `discover` is a sheet sentinel, so the ef shows home,
+digest, weather and music, and the reduced shows home and digest. `digest` and
+`homeControl` are **not Nest surfaces at all** — they are inventions here.
 
 **2. Two of the seven quick-settings buttons are wrong.**
 
@@ -312,23 +315,37 @@ Two devices, both squarely inside the e-waste target.
 | App badge pitch (sheet + drawer) | 118.0 px | 118 px |
 | Sheet app-row centre | 810 px | 811 px |
 | Sheet top edge | 605 px | 604 px |
-| Frame cost, idle | 10.9 ms | ≤ 16.7 ms |
-| Frame cost, sheet animation | 11.0 ms | ≤ 16.7 ms |
-| Total PSS | 65 MB | — |
-| **GPU memory** | **564 KB** | — |
-| Cold start | 0.8 s | — |
+| Total PSS, release ef | 102 MB | — |
+| Total PSS, release reduced | 81 MB | — |
+| Cold start, release after first install | 509–603 ms | — |
+| First launch after install | 3.3 s ef / 1.2 s reduced | one-time Android install work |
 
 **Samsung Galaxy Tab A7 Lite (SM-X110)** — Android 15, 3.7 GB RAM, MediaTek
 MT6789 / Helio G80, 800x1340 **portrait**.
 
 | | measured |
 | --- | --- |
-| Cold start | **362–405 ms** (`am start -W`) |
+| Cold start | **548 ms** (`am start -W`, release) |
 | Clock block, left edge | 135 px (matches) |
 | App badge pitch | 118.0 px (matches) |
 
-The GPU figure is worth keeping: it is the payoff for drawing every icon as
-vector paths. A PNG icon set would have cost several MB of resident texture.
+**Release idle cost** (T20 `top`, release; SM-X110 `PERF_OVERLAY` profile):
+
+| | SM-X110 profile | T20 release |
+| --- | --- | --- |
+| Home | 3.0% | 2.6% |
+| Digest | — | 2.3% (0.3% reduced) |
+| Weather | 1.1% (static glyph) | 3.3% (no place photo) |
+| Music | 4.8% (down from 10%) | 2.6% (mock playing) |
+
+The weather glyph is static on the page. The animated 60 fps version measured
+**91.6% CPU** on the SM-X110; the static page measures 1.1%. The animation code
+remains in `weather_glyph.dart`; the shipped page does not run it. This is a
+deliberate 1–4 GB tablet trade.
+
+The old profile build reported 564 KB of GPU memory, the payoff for drawing
+every icon as vector paths. The release builds ship without the overlay, so
+this table no longer quotes a GPU figure.
 
 ### Four bugs only real hardware could surface
 
@@ -504,9 +521,15 @@ bundled one.
 
 ## 9. Music
 
-The digest page opens YouTube or Spotify in an in-app WebView. **The WebView is
-constructed only when you tap one** — building one at app start would add a
-WebView and its first page load to a cold start.
+**This section describes the old WebView panel, not the current music page.**
+That panel and the old radio card's Media3 service lived on the Home control
+page, which both shipped configs now disable. The ef music page is the
+NCS-SMLauncher remote described in §15d; the ad-blocking notes below do not
+apply to it.
+
+The old digest page opened YouTube or Spotify in an in-app WebView. **The
+WebView was constructed only when you tapped one** — building one at app start
+would add a WebView and its first page load to a cold start.
 
 ### Ad blocking: what it actually does
 
@@ -607,9 +630,15 @@ file chosen at build time:
 
 | | `ef` — ExtraFeature | reduced |
 | --- | --- | --- |
-| Features | all 10 | 4: settings, quickSettings, digestPage, calendar |
+| Features | all known flags except `homeControl` | 5: settings, quickSettings, digestPage, calendar, todo; `homeControl` off too |
 | applicationId | `dev.snlauncher.snlauncher.ef` | `dev.snlauncher.snlauncher` |
 | Label | SN-Launcher ef | SN-Launcher |
+
+Both configs also set `"homeControl": false`. The Home control page and its enum
+value remain in the tree; the flag keeps it out of `availablePages`, and the
+content gate returns an empty box. It was a set of device tiles with nothing
+real behind them, so shipping it would claim a capability the build does not
+have.
 
 Different applicationIds means both can be installed on one device at the same
 time and compared directly. The mechanism is one Gradle property
@@ -785,8 +814,10 @@ date and claimed things that were already true.
    path, speech recognition and text-to-speech are implemented and unit-tested,
    but no microphone has ever been pointed at them. This is the largest
    untested surface in the project.
-2. **The music WebView has never been run on real hardware.** Same position:
-   it compiles, the blocking logic is tested, nothing has rendered a page.
+2. **The old music WebView has never been run on real hardware.** It lives on
+   the Home control page, which both shipped configs disable; nothing has
+   rendered a page there. The current ef music page is the NCS remote, and it
+   has been run against the mock; see §15d.
 3. **The settings page has never been screenshotted on a device.** It is
    exercised by widget tests at 1024x600 and 1280x800.
 4. **Navigation is a carousel, not the device's layer model.** See §1.
@@ -796,12 +827,17 @@ date and claimed things that were already true.
    was cut before any protocol code was written, to keep v1 focused.
 7. **Ambient light sensor** — `adaptToAmbientLight()` works but nothing feeds
    it. Most target hardware has no light sensor, and faking it would be worse.
-8. **Weather location** — build-time `--dart-define` only. The store is
-   already there; the missing part is a UI and a decision about first
-   acquisition.
+8. **Weather place name** — the location path resolves, but the name has never
+   rendered on either tablet; the page shows conditions without a place. The
+   page has device location, a build-time pin and an IP fallback. The missing
+   piece is the name; see `docs/STATUS.md` §3a.
 9. **Launching apps** is implemented (deep links / native intents) but untested
    on a real device.
 10. **A proper release keystore** does not exist. See §13.
+11. **The real NCS-SMLauncher** does not speak the music page's protocol yet;
+    the page is verified against the mock only. See [`docs/NCS.md`](docs/NCS.md).
+12. **The Linux desktop build has never been run.** It compiles in CI; that is
+    not a launch test.
 
 The longer reasoning for items 6–8, and the reasoning behind the deleted
 four-dot Assistant orb, is in [`docs/DEFERRED.md`](docs/DEFERRED.md).
@@ -834,6 +870,10 @@ were reachable**. The weather page, home control and discover could not be
 navigated to by swipe, by arrow key, or by "See all" in the launcher sheet —
 all three routes call `goToPage`. The launcher opened; the selected page was
 correct; the picture on the glass was the digest page.
+
+That page list is from the bug's era. Both shipped configs now disable the Home
+control page, so the current ef is home, digest, weather, music and the reduced
+is home, digest.
 
 ### Why it survived two releases
 
@@ -898,27 +938,28 @@ Written for whoever is about to put it on a tablet they found in a drawer.
 
 **The reduced build** (`SN-Launcher-0.3.0-rc1.apk`, 32 MB) is the one to put on
 something you are not sure about. It has the launcher, the clock, the calendar,
-the to-do list, the photo frame and the weather's current conditions. It asks
-for **no sensitive permissions at all** — no microphone, no calendar, no
-location, no notification listener — so it installs without a Play Protect
-warning and cannot read anything private. That is checked against the built
-APK, not against the manifest, by `tool/verify_permissions.sh`.
+the to-do list and the photo frame. It asks for no microphone, location,
+notification-listener or media permission; the calendar permission is requested
+only when the calendar card needs it. The permission check is run against the
+built APK, not against the manifest, by `tool/verify_permissions.sh`.
 
 **The ef build** (`SN-Launcher-0.3.0-rc1-beta-arm64.apk`, 20 MB for arm64
-only) adds the radio player, the weather page with its artwork, the voice
+only) adds the NCS music page, the weather page with its artwork, the voice
 assistant, the theme picker and the Sun theme. It is the one to put on a device
 you own, where you have decided what it may look at.
 
+The version and APK names in this section predate the current builds; the two
+variants are built by `tool/build_variants.sh` and described in
+[`docs/BUILDS.md`](docs/BUILDS.md).
+
 ### What actually costs memory
 
-The honest answer is that the **WebView costs more than everything else in the
-app put together** — roughly 300 MB of browser engine and renderer for a screen
-you are using to show a YouTube page. On a 1 GB tablet that is a third of the
-device.
-
-This is why the radio player exists. A native Media3 player is tens of
-megabytes, not hundreds, and it keeps playing with the app closed and the
-screen off — which a WebView cannot do, because Android suspends the WebView
+The old WebView panel was the largest thing in the tree — roughly 300 MB of
+browser engine and renderer for a screen showing a YouTube page. Both shipped
+builds now avoid it: the ef music page is a remote, so the library and decoder
+stay in NCS-SMLauncher. The current release PSS is 102 MB (T20 ef), 140 MB
+(SM-X110 ef) and 81 MB (T20 reduced). The old WebView's background limitation
+is why the launcher does not embed a player: Android suspends the WebView
 renderer about five minutes after the app is backgrounded, even with a
 foreground service running, and stops the audio when the screen locks.
 
@@ -931,23 +972,23 @@ each other by `tool/verify_licence_parity.sh`.
 
 **Samsung Galaxy Tab A7 Lite (SM-X110)** — MediaTek Helio A22 (MT6789), Android
 15, 800 × 1340 portrait, which the app rotates to landscape. This is the device
-everything that has been verified was verified on. It is a 2 GB tablet, so it
-is the "comfortable" column, not the minimum.
+most of the performance work was verified on. It has 3.7 GB of RAM, so it is
+the "comfortable" column, not the minimum.
 
-**Nokia T20** — unreachable for the entire development session. It was never
-tested. If you are the one who has it, it is the most valuable thing you could
-do: install the arm64 APK and say what breaks.
+**Nokia T20** — Android 13, 3.8 GB RAM, 2000×1200 landscape. Both release
+variants were installed and exercised on 23 Oct 2026: pages, sheet, music
+against the mock, cold starts, CPU and memory. It is no longer the untested
+device this section used to describe.
 
 ### Known to be tight
 
-- **1 GB devices.** Everything works, but the WebView is tight and the system
-  will kill it under pressure. The reduced build, without the WebView's ad
-  blocking path being used, is noticeably happier.
-- **The Nokia T20's screen is 720 × 1280**, which is narrower than the layout
-  assumes. The card row is designed not to scroll — a scrolling card row eats
-  the horizontal gesture and the page after it becomes unreachable, which is
-  exactly what happened — so on a narrow screen the cards may not fit.
-  **This is untested and is a real risk.**
+- **1 GB devices.** The reduced build avoids the WebView and the NCS music
+  page; its release PSS is 81 MB on the T20. The ef's 102 MB is still close,
+  and the system will kill either under pressure.
+- **The Nokia T20's 2000×1200 panel is now tested.** The five digest cards fit;
+  the music card's track names truncate at the narrow card width. The card row
+  is still designed not to scroll, because a scrolling card row eats the
+  horizontal gesture.
 - **Devices without Google Play Services.** The location fix uses the platform
   `LocationManager`, not Play Services, so it degrades to the network provider
   and then to an IP lookup. The IP lookup is city-level and tells a third party
@@ -955,10 +996,10 @@ do: install the arm64 APK and say what breaks.
 
 ### Battery
 
-A foreground service with a foreground-service type of `mediaPlayback` runs
-while music plays, by definition. The launcher itself is idle apart from a
-one-minute clock tick and the photo rotation, which by default changes every
-ten minutes.
+Any media foreground service belongs to NCS-SMLauncher, not the launcher. The
+launcher itself is idle apart from its clock tick and the photo rotation. On
+the ef home the clock shows seconds, so it repaints at 1 Hz; the reduced home
+shows minutes. The photo rotation by default changes every ten minutes.
 
 ## 15c. Desktop — Linux and macOS
 
@@ -976,15 +1017,20 @@ So CI builds them. `.github/workflows/desktop.yml` runs `ubuntu-24.04` and
 `macos-14` runners, builds both feature sets on each, and uploads the
 binaries as artefacts.
 
+**Neither desktop build has been run in this project's verification.** The
+Linux build in particular has never been launched on a Linux machine. CI
+compiles both; a compiled artefact is not a tested one.
+
 The codebase was already written for this. Every method channel catches
 `MissingPluginException` and answers with a null rather than throwing, and
 `SettingsStore` falls back to a file in the system temp directory when the
 platform channel is absent — the app's private cache on Android, `/tmp`
 elsewhere.
 
-What does **not** work on a desktop: the radio player (a Media3 foreground
-service is an Android thing) and the voice assistant (the speech recogniser
-is Android only). Everything else does.
+What is **not expected** to work on a desktop: the old radio/Media3 panel (a
+foreground service is an Android thing) and the voice assistant (the speech
+recogniser is Android only). Everything else is intended to work, but none of
+it has been run here.
 
 ### The now-playing file contract
 
@@ -1034,6 +1080,10 @@ over HTTP. The protocol, the mock server and the reasoning are in
   the old music card opened. It is gated on `music` **and** `ncsPlayer`, both
   ef-only, and the carousel indexes into `availablePages`, so the reduced build
   has no hole where it would have been.
+
+The page is verified against the mock on the SM-X110 and the T20 release; the
+real NCS-SMLauncher does not speak this protocol yet. The chip names whichever
+server answered, and the mock says "(mock)". See [`docs/NCS.md`](docs/NCS.md).
 
 The artwork in `tool/ncs_mock_server.py` is generated by the script — two
 colours and a diagonal band, 512×512 — rather than shipped, so the fixture has

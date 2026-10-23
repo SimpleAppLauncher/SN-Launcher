@@ -76,7 +76,8 @@ void main() {
 
   test('the page sits after the weather and before the home controls', () {
     FeatureFlags.forTesting = flags(
-      '{"features":{"weather":true,"music":true,"ncsPlayer":true}}',
+      '{"features":{"weather":true,"music":true,"ncsPlayer":true,'
+      '"homeControl":true}}',
     );
     final c = controller();
     addTearDown(c.dispose);
@@ -89,5 +90,14 @@ void main() {
       pages.indexOf(ShellPage.music) + 1,
       pages.indexOf(ShellPage.homeControl),
     );
+  });
+
+  test('the home control page is off unless the flag turns it on', () {
+    // Both shipped feature files set it false; the code stays for when there
+    // is something real behind the tiles.
+    FeatureFlags.forTesting = flags('{"features":{}}');
+    final c = controller();
+    addTearDown(c.dispose);
+    expect(c.availablePages, isNot(contains(ShellPage.homeControl)));
   });
 }

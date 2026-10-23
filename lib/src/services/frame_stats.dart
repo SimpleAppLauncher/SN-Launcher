@@ -1,4 +1,3 @@
-
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
@@ -13,12 +12,20 @@ import 'package:flutter/widgets.dart';
 /// costs nothing in a normal build.
 class FrameStats {
   FrameStats() {
-    // `addTimingsCallback` returns void; hold the callback so it can be
-    // detached in dispose().
-    SchedulerBinding.instance.addTimingsCallback(_onTimings);
+    // Registering makes the engine report every frame even when nothing reads
+    // the numbers. A release build should not pay for a diagnostic, so only
+    // attach the callback when the overlay or the log asked for it.
+    if (enabled || log) {
+      SchedulerBinding.instance.addTimingsCallback(_onTimings);
+    }
   }
 
   static const bool enabled = bool.fromEnvironment('PERF_OVERLAY');
+
+  /// `--dart-define=PERF_LOG=true` prints every frame's build and raster time
+  /// to logcat, for measuring one interaction at a time. Off by default, so
+  /// the branch is dead in a normal build.
+  static const bool log = bool.fromEnvironment('PERF_LOG');
 
   final List<FrameTiming> _recent = [];
 
@@ -45,11 +52,24 @@ class FrameStats {
 
   void _onTimings(List<FrameTiming> timings) {
     if (timings.isEmpty) return;
+    if (log) {
+      for (final t in timings) {
+        // Plain print, not debugPrint: debugPrint rate-limits and would drop
+        // frames, which is what this mode exists to count.
+        // ignore: avoid_print
+        print(
+          'SNFRAME ${t.buildDuration.inMicroseconds} '
+          '${t.rasterDuration.inMicroseconds}',
+        );
+      }
+    }
     _recent.addAll(timings);
     if (_recent.length > 120) _recent.removeRange(0, _recent.length - 120);
 
     for (final t in timings) {
-      final ms = (t.buildDuration.inMicroseconds + t.rasterDuration.inMicroseconds) / 1000.0;
+      final ms =
+          (t.buildDuration.inMicroseconds + t.rasterDuration.inMicroseconds) /
+          1000.0;
       if (ms > worstFrameMs) worstFrameMs = ms;
       // 16.7 ms is the 60 Hz budget; anything over it is a dropped frame.
       if (ms > 16.7) jankCount++;

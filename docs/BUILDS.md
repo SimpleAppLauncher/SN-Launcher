@@ -9,12 +9,21 @@ change in code.
 |---|---|---|
 | What it is | Everything switched on. For finding out what actually happens. | A launcher and nothing else. This is the one that ships. |
 | Config | `assets/features.ef.json` | `assets/features.json` |
-| Features on | all 11 | 5 — `settings`, `quickSettings`, `digestPage`, `calendar`, `todo` |
+| Features on | all known features except `homeControl` (deliberately off) | 5 — `settings`, `quickSettings`, `digestPage`, `calendar`, `todo`; `homeControl` off too |
+| Pages | 4 — home, digest, weather, music | 2 — home, digest |
 | Build | `./tool/build_variants.sh ef` | `./tool/build_variants.sh reduced` |
 
 Both keep settings and quick settings. A launcher you cannot configure, and
 cannot change the brightness of, is not a launcher — and you asked for settings
 to survive in both.
+
+Both also set `"homeControl": false`. The Home control page, its enum value and
+its tests remain in the tree; the flag keeps it out of `availablePages`, and the
+content gate returns an empty box if it is ever reached. It was a set of device
+tiles with nothing real behind them, so shipping it would claim a capability the
+build does not have. Flip the flag when the tiles are real; do not delete the
+page. The main clock/photo home is not the page being referred to and is always
+present.
 
 ## Telling them apart on a device
 
@@ -64,7 +73,8 @@ Edit the JSON and rebuild. Nothing else needs touching.
 {
   "features": {
     "assistant": true,     // lightbar, centre-tap listener, voice
-    "music": true,         // WebView player card
+    "music": true,         // the NCS-SMLauncher music page
+    "ncsPlayer": true,     // the NCS remote-control client
     "photoRotation": true, // rotating background + Photos card
     "themePicker": true,   // Theme card on the digest page
     "calendar": true,      // Calendar card
@@ -72,14 +82,17 @@ Edit the JSON and rebuild. Nothing else needs touching.
     "weather": true,       // the weather page
     "settings": true,      // the gear, and the Settings button in the dock
     "quickSettings": true, // the dock row itself
-    "sunTheme": true       // "Sun", the theme that follows the time of day
+    "sunTheme": true,      // "Sun", the theme that follows the time of day
+    "homeControl": false   // the tile page; off in both shipped configs
   }
 }
 ```
 
 The reduced build keeps `settings`, `quickSettings`, `digestPage`, `calendar`
-and `todo`, and nothing else. It is a launcher with a calendar and a to-do list
-on page two.
+and `todo`, and nothing else beyond the base photo frame. It is a launcher with
+a calendar and a to-do list on page two. `homeControl` is off in both configs,
+so the reduced's carousel is home and digest; the ef's is home, digest, weather
+and music.
 
 **`digestPage` and `calendar` travel together on purpose.** `calendar` on with
 `digestPage` off is a calendar rendering on a page nobody can reach — which is
@@ -98,6 +111,9 @@ Deliberately, in every case the same way: **off**.
 A broken config must never produce a launcher that *claims* capabilities it was
 not built with. That is the rule that killed the four-dot Assistant orb, and it
 is why a typo fails visibly instead of quietly enabling something.
+
+The Home control page is off for the same reason, applied deliberately: the page
+exists, but the build does not claim the controls behind it.
 
 If a key is misspelled, `FeatureFlags.unknown` reports it and the console prints
 the name. A silently ignored typo is how an afternoon disappears.

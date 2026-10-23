@@ -120,11 +120,19 @@ void main() {
 
     await pumpPage(tester, client);
 
+    // `_Artwork` decodes grid and mini-player covers at their display size, so
+    // the provider is a ResizeImage wrapping the NetworkImage. Unwrap it rather
+    // than silently missing the mini player's cover.
     final covers = tester
         .widgetList<Image>(find.byType(Image))
         .map((image) => image.image)
-        .whereType<NetworkImage>()
-        .map((provider) => provider.url)
+        .expand((provider) {
+          if (provider is ResizeImage) {
+            final inner = provider.imageProvider;
+            return inner is NetworkImage ? [inner.url] : const <String>[];
+          }
+          return provider is NetworkImage ? [provider.url] : const <String>[];
+        })
         .toList();
 
     // The grid draws the queue; only the mini player can ask for the track that

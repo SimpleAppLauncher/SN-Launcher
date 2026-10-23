@@ -16,21 +16,21 @@ void main() {
 
   final ef = FeatureFlags.parse(
     '{"features":{"settings":true,"quickSettings":true,"digestPage":true,'
-    '"calendar":true,"todo":true,"weather":true}}',
+        '"calendar":true,"todo":true,"weather":true}}',
     'ef',
   );
   final reduced = FeatureFlags.parse(
     '{"features":{"settings":true,"quickSettings":true,"digestPage":true,'
-    '"calendar":true,"todo":true,"weather":false}}',
+        '"calendar":true,"todo":true,"weather":false}}',
     'reduced',
   );
 
   tearDown(() => FeatureFlags.forTesting = reduced);
 
   ShellController controller() => ShellController(
-        metrics: NestMetrics.forSize(const Size(1280, 800)),
-        vsync: const TestVSync(),
-      );
+    metrics: NestMetrics.forSize(const Size(1280, 800)),
+    vsync: const TestVSync(),
+  );
 
   group('the available pages', () {
     test('the ef build has the weather page as its third', () {
@@ -125,7 +125,6 @@ void main() {
     });
   });
 
-
   group('the carousel gesture', () {
     test('a slow drag changes the page, not only a flick', () {
       // The handler passed the drag distance as zero, so only a fast flick
@@ -142,10 +141,17 @@ void main() {
       // The drag update comes first because that is what a real gesture does
       // — the carousel follows the finger, so the release reads a live
       // position rather than the page it started on.
-      c.onHorizontalDragUpdate(-600, 1000);
-      c.onHorizontalDragEnd(20, -600, 1000);
-      expect(c.page, isNot(ShellPage.digest),
-          reason: 'a drag past halfway commits to the next page');
+      //
+      // Rightward, not leftward: the reduced build is home, digest, and the
+      // Home control page is disabled, so digest is the last page. A leftward
+      // drag has nowhere to go and would pass without testing the threshold.
+      c.onHorizontalDragUpdate(600, 1000);
+      c.onHorizontalDragEnd(20, 600, 1000);
+      expect(
+        c.page,
+        isNot(ShellPage.digest),
+        reason: 'a drag past halfway commits to the previous page',
+      );
     });
 
     test('a flick changes the page', () {
@@ -153,7 +159,7 @@ void main() {
       final c = controller();
       addTearDown(c.dispose);
       c.goToPage(ShellPage.digest);
-      c.onHorizontalDragEnd(-900, 0, 1000);
+      c.onHorizontalDragEnd(900, 0, 1000);
       expect(c.page, isNot(ShellPage.digest));
     });
 
@@ -162,7 +168,7 @@ void main() {
       final c = controller();
       addTearDown(c.dispose);
       c.goToPage(ShellPage.digest);
-      c.onHorizontalDragEnd(10, -60, 1000);
+      c.onHorizontalDragEnd(10, 60, 1000);
       expect(c.page, ShellPage.digest);
     });
   });

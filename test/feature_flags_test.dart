@@ -73,7 +73,11 @@ void main() {
       // If someone adds a flag to FeatureFlags.known and forgets the ef file,
       // this is the test that says so. Without it the new feature ships
       // switched off in the one build that is supposed to show everything.
-      final off = FeatureFlags.known.where((k) => !f.isOn(k)).toList();
+      // homeControl is the deliberate exception: the page stays in the code
+      // but both shipped builds disable it. Every other known flag is on.
+      final off = FeatureFlags.known
+          .where((k) => k != 'homeControl' && !f.isOn(k))
+          .toList();
       expect(off, isEmpty, reason: 'ef build leaves $off off');
     });
 
@@ -110,13 +114,15 @@ void main() {
       expect(
         on.difference(expected),
         isEmpty,
-        reason: 'reduced build unexpectedly enables '
+        reason:
+            'reduced build unexpectedly enables '
             '${on.difference(expected)}',
       );
       expect(
         expected.difference(on),
         isEmpty,
-        reason: 'reduced build lost '
+        reason:
+            'reduced build lost '
             '${expected.difference(on)}',
       );
     });
@@ -163,9 +169,9 @@ void main() {
   group('quick-settings row', () {
     /// The ef build, with both optional buttons available.
     FeatureFlags efLike() => FeatureFlags.parse(
-          '{"features":{"settings":true,"quickSettings":true,"digestPage":true}}',
-          't',
-        );
+      '{"features":{"settings":true,"quickSettings":true,"digestPage":true}}',
+      't',
+    );
 
     test('is the full seven-button row on the ef build', () {
       // Seven, and it is a measurement rather than a preference: this row was
@@ -203,7 +209,10 @@ void main() {
       );
       final row = quickSettingsFor(f);
       expect(row.length, 6);
-      expect(row.map((q) => q.kind), isNot(contains(QuickSettingKind.settings)));
+      expect(
+        row.map((q) => q.kind),
+        isNot(contains(QuickSettingKind.settings)),
+      );
     });
 
     test('drops both when both are off', () {
@@ -212,10 +221,7 @@ void main() {
       expect(row.length, 5);
       expect(
         row.map((q) => q.kind),
-        isNot(anyOf(
-          QuickSettingKind.settings,
-          QuickSettingKind.zoomIn,
-        )),
+        isNot(anyOf(QuickSettingKind.settings, QuickSettingKind.zoomIn)),
       );
     });
 

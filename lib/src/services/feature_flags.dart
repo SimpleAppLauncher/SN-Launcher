@@ -29,8 +29,10 @@ class FeatureFlags {
 
   static const String defaultAsset = 'assets/features.json';
 
-  static final FeatureFlags empty =
-      FeatureFlags._({}, '(none — every feature disabled)');
+  static final FeatureFlags empty = FeatureFlags._(
+    {},
+    '(none — every feature disabled)',
+  );
 
   /// Every feature this build knows how to gate. Adding one here without
   /// gating it is harmless; adding one to the JSON without adding it here means
@@ -51,6 +53,10 @@ class FeatureFlags {
     'themePicker',
     'calendar',
     'digestPage',
+    // The Home control page (the tile grid of Nest controls). Off in both
+    // shipped builds; the page and its code stay so it can be turned back on
+    // by a config change, not a code change.
+    'homeControl',
     'weather',
     'quickSettings',
     'sunTheme',

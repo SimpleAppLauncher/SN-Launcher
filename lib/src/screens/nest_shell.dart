@@ -769,6 +769,7 @@ class _NestShellState extends State<NestShell> {
           onBaseUrlChanged: widget.onNcsAddressChanged,
         );
       case ShellPage.homeControl:
+        if (!flags.isOn('homeControl')) return const SizedBox.shrink();
         return _HomeControlPage(metrics: _m, type: type, palette: palette);
       case ShellPage.discover:
         return const SizedBox.shrink();

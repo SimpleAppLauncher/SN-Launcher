@@ -67,13 +67,19 @@ class _WeatherGlyphState extends State<WeatherGlyph>
     return SizedBox(
       width: widget.size.width,
       height: widget.size.height,
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (context, _) => CustomPaint(
-          painter: _WeatherGlyphPainter(
-            condition: widget.condition,
-            color: widget.color,
-            t: _c.value,
+      // Its own layer. When a caller lets the glyph animate it repaints every
+      // frame; without this the repaint goes up to the page's layer and
+      // re-rasterises the full-screen photograph behind it, which measured 96%
+      // of a core on the SM-X110. The glyph itself is 120x120.
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: _c,
+          builder: (context, _) => CustomPaint(
+            painter: _WeatherGlyphPainter(
+              condition: widget.condition,
+              color: widget.color,
+              t: _c.value,
+            ),
           ),
         ),
       ),
@@ -82,7 +88,11 @@ class _WeatherGlyphState extends State<WeatherGlyph>
 }
 
 class _WeatherGlyphPainter extends CustomPainter {
-  _WeatherGlyphPainter({required this.condition, required this.color, required this.t});
+  _WeatherGlyphPainter({
+    required this.condition,
+    required this.color,
+    required this.t,
+  });
 
   final WeatherCondition condition;
   final Color color;
@@ -144,12 +154,17 @@ class _WeatherGlyphPainter extends CustomPainter {
           paint,
         );
 
-        if (condition == WeatherCondition.rain || condition == WeatherCondition.drizzle) {
+        if (condition == WeatherCondition.rain ||
+            condition == WeatherCondition.drizzle) {
           final phase = t * 12;
           for (var i = 0; i < 3; i++) {
             final x = w * (0.30 + i * 0.20);
             final y = h * dy + w * 0.30 + ((phase + i * 2.1) % 4.0) * w * 0.06;
-            canvas.drawLine(Offset(x, y), Offset(x - w * 0.07, y + w * 0.17), stroke);
+            canvas.drawLine(
+              Offset(x, y),
+              Offset(x - w * 0.07, y + w * 0.17),
+              stroke,
+            );
           }
         }
         if (condition == WeatherCondition.snow) {

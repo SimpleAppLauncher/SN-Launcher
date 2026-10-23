@@ -1,9 +1,11 @@
 # Status: what works, what does not, and what to do next
 
-Written against the tree at the point where spring motion and the clock-zoom
-fix had landed and 139 tests passed. This file exists because the honest answer
-to "does it work?" has been longer than a chat message should carry, and
-because the previous answer to that question was wrong.
+Written against the tree at the point where the Home control page was disabled
+in both builds and the weather/music idle cost was cut. 256 tests pass and one
+is skipped; both release variants are installed and hardware-verified on the
+Nokia T20, and the ef is verified on the SM-X110. This file exists because the
+honest answer to "does it work?" has been longer than a chat message should
+carry, and because the previous answer to that question was wrong.
 
 Everything below is graded against one standard, which is the only standard
 that matters for a device sitting on a wall:
@@ -28,8 +30,13 @@ whole test suite.
 | Theme switching, 5 themes | Seen on device |
 | Show-seconds toggle | Observed ticking at 13:19:16 |
 | Brightness | Works |
-| Page carousel | Now reaches page 3 and 4 — screenshots |
-| Weather page renders conditions | 21°, partly cloudy, on the Tab A7 Lite |
+| Page carousel | ef 4 pages (home, digest, weather, music); reduced 2 (home, digest); the Home control page is off in both. Ef screenshots on SM-X110 and T20; reduced on the T20 |
+| Weather page renders conditions | 21°, partly cloudy on the SM-X110 and T20; the T20 has no place photo because the place name still does not resolve (3a) |
+| Music page (mock) | T20 ef release, SM-X110 ef release and SM-X110 profile: live feed over the LAN; pause/next read back from the mock on the T20 and profile; the T20's `adb reverse` was removed and it kept polling |
+| Release builds | T20: both variants installed and exercised; SM-X110: ef installed and exercised; applicationIds checked; ef 4 pages, reduced 2 |
+| Release idle cost | T20: home 2.6%, digest 2.3%, weather 3.3%, music 2.6%, reduced digest 0.3% |
+| Release cold start | SM-X110 548 ms; T20 509–603 ms after first install; first T20 launch 3.3 s ef / 1.2 s reduced |
+| Release memory | T20 PSS 102 MB ef / 81 MB reduced; SM-X110 140 MB ef |
 
 ## 2. Built, tested, never seen on hardware
 
@@ -39,14 +46,15 @@ These pass their tests and have never been looked at by a person.
 | --- | --- | --- |
 | Clock zoom 1.0–1.2 | The date and clock rectangles do not overlap, measured | How it actually looks |
 | Spring motion | A thrown carousel arrives sooner than an eased one; a critically damped page spring does not overshoot | How it actually feels |
-| Ad blocking | 8 URL cases pass in a node harness against the real 23-host list | Whether YouTube behaves differently in a real WebView — it does, and not in the direction we wanted |
+| Ad blocking (old WebView) | 8 URL cases pass in a node harness against the real 23-host list | The panel is on the disabled Home control page; neither shipped build opens it |
 
 ## 3. Known broken
 
 ### 3a. The weather place name has never once appeared
 
 Symptom: the weather page shows a temperature and a condition, and no place
-name and no "Location from this device's Wi-Fi" line.
+name and no "Location from this device's Wi-Fi" line. Seen again on the T20
+release (23 Oct 2026): 21°, partly cloudy, no place name and no place photo.
 
 What is known: the permission request path is present on both sides — Dart
 calls `resolve(askPermission: true)`, and the Kotlin bridge returns
@@ -79,31 +87,53 @@ some ad traffic and none of the ad scripts, which is indistinguishable from
 Only a native `WebViewClient.shouldInterceptRequest` can block them, and
 `webview_flutter` 4.x does not expose one.
 
-### 3c. Background audio does not exist
+### 3c. No shipped page plays audio
 
-The player is a full-screen WebView. On Android the WebView renderer is
-suspended after roughly five minutes in the background *even with a foreground
-service running*, and audio stops when the screen locks. Background playback
-needs a real native player: Media3 `ExoPlayer` in a `MediaSessionService`, with
-a foreground service, which is mandatory on Android 8+ and has no
-notification-only alternative.
+The old music panel was a full-screen WebView on the Home control page, and the
+radio card's Media3 `PlaybackService` lives in the same disabled corner. Both
+shipped configs disable that page, and the ef music page is a remote for
+NCS-SMLauncher, so no page in either build plays audio or exposes a media
+session. Background playback is the NCS player's job. The old WebView was not an
+answer: on Android its renderer is suspended after roughly five minutes in the
+background *even with a foreground service running*, and audio stops when the
+screen locks. The launcher-side player code exists as that radio card's
+service, but it is unreachable while `homeControl` is off.
 
 ## 4. Not built at all
 
-- Native audio player, MediaSession, lock-screen controls
+- Native audio player, MediaSession, lock-screen controls in a shipped page
+  (the radio card's `PlaybackService` exists on the disabled Home control page)
 - Jellyfin integration
 - Weather page redesign — the "at this time there is rain" treatment with a
   condition-appropriate background image
 - Reverse geocoding
 - A runtime location picker
-- Any automated test that runs on a device; there is no CI
-- Nokia T20 — unreachable for the entire session, never tested
+- Any automated test that runs on a device; CI only builds the desktop targets
+- A 72-hour soak on the T20, and the long-session memory/poll behaviour
 - A release signing key (all builds are debug-signed)
-- Desktop targets — declined
+- Desktop targets — built in CI, never run here; the Linux build has never been launched
 
 ---
 
 ## 5. What to do, in this order
+
+### Current, 23 Oct 2026
+
+1. **Run the Linux desktop build.** It has never been launched; the CI
+   artefact is not a run. Do this on the machine that will host it.
+2. **Get the real NCS-SMLauncher contract.** The music page is verified against
+   the mock only. Ask the player's author for the port, endpoints, library
+   model and playback language, then test the page against the real server on
+   the LAN.
+3. **Soak the T20.** Leave the ef release on the home/weather/music pages for
+   72 hours and watch PSS, the poll, and the carousel; then repeat the memory
+   check. The current release PSS is 102 MB ef / 81 MB reduced.
+4. **Settle the weather place name (3a).** It is still the one bug that shows
+   on the wall: conditions without a place.
+5. **Release signing.** A proper keystore, so upgrades do not require an
+   uninstall.
+
+### Earlier plan (kept for the record; the native-player step is superseded by the NCS remote)
 
 ### Step 1 — Settle the location bug. It is the only thing here that is both broken and cheap.
 
@@ -166,12 +196,16 @@ achievable and should not be claimed again.
 
 ## 6. The honest ratio
 
-At the time of writing: roughly twenty features built, eleven verified on
-hardware, three built-but-unseen, three broken, six not started.
+At the time of writing: both release variants are built, installed and
+hardware-verified on the Nokia T20; the ef is also verified on the SM-X110. The
+Home control page is off in both. The music page is verified against the mock
+only; the real NCS-SMLauncher, the Linux desktop build, and a 72-hour soak are
+still unverified.
 
 The number that matters is not the first one. It is that **three broken things
 shipped in v0.1.2 and v0.1.3 while the test suite reported all green** — because
 the tests asserted on state variables rather than on what the screen renders,
-and because a page nobody could reach still reported itself as selected.
+and because a page nobody could reach still reported itself as selected. The
+current rule is the same one: a passing test is not a device check.
 
 Until a device check runs after every change, that gap stays open.

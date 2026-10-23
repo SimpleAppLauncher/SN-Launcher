@@ -72,9 +72,10 @@ because the app bypasses HWUI, and SurfaceFlinger cannot sample the BLAST
 surface. The overlay is the only source of truth.
 
 **5. Memory.** `adb shell dumpsys meminfo dev.snlauncher.snlauncher`. The
-reference device was 71 MB PSS / 664 KB GPU. A photo-frame build adds a decoded
-bitmap; the decode is clamped to the photo's intrinsic width precisely so a
-bigger panel does not silently cost more.
+current release PSS is 102 MB (T20 ef), 81 MB (T20 reduced) and 140 MB
+(SM-X110 ef); the old reference profile was 71 MB PSS / 664 KB GPU. A
+photo-frame build adds a decoded bitmap; the decode is clamped to the photo's
+intrinsic width precisely so a bigger panel does not silently cost more.
 
 ## Known hardware differences
 
@@ -99,6 +100,9 @@ Flutter is deprecating that escape hatch, so treat it as a compatibility valve
 rather than a plan.
 
 ## Linux / Raspberry Pi
+
+**This project's Linux build has not been run.** The commands below are the
+intended path, not a verified procedure.
 
 Cannot be cross-compiled — build on the machine that will run it:
 

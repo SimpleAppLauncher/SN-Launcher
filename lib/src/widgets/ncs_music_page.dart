@@ -47,11 +47,22 @@ class NcsMusicPage extends StatefulWidget {
   State<NcsMusicPage> createState() => _NcsMusicPageState();
 }
 
+/// Identity of a row the feed draws. The tile shows title, artist and art, and
+/// the playing mark compares titles, so an id alone is not enough.
+String _trackSig(NcsTrack t) =>
+    '${t.id}\u0001${t.title}\u0001${t.artist}\u0001${t.artwork}';
+
 class _NcsMusicPageState extends State<NcsMusicPage> {
   /// The library, once the server has offered one.
   List<NcsTrack> _library = const [];
 
   bool _loadingLibrary = false;
+
+  /// Rebuilding the 24-cover feed on every two-second poll cost 11-18 ms of
+  /// build per poll even when nothing in it had changed. Keeping the widget
+  /// instance while its inputs are identical lets Flutter skip that subtree.
+  Widget? _feedCache;
+  String? _feedKey;
 
   @override
   void initState() {
@@ -159,13 +170,28 @@ class _NcsMusicPageState extends State<NcsMusicPage> {
                 onSubmit: (value) => _connect(context, value),
               );
             } else {
-              body = _Feed(
-                metrics: m,
-                type: type,
-                client: client,
-                snapshot: snapshot,
-                quickPicks: _quickPicks,
-              );
+              final quickPicks = _quickPicks;
+              // What the feed actually draws: every field of every track it
+              // shows, the current track (the playing mark compares titles)
+              // and whether it is playing. Position and volume do not appear
+              // in it, so a poll that only moved the progress line must not
+              // rebuild two dozen covers.
+              final key =
+                  '${snapshot.current == null ? '' : _trackSig(snapshot.current!)}'
+                  '|${snapshot.playing}'
+                  '|${quickPicks.map(_trackSig).join('\u0002')}'
+                  '|${snapshot.queue.map(_trackSig).join('\u0002')}';
+              if (_feedCache == null || _feedKey != key) {
+                _feedKey = key;
+                _feedCache = _Feed(
+                  metrics: m,
+                  type: type,
+                  client: client,
+                  snapshot: snapshot,
+                  quickPicks: quickPicks,
+                );
+              }
+              body = _feedCache!;
             }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -186,6 +212,7 @@ class _NcsMusicPageState extends State<NcsMusicPage> {
                     type: type,
                     client: client,
                     snapshot: snapshot!,
+                    active: widget.isCurrent,
                     onOpen: () => _openFullPlayer(context),
                   ),
               ],
@@ -787,6 +814,13 @@ class _ArtworkState extends State<_Artwork> {
               url,
               key: ValueKey('$url#$_attempt'),
               fit: BoxFit.cover,
+              // The grid shows 512px covers in a ~200px slot; decoding at the
+              // slot's physical size leaves more of a 2GB tablet's bitmap cache
+              // for the photographs.
+              cacheWidth: widget.size == null
+                  ? null
+                  : (widget.size! * MediaQuery.devicePixelRatioOf(context))
+                        .round(),
               // A server that promises artwork and cannot deliver it is a
               // gradient, not a broken image icon.
               errorBuilder: (context, error, stack) {
@@ -837,6 +871,7 @@ class _MiniPlayer extends StatelessWidget {
     required this.type,
     required this.client,
     required this.snapshot,
+    required this.active,
     required this.onOpen,
   });
 
@@ -844,6 +879,10 @@ class _MiniPlayer extends StatelessWidget {
   final NestType type;
   final NcsClient client;
   final NcsSnapshot snapshot;
+
+  /// False while another carousel page is on screen. The player keeps playing;
+  /// only the repaint timer stops.
+  final bool active;
   final VoidCallback onOpen;
 
   @override
@@ -862,6 +901,7 @@ class _MiniPlayer extends StatelessWidget {
             snapshot: snapshot,
             color: _onSurface,
             height: 2,
+            active: active,
             onSeek: (position) => client.control(
               'seek',
               value: position.inMilliseconds.toDouble(),
@@ -942,12 +982,17 @@ class _LiveProgress extends StatefulWidget {
     required this.snapshot,
     required this.color,
     required this.height,
+    this.active = true,
     this.onSeek,
   });
 
   final NcsSnapshot snapshot;
   final Color color;
   final double height;
+
+  /// False while the music page is off screen, so the one-second tick does
+  /// not keep the page's layer dirty for nobody.
+  final bool active;
   final ValueChanged<Duration>? onSeek;
 
   @override
@@ -976,13 +1021,13 @@ class _LiveProgressState extends State<_LiveProgress> {
   }
 
   /// Ticks only while something is playing. A paused track does not need a
-  /// repaint twice a second.
+  /// repaint every second.
   void _sync() {
-    if (widget.snapshot.playing && _ticker == null) {
-      _ticker = Timer.periodic(const Duration(milliseconds: 500), (_) {
+    if (widget.active && widget.snapshot.playing && _ticker == null) {
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() {});
       });
-    } else if (!widget.snapshot.playing) {
+    } else if (!widget.active || !widget.snapshot.playing) {
       _ticker?.cancel();
       _ticker = null;
     }
@@ -1006,22 +1051,29 @@ class _LiveProgressState extends State<_LiveProgress> {
     );
 
     final onSeek = widget.onSeek;
-    if (onSeek == null) return bar;
+    if (onSeek == null) return RepaintBoundary(child: bar);
 
     // Tapping a thin line is unpleasant; the tap target is the line plus
     // sixteen pixels above and below it.
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (details) {
-        if (total <= 0) return;
-        final box = context.findRenderObject() as RenderBox?;
-        if (box == null || !box.hasSize) return;
-        final x = details.localPosition.dx.clamp(0.0, box.size.width);
-        onSeek(Duration(milliseconds: (total * (x / box.size.width)).round()));
-      },
-      child: SizedBox(
-        height: widget.height + 16,
-        child: Center(child: bar),
+    // Its own layer. A two-pixel bar moves once a second; without this the
+    // whole music page (covers included) was re-rasterised for it, measured at
+    // 18 ms per tick on the tablet.
+    return RepaintBoundary(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (details) {
+          if (total <= 0) return;
+          final box = context.findRenderObject() as RenderBox?;
+          if (box == null || !box.hasSize) return;
+          final x = details.localPosition.dx.clamp(0.0, box.size.width);
+          onSeek(
+            Duration(milliseconds: (total * (x / box.size.width)).round()),
+          );
+        },
+        child: SizedBox(
+          height: widget.height + 16,
+          child: Center(child: bar),
+        ),
       ),
     );
   }
@@ -1397,7 +1449,7 @@ class _TickingTimeState extends State<_TickingTime> {
 
   void _sync() {
     if (widget.snapshot.playing && _timer == null) {
-      _timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() {});
       });
     } else if (!widget.snapshot.playing) {
@@ -1407,9 +1459,11 @@ class _TickingTimeState extends State<_TickingTime> {
   }
 
   @override
-  Widget build(BuildContext context) => Text(
-    formatDuration(widget.snapshot.positionAt(DateTime.now())),
-    style: widget.style,
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: Text(
+      formatDuration(widget.snapshot.positionAt(DateTime.now())),
+      style: widget.style,
+    ),
   );
 }
 

@@ -55,10 +55,9 @@ class WeatherPage extends StatelessWidget {
 
   /// Whether this page is the one currently on screen.
   ///
-  /// The condition glyph only animates while this is true. The page stays
-  /// alive in the carousel when you swipe away, so an always-animating glyph
-  /// would keep the pipeline awake for as long as the app is open, for
-  /// something nobody is looking at.
+  /// The page stays alive in the carousel when you swipe away, so anything
+  /// that animates here has to know whether anyone is looking. The condition
+  /// glyph is static on purpose — see the note at its call site.
   final bool isCurrent;
 
   /// A photograph of the place, painted behind the sky.
@@ -81,118 +80,154 @@ class WeatherPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = metrics;
     final sky = _sky(weather.condition);
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final view = MediaQuery.sizeOf(context);
+    final photo = backgroundFile == null
+        ? null
+        : ResizeImage(
+            FileImage(backgroundFile!),
+            // The photograph sits under a 0.55-opacity sky wash; decoding it at
+            // panel resolution instead of its native 3000px cuts the bitmap and
+            // the per-frame upload when the page repaints. fit keeps the aspect.
+            width: (view.width * dpr).round(),
+            height: (view.height * dpr).round(),
+            policy: ResizeImagePolicy.fit,
+            allowUpscaling: false,
+          );
 
     return Stack(
       fit: StackFit.expand,
       children: [
         // The photograph of the place, behind everything.
-        if (backgroundFile != null)
+        if (photo != null)
           Positioned.fill(
-            child: Image.file(
-              backgroundFile!,
-              fit: BoxFit.cover,
-              // A photograph of a rainy city and a sky-coloured page are two
-              // different visual languages. The scrim below is what joins
-              // them: it is the sky, laid over the picture, at high opacity,
-              // so the picture reads as the world's colour rather than as
-              // wallpaper.
-              color: sky.first.withValues(alpha: 0.55),
-              colorBlendMode: BlendMode.srcOver,
+            // The photograph is static; keeping it in its own layer stops any
+            // change in the text or the artwork from re-rasterising it.
+            child: RepaintBoundary(
+              child: Image(
+                image: photo,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.medium,
+                // A photograph of a rainy city and a sky-coloured page are two
+                // different visual languages. The scrim below is what joins
+                // them: it is the sky, laid over the picture, at high opacity,
+                // so the picture reads as the world's colour rather than as
+                // wallpaper.
+                color: sky.first.withValues(alpha: 0.55),
+                colorBlendMode: BlendMode.srcOver,
+              ),
             ),
           ),
         Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: sky,
-        ),
-      ),
-      child: Stack(
-        children: [
-          // The weather, drawn. Rain streaks, snow, fog banks, a hazy sun —
-          // enough that the page reads as weather from across a kitchen
-          // rather than as a blue rectangle with a number on it.
-          Positioned.fill(
-            child: WeatherArtwork(
-              condition: weather.condition,
-              ink: _ink(sky),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: sky,
             ),
           ),
-          // The whole page is drawn in the sky's ink, not the palette's. A pale
-          // sky needs dark text; a storm needs light text. Deciding it here
-          // rather than per widget is what keeps the page coherent.
-          Positioned.fill(
-            child: DefaultTextStyle(
-              style: type.caption(color: sky.last == Colors.white
-                  ? const Color(0xFF0B1020)
-                  : const Color(0xFFF7F9FF)),
-              child: const SizedBox.shrink(),
-            ),
-          ),
-          // Positioned.fill, not a bare child. The Stack's default fit is
-          // loose, so an unpositioned Column gets loose constraints, sizes
-          // itself to its widest child and sits in the top-left corner. The
-          // temperature and the sentence were jammed against the left edge
-          // instead of centred. Nothing caught it: every text was present,
-          // every assertion passed, and it looked like a design choice in a
-          // screenshot until you measured where the words actually were.
-          Positioned.fill(
-            child: SafeArea(
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: m.px(48),
-                vertical: m.px(32),
+          child: Stack(
+            children: [
+              // The weather, drawn. Rain streaks, snow, fog banks, a hazy sun —
+              // enough that the page reads as weather from across a kitchen
+              // rather than as a blue rectangle with a number on it.
+              Positioned.fill(
+                child: WeatherArtwork(
+                  condition: weather.condition,
+                  ink: _ink(sky),
+                  animate: isCurrent,
+                ),
               ),
-              child: Column(
-                children: [
-                  _placeLine(m, sky),
-                  const Spacer(),
-                  WeatherGlyph(
-                    condition: weather.condition,
-                    color: _ink(sky),
-                    animate: isCurrent,
-                    size: Size(m.px(120), m.px(120)),
+              // The whole page is drawn in the sky's ink, not the palette's. A pale
+              // sky needs dark text; a storm needs light text. Deciding it here
+              // rather than per widget is what keeps the page coherent.
+              Positioned.fill(
+                child: DefaultTextStyle(
+                  style: type.caption(
+                    color: sky.last == Colors.white
+                        ? const Color(0xFF0B1020)
+                        : const Color(0xFFF7F9FF),
                   ),
-                  SizedBox(height: m.px(18)),
-                  // The temperature, in the clock's own face. The Nest sets
-                  // the weather in the same type as the clock, and reusing it
-                  // is what makes the page read as one design.
-                  Text(
-                    weather.shortLabel,
-                    style: type.clock(color: _ink(sky)).copyWith(
-                      fontSize: m.px(NestMetrics.clockFontSize) * 1.1,
-                      letterSpacing:
-                          type.clock(color: _ink(sky)).letterSpacing! * 1.1,
+                  child: const SizedBox.shrink(),
+                ),
+              ),
+              // Positioned.fill, not a bare child. The Stack's default fit is
+              // loose, so an unpositioned Column gets loose constraints, sizes
+              // itself to its widest child and sits in the top-left corner. The
+              // temperature and the sentence were jammed against the left edge
+              // instead of centred. Nothing caught it: every text was present,
+              // every assertion passed, and it looked like a design choice in a
+              // screenshot until you measured where the words actually were.
+              Positioned.fill(
+                child: SafeArea(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: m.px(48),
+                      vertical: m.px(32),
+                    ),
+                    child: Column(
+                      children: [
+                        _placeLine(m, sky),
+                        const Spacer(),
+                        // Deliberately static. Animating this glyph at
+                        // 60 fps re-rasterised the whole page — the photograph,
+                        // the 130 rain strokes and the text — and measured
+                        // 91.6% of a core on the SM-X110 over five seconds
+                        // (310 frames). Static is 1.1% and produces no frames.
+                        // It is a decorative mark read from across a room; the
+                        // cost was not worth the motion.
+                        WeatherGlyph(
+                          condition: weather.condition,
+                          color: _ink(sky),
+                          animate: false,
+                          size: Size(m.px(120), m.px(120)),
+                        ),
+                        SizedBox(height: m.px(18)),
+                        // The temperature, in the clock's own face. The Nest sets
+                        // the weather in the same type as the clock, and reusing it
+                        // is what makes the page read as one design.
+                        Text(
+                          weather.shortLabel,
+                          style: type
+                              .clock(color: _ink(sky))
+                              .copyWith(
+                                fontSize: m.px(NestMetrics.clockFontSize) * 1.1,
+                                letterSpacing:
+                                    type
+                                        .clock(color: _ink(sky))
+                                        .letterSpacing! *
+                                    1.1,
+                              ),
+                        ),
+                        SizedBox(height: m.px(4)),
+                        Text(
+                          weather.condition.label,
+                          style: type.sheetTitle(color: _ink(sky)),
+                        ),
+                        SizedBox(height: m.px(14)),
+                        _highLow(m, sky),
+                        SizedBox(height: m.px(10)),
+                        // "It's raining this afternoon." A sentence, because that is
+                        // how a person would say it and this is a screen someone
+                        // glances at from across a room.
+                        Text(
+                          weather.condition.sentence(
+                            metrics.size.height > 0 ? DateTime.now().hour : 12,
+                          ),
+                          style: type.caption(
+                            color: _ink(sky).withValues(alpha: 0.8),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const Spacer(),
+                        _footer(m, sky),
+                      ],
                     ),
                   ),
-                  SizedBox(height: m.px(4)),
-                  Text(
-                    weather.condition.label,
-                    style: type.sheetTitle(color: _ink(sky)),
-                  ),
-                  SizedBox(height: m.px(14)),
-                  _highLow(m, sky),
-                  SizedBox(height: m.px(10)),
-                  // "It's raining this afternoon." A sentence, because that is
-                  // how a person would say it and this is a screen someone
-                  // glances at from across a room.
-                  Text(
-                    weather.condition.sentence(metrics.size.height > 0
-                        ? DateTime.now().hour
-                        : 12),
-                    style: type.caption(color: _ink(sky).withValues(alpha: 0.8)),
-                    textAlign: TextAlign.center,
-                  ),
-                  const Spacer(),
-                  _footer(m, sky),
-                ],
+                ),
               ),
-            ),
-            ),
+            ],
           ),
-        ],
-      ),
         ),
       ],
     );
@@ -287,9 +322,8 @@ class WeatherPage extends StatelessWidget {
     // The average luminance of the gradient decides it, so a page that is
     // dark at the top and light at the bottom does not end up with unreadable
     // text in the middle.
-    final avg = sky
-            .map((c) => c.computeLuminance())
-            .reduce((a, b) => a + b) /
+    final avg =
+        sky.map((c) => c.computeLuminance()).reduce((a, b) => a + b) /
         sky.length;
     return avg > 0.45 ? const Color(0xFF0B1020) : const Color(0xFFF7F9FF);
   }
@@ -302,50 +336,50 @@ class WeatherPage extends StatelessWidget {
   /// Nest Hub showing weather to measure from — which is the one thing on this
   /// page that is an eyeball rather than a measurement.
   static List<Color> _sky(WeatherCondition c) => switch (c) {
-        WeatherCondition.clear => const [
-            Color(0xFF4FA3E3),
-            Color(0xFF8FCBF0),
-            Color(0xFFDCEFFA),
-          ],
-        WeatherCondition.partlyCloudy => const [
-            Color(0xFF6FA8D6),
-            Color(0xFFA9C6DF),
-            Color(0xFFE3E9EE),
-          ],
-        WeatherCondition.cloudy => const [
-            Color(0xFF7C8A99),
-            Color(0xFFA8B4C0),
-            Color(0xFFD2D9DF),
-          ],
-        WeatherCondition.fog => const [
-            Color(0xFF9AA6AC),
-            Color(0xFFC2CACD),
-            Color(0xFFE6EAEA),
-          ],
-        WeatherCondition.drizzle => const [
-            Color(0xFF5E7284),
-            Color(0xFF8A9DAB),
-            Color(0xFFC3CFD7),
-          ],
-        WeatherCondition.rain => const [
-            Color(0xFF3E5265),
-            Color(0xFF63788A),
-            Color(0xFF9DB0BD),
-          ],
-        WeatherCondition.snow => const [
-            Color(0xFF6E7F92),
-            Color(0xFFA3B3C4),
-            Color(0xFFE6EEF5),
-          ],
-        WeatherCondition.thunder => const [
-            Color(0xFF1E2733),
-            Color(0xFF3A4756),
-            Color(0xFF6B7A8B),
-          ],
-        WeatherCondition.unknown => const [
-            Color(0xFF4A5568),
-            Color(0xFF7C8798),
-            Color(0xFFBFC7D1),
-          ],
-      };
+    WeatherCondition.clear => const [
+      Color(0xFF4FA3E3),
+      Color(0xFF8FCBF0),
+      Color(0xFFDCEFFA),
+    ],
+    WeatherCondition.partlyCloudy => const [
+      Color(0xFF6FA8D6),
+      Color(0xFFA9C6DF),
+      Color(0xFFE3E9EE),
+    ],
+    WeatherCondition.cloudy => const [
+      Color(0xFF7C8A99),
+      Color(0xFFA8B4C0),
+      Color(0xFFD2D9DF),
+    ],
+    WeatherCondition.fog => const [
+      Color(0xFF9AA6AC),
+      Color(0xFFC2CACD),
+      Color(0xFFE6EAEA),
+    ],
+    WeatherCondition.drizzle => const [
+      Color(0xFF5E7284),
+      Color(0xFF8A9DAB),
+      Color(0xFFC3CFD7),
+    ],
+    WeatherCondition.rain => const [
+      Color(0xFF3E5265),
+      Color(0xFF63788A),
+      Color(0xFF9DB0BD),
+    ],
+    WeatherCondition.snow => const [
+      Color(0xFF6E7F92),
+      Color(0xFFA3B3C4),
+      Color(0xFFE6EEF5),
+    ],
+    WeatherCondition.thunder => const [
+      Color(0xFF1E2733),
+      Color(0xFF3A4756),
+      Color(0xFF6B7A8B),
+    ],
+    WeatherCondition.unknown => const [
+      Color(0xFF4A5568),
+      Color(0xFF7C8798),
+      Color(0xFFBFC7D1),
+    ],
+  };
 }

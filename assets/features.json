@@ -16,6 +16,8 @@
     "photoDiscovery": false,
     "themePicker": false,
     "weather": false,
-    "sunTheme": false
+    "sunTheme": false,
+
+    "homeControl": false
   }
 }

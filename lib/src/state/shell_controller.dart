@@ -312,6 +312,10 @@ class ShellController extends ChangeNotifier {
     ShellPage.digest => f.isOn('digestPage'),
     ShellPage.weather => f.isOn('weather'),
     ShellPage.music => f.isOn('music') && f.isOn('ncsPlayer'),
+    // Disabled in both feature files. The page and its code stay; the flag
+    // keeps it out of the carousel until there is something real behind the
+    // tiles.
+    ShellPage.homeControl => f.isOn('homeControl'),
     // Not a page: `discover` is the marker the shell sets while the
     // launcher sheet is fully open, so the carousel behind it draws
     // nothing. It has no content of its own, and leaving it in this list

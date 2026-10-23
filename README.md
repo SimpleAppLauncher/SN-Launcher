@@ -73,6 +73,21 @@ restarts, and a 1 GB tablet does not have to hold a library. A mock player is
 included, so the page can be tried before the real one is ready — see
 [`docs/NCS.md`](docs/NCS.md).
 
+As of this build the page is verified against that mock on hardware; the real
+NCS-SMLauncher does not speak this protocol yet, so the page does not claim it
+is controlling the real player. The chip names whichever server answered, and
+the mock's name says "(mock)".
+
+**The Home control page is compiled but disabled in both builds.** Both
+`assets/features.ef.json` and `assets/features.json` set
+`"homeControl": false`. The page, its code and its tests stay in the tree, but
+it is not in either carousel: the beta is home → digest → weather → music, and
+the shipping build is home → digest. This is the tile page, not the clock/photo
+home; the main home screen is unchanged. It was disabled because there were no
+real device controls behind its tiles, and the rule here is that the UI does not
+claim a capability it does not have. Flip the flag, do not delete the page,
+when the tiles are real.
+
 What is in each build is decided by a JSON file, not by code — see
 [`docs/BUILDS.md`](docs/BUILDS.md).
 
@@ -93,12 +108,41 @@ MT6789, 800x1340) and a **Nokia T20** (Android 13, Unisoc T610, 2000x1200).
 | The quick-settings row — every button does something | ✓ |
 | Five themes | ✓ |
 | Settings | ✓ |
-| Cold start | **362–405 ms** on the Tab A7 Lite |
+| Cold start | **548 ms** on the Tab A7 Lite release; **509–603 ms** on the T20 release after the first install |
 
-**Not yet run on any device: the voice assistant and both music players.** All
-three are in the beta build. They compile and their tests pass, which is not the
-same thing as working — the microphone path has never heard a microphone, and
-the new music page has never been swiped to.
+**Not yet verified end to end: the voice assistant and the real NCS-SMLauncher.**
+The assistant has never heard a microphone. The ef music page has now been
+swiped to on both tablets, and it connected to the mock over the LAN on the
+SM-X110 profile, the SM-X110 ef release and the T20 ef release. Pause/next were
+read back from the mock on the T20 and the profile. The real player is still the
+mock's contract only. The old WebView music panel lived on the now-disabled Home
+control page.
+
+The ef's first launch straight after installing is 3.3 s (the reduced's is
+1.2 s) while Android extracts the package; every cold start after that is
+~0.5–0.6 s. That one-time cost is the installer's, not a startup path in the
+app.
+
+### Measured performance
+
+Release builds unless marked "profile". The profile numbers come from the
+SM-X110 with `PERF_OVERLAY=true`; the T20 release CPU numbers are from `top`,
+and PSS/cold start are from `dumpsys meminfo` and `am start -W`. The release
+builds ship without the overlay.
+
+| | |
+| --- | --- |
+| Home idle | 2.6% CPU (T20 ef release), 3.0% (SM-X110 profile) |
+| Digest idle | 2.3% (T20 ef release), 0.3% (T20 reduced release, at rest) |
+| Weather | 3.3% (T20 release, no place photo); 1.1% static vs **91.6%** with the 60 fps glyph (SM-X110 profile) |
+| Music | 2.6% (T20 release, mock playing); 4.8% vs 10% before the timer/cache work (SM-X110 profile) |
+| Cold start | 548 ms (SM-X110 release); 509–603 ms (T20 release, after the first install) |
+| PSS | 102 MB ef / 81 MB reduced (T20); 140 MB ef (SM-X110) |
+
+The weather glyph is **static** on the shipped page. The animation code remains
+in `weather_glyph.dart`; the 60 fps version cost 91.6% CPU on the SM-X110 and the
+static page costs 1.1%. This is a deliberate trade for 1–4 GB tablets, not a
+capability that was removed and then claimed.
 
 ---
 
@@ -114,6 +158,10 @@ the new music page has never been swiped to.
   The full accounting is in [INFO.md](INFO.md) §1.
 - **The navigation is a page carousel; the real device uses layers.** Also in
   INFO.md §1.
+- **The weather glyph is static by choice.** The 60 fps glyph cost 91.6% CPU on
+  the SM-X110; the static page costs 1.1%. The animation code remains, but the
+  shipped page does not run it. This is a deliberate trade for 1–4 GB tablets,
+  not a removed capability.
 
 ---
 
@@ -156,6 +204,11 @@ Neither can be built from a Mac: **Linux cannot be cross-compiled at all**,
 and **macOS needs the full Xcode**, not just the Command Line Tools. So CI
 builds them — `.github/workflows/desktop.yml` runs an `ubuntu-24.04` and a
 `macos-14` runner and uploads the binaries as artefacts.
+
+Those are **compiled artefacts, not tested desktop builds**. The Linux build in
+particular **has never been run** on a Linux machine; the Android measurements
+above do not transfer to it. Launch it on the machine that will host it before
+believing it works.
 
 **[docs/DESKTOP.md](docs/DESKTOP.md)** has the build commands, what works on
 a desktop and what does not, and the now-playing file contract that lets

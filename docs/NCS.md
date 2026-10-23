@@ -11,6 +11,11 @@ when you swipe back to the clock.
 
 [ncs]: https://github.com/SimpleAppLauncher/NCS-SMLauncher
 
+> **Status:** the page is verified against the mock; the real NCS-SMLauncher is
+> not yet speaking this contract. The protocol below is what the mock speaks
+> and what the integration needs, not a statement that the real player already
+> does.
+
 ## What it looks like
 
 A feed of square artwork ("Quick picks"), the queue below it ("Up next"), and a
@@ -133,8 +138,11 @@ It prints the address to type into the launcher:
 ```
 NCS-SMLauncher mock player
   listening on http://0.0.0.0:8737
-  enter this in the launcher:  http://192.168.1.20:8737
+  enter this in the launcher:  http://192.168.1.12:8737
 ```
+
+The script prints the current address; the IP above is from one machine and
+will change.
 
 Nothing is downloaded and there are no dependencies — the artwork is drawn by
 the script, so it is a test fixture rather than a queue of licensed images.
@@ -153,7 +161,8 @@ stopping the app on the tablet and watching it open straight into the live feed.
 ## What is verified, and what is not
 
 Verified on the tablet — Samsung SM-X110, Android 15, 1340×800 landscape —
-against `tool/ncs_mock_server.py` on the LAN:
+against `tool/ncs_mock_server.py` on the LAN, and on the Nokia T20 release
+below:
 
 - Connecting from the card with the keyboard's **Đi** key, with the Connect
   button fully above the keyboard while typing.
@@ -168,9 +177,34 @@ against `tool/ncs_mock_server.py` on the LAN:
   without scrolling.
 - A frozen player: the feed and mini player stay, the chip turns amber and says
   "Reconnecting…", and returns to the player's name when it answers again.
-- The reduced build, installed alongside ef: its carousel has three pages and
-  the last swipe stays on "Home" — before the fix both builds showed a blank
-  page there. The fully open launcher sheet still covers the carousel.
+- The ef release on the same SM-X110 also shows the live feed and mini player
+  from the mock over the LAN; the mock log shows its requests from
+  `192.168.1.220`. The thin green line at the screen edge is still unidentified.
+- The reduced build, installed alongside ef: its carousel has two pages (home,
+  digest) and the last swipe stays on digest. The Home control page is off in
+  both configs now; before it was disabled the reduced had a third page. The
+  fully open launcher sheet still covers the carousel.
+
+Release builds, Nokia T20 (Android 13, 1200×2000) — 23 Oct 2026:
+
+- The ef release's carousel is home → digest → weather → music; a fourth left
+  swipe stays on music. The Home control page is absent. The reduced release's
+  carousel is home → digest; a second left swipe stays on digest.
+- The ef page connected to the mock first through `adb reverse`, then over the
+  LAN at the Mac's `http://192.168.1.12:8737`; it showed the live feed. Pause
+  stopped `playing`, next moved to "My Heart" in `/state`, and the full player's
+  controls were used for the check.
+- The earlier reverse was only needed because the saved address was the
+  tablet's own IP (`192.168.1.20`), not the Mac's. After the correction the
+  mock log showed the T20's requests from `192.168.1.20`, and the page kept
+  polling after the reverse was removed. The real server's LAN placement is
+  still untested.
+- The sheet at rest is clean. Mid-transition screenshots on this GPU can catch a
+  frame tear with double text; it is not present once the sheet settles.
+- Release `top`: home 2.6%, digest 2.3%, weather 3.3%, music 2.6%, reduced
+  digest 0.3%. PSS 102 MB ef, 81 MB reduced. Cold starts 509–603 ms after the
+  first install; the ef's first T20 launch is 3.3 s (1.2 s reduced) while
+  Android extracts the package.
 
 Verified by tests:
 
@@ -183,13 +217,19 @@ Verified by tests:
   `pause`; the card fits above a simulated keyboard; a missed poll keeps the
   feed and says "Reconnecting…"; an unreachable player keeps the address.
 - `test/ncs_build_test.dart` — the music page is gated on `music` and
-  `ncsPlayer`, the reduced build has no hole in the carousel, and `discover`
-  is a sheet marker rather than a page.
+  `ncsPlayer`, the reduced build has no hole in the carousel, `homeControl` is
+  off in both shipped configs, and `discover` is a sheet marker rather than a
+  page.
 
 Not verified:
 
 - **The real NCS-SMLauncher.** It does not speak this protocol yet; everything
-  above is the mock.
+  above is the mock. On 23 Oct 2026 the NCS build on the T20
+  (`com.giathinh.hashplay.ncs`, 1.1.0-rc.6-ncs) had no TCP listener of its own;
+  the `:8737` listener found was the `adb reverse` (shell UID 2000), not the
+  app. The player's author has been asked for the real port, endpoints, library
+  model and playback language. Until then the page is verified against the mock
+  only.
 - The first request after a long idle. On two freshly cleared installs the first
   connect attempt timed out and the card said "No player" until the poll two
   seconds later succeeded. The connect and response timeouts were raised from
