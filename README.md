@@ -63,6 +63,16 @@ delete. The to-do list is saved on the device, so it is still there tomorrow.
 photographs, live weather, and the "Sun" theme that follows the time of day. It
 is a *separate app* with its own icon, so you can install both and compare.
 
+<img src="docs/shots/music.png" width="42%" alt="The music page"> <img src="docs/shots/music-player.png" width="42%" alt="The full player">
+
+The beta's music page is a **remote control for
+[NCS-SMLauncher](https://github.com/SimpleAppLauncher/NCS-SMLauncher)**, the
+other project: the player does the playing, the tablet draws the library and
+sends the button presses. So the music keeps playing when the launcher
+restarts, and a 1 GB tablet does not have to hold a library. A mock player is
+included, so the page can be tried before the real one is ready — see
+[`docs/NCS.md`](docs/NCS.md).
+
 What is in each build is decided by a JSON file, not by code — see
 [`docs/BUILDS.md`](docs/BUILDS.md).
 
@@ -85,9 +95,10 @@ MT6789, 800x1340) and a **Nokia T20** (Android 13, Unisoc T610, 2000x1200).
 | Settings | ✓ |
 | Cold start | **362–405 ms** on the Tab A7 Lite |
 
-**Not yet run on any device: the voice assistant and the music player.** Both
-are in the beta build. They compile and their tests pass, which is not the same
-thing as working — the microphone path has never heard a microphone.
+**Not yet run on any device: the voice assistant and both music players.** All
+three are in the beta build. They compile and their tests pass, which is not the
+same thing as working — the microphone path has never heard a microphone, and
+the new music page has never been swiped to.
 
 ---
 

@@ -39,6 +39,10 @@ class FeatureFlags {
     'settings',
     'assistant',
     'music',
+    // The ef build's music page, driven by NCS-SMLauncher instead of the
+    // in-app WebView. Off means the old card and panel, which is what the
+    // reduced build has (and it has `music: false` anyway).
+    'ncsPlayer',
     'photoRotation',
     // Fetches new photographs from Wikimedia Commons at runtime instead of
     // using the hand-checked pool. ef only: the reduced build keeps the

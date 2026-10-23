@@ -31,6 +31,14 @@ enum ShellPage {
   /// two words.
   weather,
 
+  /// Music, driven by NCS-SMLauncher.
+  ///
+  /// A page rather than the bottom-sheet panel the old music card opened: a
+  /// remote control for a library needs a library's worth of room, and a panel
+  /// that covers the launcher is the wrong shape for something that should
+  /// stay playing while you look at the clock.
+  music,
+
   /// Home control.
   homeControl,
 
@@ -282,9 +290,21 @@ class ShellController extends ChangeNotifier {
     final f = FeatureFlags.current;
     return [
       for (final p in ShellPage.values)
-        if (p != ShellPage.weather || f.isOn('weather')) p,
+        if (_pageAvailable(p, f)) p,
     ];
   }
+
+  /// Whether this build has a page at all.
+  ///
+  /// The carousel indexes into [availablePages] rather than the enum, so a
+  /// build that drops a page has no hole where it used to be — which is the
+  /// whole reason this is a predicate and not a `where` on the enum with the
+  /// pages still present.
+  bool _pageAvailable(ShellPage page, FeatureFlags f) => switch (page) {
+        ShellPage.weather => f.isOn('weather'),
+        ShellPage.music => f.isOn('music') && f.isOn('ncsPlayer'),
+        _ => true,
+      };
 
   /// Moves the carousel to [p].
   ///

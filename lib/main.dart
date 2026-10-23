@@ -10,6 +10,7 @@ import 'src/services/calendar_service.dart';
 import 'src/services/feature_flags.dart';
 import 'src/services/external_now_playing.dart';
 import 'src/services/location_service.dart';
+import 'src/services/ncs_client.dart';
 import 'src/services/todo_service.dart';
 import 'src/services/licence_filter.dart';
 import 'src/services/photo_frame_service.dart';
@@ -120,6 +121,16 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   );
   late final AssistantService _assistant = AssistantService();
   final SettingsStore _settings = SettingsStore();
+
+  /// The music page's link to NCS-SMLauncher.
+  ///
+  /// It reads its address from settings on first use rather than in the field
+  /// initialiser above, because the settings have not been loaded yet at
+  /// construction time and an address read too early would be empty every
+  /// launch.
+  late final NcsClient _ncs = NcsClient(
+    baseUrl: _settings.get(SettingKeys.ncsBaseUrl) ?? '',
+  );
   late final TodoService _todo = TodoService(_settings);
   late final LocationService _location = LocationService(
     PlatformBridge(),
@@ -248,6 +259,7 @@ class _NestLauncherAppState extends State<NestLauncherApp>
     _placePhoto.dispose();
     _media.dispose();
     _external.dispose();
+    _ncs.dispose();
     _assistant.dispose();
     _clock.dispose();
     _weather.dispose();
@@ -288,6 +300,9 @@ class _NestLauncherAppState extends State<NestLauncherApp>
               playback: _playback,
               placePhoto: _placePhoto,
               media: _media,
+              ncs: _ncs,
+              onNcsAddressChanged: (value) =>
+                  unawaited(_settings.put(SettingKeys.ncsBaseUrl, value)),
               assistant: _assistant,
               todo: _todo,
             ),

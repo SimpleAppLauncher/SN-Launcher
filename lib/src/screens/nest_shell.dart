@@ -6,6 +6,7 @@ import '../models/nest_action.dart';
 import '../services/assistant_service.dart';
 import '../services/feature_flags.dart';
 import '../services/location_service.dart';
+import '../services/ncs_client.dart';
 import '../services/device_media_watcher.dart';
 import '../services/place_photo_service.dart';
 import '../services/playback_service.dart';
@@ -28,6 +29,7 @@ import '../widgets/clock_block.dart';
 import '../widgets/launcher_sheet.dart';
 import '../widgets/assistant_lightbar.dart';
 import '../widgets/music_player.dart';
+import '../widgets/ncs_music_page.dart';
 import '../widgets/photo_frame.dart';
 import '../widgets/settings_page.dart';
 import '../widgets/todo_card.dart';
@@ -63,6 +65,8 @@ class NestShell extends StatefulWidget {
     this.playback,
     this.placePhoto,
     this.media,
+    this.ncs,
+    this.onNcsAddressChanged,
     this.suggested,
     this.actions,
     this.animateDecorations = true,
@@ -94,6 +98,12 @@ class NestShell extends StatefulWidget {
 
   /// Active media sessions belonging to other apps.
   final DeviceMediaWatcher? media;
+
+  /// The client for NCS-SMLauncher. Null in a build without the music page.
+  final NcsClient? ncs;
+
+  /// Called when the user types a new player address, so it can be stored.
+  final ValueChanged<String>? onNcsAddressChanged;
 
   /// Optional. Absent in tests and on desktop, where the background stays on
   /// the bundled photograph.
@@ -747,6 +757,16 @@ class _NestShellState extends State<NestShell> {
           // never coming.
           isCurrent: widget.controller.page == ShellPage.weather &&
               widget.animateDecorations,
+        );
+      case ShellPage.music:
+        final ncs = widget.ncs;
+        if (ncs == null) return const SizedBox.shrink();
+        return NcsMusicPage(
+          client: ncs,
+          metrics: _m,
+          type: type,
+          isCurrent: widget.controller.page == ShellPage.music,
+          onBaseUrlChanged: widget.onNcsAddressChanged,
         );
       case ShellPage.homeControl:
         return _HomeControlPage(metrics: _m, type: type, palette: palette);

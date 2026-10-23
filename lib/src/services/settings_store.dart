@@ -127,6 +127,9 @@ abstract final class SettingKeys {
   /// per item, so a list of any length is still one write.
   static const todo = 'todo';
 
+  /// Where NCS-SMLauncher is listening, as the user typed it.
+  static const ncsBaseUrl = 'ncsBaseUrl';
+
   /// Whether the big clock shows seconds.
   static const showSeconds = 'showSeconds';
 
