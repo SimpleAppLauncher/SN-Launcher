@@ -86,6 +86,13 @@ works.
 | `shuffle` | — | — |
 | `repeat` | — | — |
 
+`shuffle` and `repeat` are accepted by the server but **not drawn** by the
+launcher. The snapshot carries no state for either, so a toggle could not show
+whether it was on; the buttons go in when `/state` can say what they are doing.
+The five that are drawn all have feedback in the snapshot: play and pause move
+`playing`, next and previous move the track, seek moves `positionMs`, volume
+comes back as `volume`.
+
 Unknown actions must be accepted and ignored. A control surface that rejects
 verbs it does not know breaks the day the other side learns a new one.
 

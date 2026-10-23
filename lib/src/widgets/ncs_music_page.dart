@@ -1246,14 +1246,16 @@ class _Transport extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = metrics;
+    // Only the controls whose effect the snapshot can confirm: play and pause
+    // move `playing`, next and previous move the track, seek moves the
+    // position, volume comes back as a value. Shuffle and repeat are
+    // deliberately absent — the protocol carries no state for them, so a
+    // toggle could not show whether it was on, and a button that gives no
+    // feedback is the four-dead-buttons mistake with better icons. They go
+    // back in when /state can say what they are doing.
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        IconButton(
-          onPressed: () => client.control('shuffle'),
-          icon: Icon(NestIcons.Shuffle, size: m.px(24), color: _muted),
-          tooltip: 'Shuffle',
-        ),
         IconButton(
           onPressed: () => client.control('previous'),
           icon: Icon(NestIcons.SkipPrevious, size: m.px(38), color: _onSurface),
@@ -1268,11 +1270,6 @@ class _Transport extends StatelessWidget {
           onPressed: () => client.control('next'),
           icon: Icon(NestIcons.SkipNext, size: m.px(38), color: _onSurface),
           tooltip: 'Next',
-        ),
-        IconButton(
-          onPressed: () => client.control('repeat'),
-          icon: Icon(NestIcons.Repeat, size: m.px(24), color: _muted),
-          tooltip: 'Repeat',
         ),
       ],
     );
