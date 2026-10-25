@@ -232,8 +232,10 @@ State on 24–25 Oct 2026:
   The install command and the exact TV-side steps are in `docs/TIZEN.md`.
 
 Because it has not run, none of the TV claims exist yet: 16:9 layout, D-pad
-focus, remote Back, ef/reduced gating, the Tizen WebView, or the NCS feed. The
-current shell still uses its tablet focus model: the root `Focus` claims
+focus, remote Back, ef/reduced gating, the Tizen WebView, or the NCS feed. A
+1920×1080 render from the test harness fits without overflow, but it is the
+tablet shell: a drag handle, one row of icons, and no focus ring. The current
+shell also still uses its tablet focus model: the root `Focus` claims
 Left/Right for page changes, so horizontal traversal inside a page is not
 implemented. That is the next code change, and it should be made with the TV
 in front of us.

@@ -176,6 +176,19 @@ curl -s http://192.168.1.11:8001/api/v2/ | grep -o '"PowerState":"[^"]*"'
 `standby` means the TV is off. `on` with a resetting port 26101 means the
 daemon is not up and the TV needs the power cycle.
 
+## What the 16:9 render shows
+
+The shell was rendered at 1920×1080 by the test harness (not on the TV) and the
+image is at `build/shots/tv_home_1920x1080.png` and
+`build/shots/tv_sheet_1920x1080.png`. It fits: nothing overflows, the clock sits
+bottom-left and the sheet spans the width.
+
+It is still the tablet shell. The home page has a drag handle and a "Recent
+highlights" hint but no focusable tiles; the sheet is one row of large icons
+with a drag handle and no focus ring. The test proves the size, not the
+10-foot experience. A TV layout needs its own focus model, not a resized
+tablet.
+
 ## What is not verified
 
 Everything that requires looking at the TV:

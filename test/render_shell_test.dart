@@ -247,6 +247,42 @@ void main() {
       ),
     );
   });
+
+  // The TV is 16:9. This is a layout check, not a TV check: it proves the
+  // shell does not overflow at 1920x1080, not that the TV renders it.
+  testWidgets('TV home @ 1920x1080', (tester) async {
+    tester.view
+      ..physicalSize = const Size(1920, 1080)
+      ..devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await _capture(
+      tester,
+      const _Harness(
+        size: Size(1920, 1080),
+        hour: 9.75,
+        sheet: 0,
+        page: ShellPage.home,
+        out: 'tv_home_1920x1080',
+      ),
+    );
+  });
+
+  testWidgets('TV sheet @ 1920x1080', (tester) async {
+    tester.view
+      ..physicalSize = const Size(1920, 1080)
+      ..devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await _capture(
+      tester,
+      const _Harness(
+        size: Size(1920, 1080),
+        hour: 9.75,
+        sheet: 1,
+        page: ShellPage.home,
+        out: 'tv_sheet_1920x1080',
+      ),
+    );
+  });
 }
 
 Future<void> _loadFonts() async {
