@@ -83,6 +83,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_tizen:
+    dependency: transitive
+    description:
+      name: flutter_tizen
+      sha256: "5df51a022828127d8d3bf2af32e67b746b764b1209193148fd33b0d7b7c122a7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.7"
   flutter_web_plugins:
     dependency: transitive
     description: flutter
@@ -213,6 +221,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.12"
+  tizen_app_control:
+    dependency: transitive
+    description:
+      name: tizen_app_control
+      sha256: f6790bac58403299e6964476dcbaddea705136b39653fe21e74db0ca63744500
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.4"
   url_launcher:
     dependency: "direct main"
     description:
@@ -261,6 +277,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.2"
+  url_launcher_tizen:
+    dependency: "direct main"
+    description:
+      name: url_launcher_tizen
+      sha256: c58e73252f3c8373035a01fc12c7e7ff77463b489e3844d16c72e0dbeb96929a
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.7"
   url_launcher_web:
     dependency: transitive
     description:
@@ -325,6 +349,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.15.1"
+  webview_flutter_tizen:
+    dependency: "direct main"
+    description:
+      name: webview_flutter_tizen
+      sha256: "8ee86f37ebaab7c199f95bbd3e2cfb6af306734739dfea82cddc697aee941220"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.11.1"
   webview_flutter_wkwebview:
     dependency: transitive
     description:

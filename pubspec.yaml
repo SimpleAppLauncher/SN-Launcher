@@ -20,6 +20,11 @@ dependencies:
   # capable browser". Only constructed when the music page opens — see
   # lib/src/widgets/music_player.dart and docs/MUSIC.md for the trade-offs.
   webview_flutter: ^4.10.0
+  # Tizen implementations. webview_flutter_tizen is deliberately not endorsed
+  # by webview_flutter, so it has to be declared next to the federated package
+  # rather than pulled in automatically. url_launcher_tizen is endorsed.
+  url_launcher_tizen: ^2.1.7
+  webview_flutter_tizen: ^0.11.1
 
   flutter_test:
     sdk: flutter

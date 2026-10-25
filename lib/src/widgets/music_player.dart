@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -91,6 +92,11 @@ class MusicPlayer extends StatefulWidget {
 
 class _MusicPlayerState extends State<MusicPlayer> {
   WebViewController? _controller;
+
+  /// Tizen's url_launcher only supports platformDefault; Linux desktop too.
+  static LaunchMode get _mode => Platform.isLinux
+      ? LaunchMode.platformDefault
+      : LaunchMode.externalApplication;
 
   /// Whether the page-side filter actually installed.
   ///
@@ -202,7 +208,7 @@ class _MusicPlayerState extends State<MusicPlayer> {
     // suppress subframe attempts, which are almost always redirect junk.
     if (request.isMainFrame) {
       unawaited(
-        launchUrl(uri, mode: LaunchMode.externalApplication)
+        launchUrl(uri, mode: _mode)
             .catchError((Object _) => false),
       );
     }

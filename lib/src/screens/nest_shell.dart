@@ -325,10 +325,16 @@ class _NestShellState extends State<NestShell> {
         onKeyEvent: (node, event) {
           if (event is! KeyDownEvent) return KeyEventResult.ignored;
           switch (event.logicalKey) {
+            // On a TV remote Up/Down are for moving focus, not for the
+            // launcher sheet. Only claim them while the sheet is open, where
+            // Down must still close it; otherwise let focus traversal run.
             case LogicalKeyboardKey.arrowUp:
-              _c.toggleSheet();
             case LogicalKeyboardKey.arrowDown:
-              _c.closeSheet();
+              if (_c.sheetProgress > 0.01) {
+                _c.closeSheet();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
             case LogicalKeyboardKey.arrowRight:
               // Positive velocity moves towards the previous page, because the
               // carousel's first page is the left-most one. These two were

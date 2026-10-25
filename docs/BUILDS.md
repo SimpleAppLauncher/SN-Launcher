@@ -5,6 +5,9 @@ source. The only difference is which JSON file the `SN_FEATURES` define points
 at, so any behavioural difference between them is a gating bug and never a
 change in code.
 
+The Samsung TV `.tpk` is a **target** of these same two configs, not a third
+version. See `docs/TIZEN.md`.
+
 | | `ef` — ExtraFeature | reduced |
 |---|---|---|
 | What it is | Everything switched on. For finding out what actually happens. | A launcher and nothing else. This is the one that ships. |

@@ -20,6 +20,15 @@ enum LaunchOutcome { launched, notInstalled, failed }
 class ActionLauncher {
   const ActionLauncher();
 
+  /// Tizen's url_launcher implementation only supports platformDefault.
+  ///
+  /// Tizen reports itself as Linux to Dart, so this also selects the right
+  /// mode on the Linux desktop, where url_launcher_linux has the same
+  /// restriction. Android and macOS keep externalApplication.
+  static LaunchMode get _mode => !kIsWeb && Platform.isLinux
+      ? LaunchMode.platformDefault
+      : LaunchMode.externalApplication;
+
   /// Custom scheme → macOS bundle identifier, so tapping "Spotify" on a Mac
   /// opens the real app instead of a browser error page.
   static const Map<String, String> _macBundleIds = {
@@ -35,7 +44,7 @@ class ActionLauncher {
         if (await canLaunchUrl(Uri.parse(url))) {
           if (await launchUrl(
             Uri.parse(url),
-            mode: LaunchMode.externalApplication,
+            mode: _mode,
           )) {
             return LaunchOutcome.launched;
           }
@@ -87,7 +96,7 @@ class ActionLauncher {
   /// Opens an arbitrary web address (settings links, feedback, docs).
   Future<bool> openUrl(String url) async {
     try {
-      return await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      return await launchUrl(Uri.parse(url), mode: _mode);
     } catch (_) {
       return false;
     }

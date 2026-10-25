@@ -47,6 +47,7 @@ These pass their tests and have never been looked at by a person.
 | Clock zoom 1.0–1.2 | The date and clock rectangles do not overlap, measured | How it actually looks |
 | Spring motion | A thrown carousel arrives sooner than an eased one; a critically damped page spring does not overshoot | How it actually feels |
 | Ad blocking (old WebView) | 8 URL cases pass in a node harness against the real 23-host list | The panel is on the disabled Home control page; neither shipped build opens it |
+| Tizen TV TPK | It builds for `profile tv`; the Samsung distributor certificate names the TV's DUID | Everything. It has never been installed or launched — sdb cannot open the device |
 
 ## 3. Known broken
 
@@ -209,3 +210,34 @@ and because a page nobody could reach still reported itself as selected. The
 current rule is the same one: a passing test is not a device check.
 
 Until a device check runs after every change, that gap stays open.
+
+---
+
+## 7. The TV target
+
+The Samsung `QA55Q60CAKXXV` is a target, not a third version. The TPK is built
+from the same source and the same `SN_FEATURES` switch as the tablets, and both
+configs keep `homeControl: false`.
+
+State on 24–25 Oct 2026:
+
+- TPK built: `build/tizen/tpk/com.giathinh.snlauncher.tv-1.0.0.tpk`.
+- Signed with a Samsung author certificate and a Samsung distributor
+  certificate whose device-id extension is
+  `UUID:65F128FF-CD11-4D1A-AECF-491A2171D972`. The chain is Samsung VD Author
+  CA / VD DEVELOPER Public CA, not the bundled public distributor.
+- **Never installed.** The TV's sdb daemon accepts TCP on 26101 and resets the
+  connection; the TV API reports `PowerState: standby`. The TV must be powered
+  on and power-cycled after its developer-mode setting; that is a physical step.
+  The install command and the exact TV-side steps are in `docs/TIZEN.md`.
+
+Because it has not run, none of the TV claims exist yet: 16:9 layout, D-pad
+focus, remote Back, ef/reduced gating, the Tizen WebView, or the NCS feed. The
+current shell still uses its tablet focus model: the root `Focus` claims
+Left/Right for page changes, so horizontal traversal inside a page is not
+implemented. That is the next code change, and it should be made with the TV
+in front of us.
+
+The TV does not change the honest ratio: it is a third **target**, not a third
+build. There are still exactly two versions.
+
