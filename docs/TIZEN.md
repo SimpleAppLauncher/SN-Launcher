@@ -7,12 +7,14 @@ on 24 Oct 2026 and is signed with a Samsung-issued author certificate and a
 Samsung-issued distributor certificate whose device-id extension names the TV.
 That is the certificate work that was blocking installation, and it is done.
 
-The TV side is still blocking: sdb cannot open a device. `192.168.1.11:26101`
-accepts a TCP connection and then resets it, and the TV's API reports
-`PowerState: standby`. This is the documented behaviour of a TV whose
-developer-mode setting has not survived a reboot, or whose sdb daemon is not
-running. Nothing in this repository can fix that; the TV has to be power-cycled
-with the remote in hand. See **Install** below.
+The TV side is still blocking: sdb cannot open a device. On 25 Oct 2026 the TV
+was on (`PowerState: on`, developerMode 1, host IP `192.168.1.123`), and
+`192.168.1.11:26101` still accepts a TCP connection and then resets it. A full
+TCP 1–65535 scan found 15 open ports; none is a second sdb endpoint. This is
+the documented behaviour of a TV whose developer-mode setting has not survived
+a reboot, or whose sdb daemon is not running. Nothing in this repository can
+fix that; the TV has to be power-cycled with the remote in hand. See
+**Install** below.
 
 Do not read this as "the TV build works". It means the package exists, the
 signature chain was checked, and the next step is a physical one.
