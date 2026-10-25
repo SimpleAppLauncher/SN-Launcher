@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#121826">
+  <title>Nest Launcher TV</title>
+  <link rel="icon" type="image/png" href="assets/icons/icon.png">
+  <link rel="stylesheet" href="css/tv.css">
+</head>
+<body>
+  <div id="app" class="app">
+    <main id="pages" class="pages" aria-live="off"></main>
+
+    <header id="chrome" class="chrome">
+      <button id="settings-button" class="chrome-button focusable" type="button"
+              data-action="open-settings" data-fk="settings-button"
+              aria-label="Open settings" title="Settings">
+        <span class="chrome-icon" data-icon="settings"></span>
+        <span class="chrome-label">Settings</span>
+      </button>
+    </header>
+
+    <nav id="dots" class="dots" aria-label="Pages"></nav>
+    <div id="hint" class="hint" aria-hidden="true">◀ ▶ pages &nbsp;·&nbsp; ▲ ▼ focus &nbsp;·&nbsp; OK select &nbsp;·&nbsp; Back returns</div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <section id="overlay" class="overlay" hidden aria-modal="true" role="dialog"></section>
+
+    <div id="boot" class="boot">
+      <div class="boot-mark">SN</div>
+      <div class="boot-title">Nest Launcher</div>
+      <div class="boot-sub">Starting the TV shell…</div>
+    </div>
+  </div>
+
+  <noscript>This launcher needs JavaScript enabled.</noscript>
+
+  <script src="js/features.generated.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/weather.js"></script>
+  <script src="js/ncs.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

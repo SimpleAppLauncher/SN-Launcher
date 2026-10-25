@@ -176,6 +176,62 @@ curl -s http://192.168.1.11:8001/api/v2/ | grep -o '"PowerState":"[^"]*"'
 `standby` means the TV is off. `on` with a resetting port 26101 means the
 daemon is not up and the TV needs the power cycle.
 
+To rule out another listening port, run the full-range TCP scan:
+
+```bash
+tool/tv_scan.sh 192.168.1.11
+```
+
+It writes `build/tizen/tv_scan_192.168.1.11.txt`, probes every open service,
+and sends a minimal sdb `CNXN` packet to `26101`. Other open ports are TV
+services such as the API on `8001`, not alternate sdb daemons: Tizen talks sdb
+on `26101` only.
+
+### Full scan, 25 Oct 2026
+
+`nmap -Pn -sT -p-` found **15 open TCP ports** on `192.168.1.11`:
+
+| Port | What the probe found |
+| --- | --- |
+| `7000` | RTSP / AirTunes (`AirTunes rtspd`), probably AirPlay |
+| `7014` | unknown |
+| `7678` | Samsung AllShare UPnP |
+| `8001` | Samsung TV API (HTTP) |
+| `8002` | Samsung TV API / WebSocket (HTTP 401/403) |
+| `8080` | HTTP `WebServer` (403/404/OPTIONS) |
+| `8187` | Samsung AllShare UPnP |
+| `8765` | HTTP (408/404) |
+| `9119` | Samsung AllShare UPnP |
+| `9197` | Samsung AllShare / DLNA UPnP |
+| `9495` | TLS / HTTP (408/404) |
+| `15500` | unknown |
+| `26101` | Tizen sdb — TCP connects, then the `CNXN` handshake resets |
+| `32961` | HTTP (404) |
+| `39011` | tcpwrapped, unknown |
+
+The scan also reported **15 filtered ports** with no response. It is a TCP
+connect scan, not UDP, and `--defeat-rst-ratelimit` can misclassify a closed
+port as filtered. The open list is still enough to settle the question: there
+is no second sdb endpoint. `26101` is the only Tizen sdb port, and its daemon
+is not up.
+
+### The `tv/` web fallback
+
+`tv/` is a separate browser/Tizen web fallback, not the Flutter app and not a
+third version. It exists to check the remote-first focus model without Xcode or
+a TV. Serve the repository root and open `/tv/`:
+
+```bash
+cd ~/nestlaunch
+python3 -m http.server 8088 --bind 127.0.0.1
+# open http://127.0.0.1:8088/tv/ in Safari
+```
+
+Arrow keys move focus, Enter selects, Esc goes back. Use
+`tv/scripts/use-build.sh ef` or `tv/scripts/use-build.sh reduced` to regenerate
+`tv/js/features.generated.js` from the same feature JSON as the app. This
+fallback has not been installed on the TV either.
+
 ## What the 16:9 render shows
 
 The shell was rendered at 1920×1080 by the test harness (not on the TV) and the

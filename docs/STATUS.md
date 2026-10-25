@@ -226,10 +226,12 @@ State on 24–25 Oct 2026:
   certificate whose device-id extension is
   `UUID:65F128FF-CD11-4D1A-AECF-491A2171D972`. The chain is Samsung VD Author
   CA / VD DEVELOPER Public CA, not the bundled public distributor.
-- **Never installed.** The TV's sdb daemon accepts TCP on 26101 and resets the
-  connection; the TV API reports `PowerState: standby`. The TV must be powered
-  on and power-cycled after its developer-mode setting; that is a physical step.
-  The install command and the exact TV-side steps are in `docs/TIZEN.md`.
+- **Never installed.** On 25 Oct 2026 the TV was on (`PowerState: on`,
+  developerMode 1, host IP `192.168.1.123`), but `26101` still accepts TCP and
+  resets the sdb handshake. A full TCP 1–65535 scan found 15 open ports. None
+  of the others speaks sdb; `26101` remains the only sdb endpoint. The daemon
+  starts only after a hard power cycle, which is a physical step. The install
+  command, the scan tool and the exact TV-side steps are in `docs/TIZEN.md`.
 
 Because it has not run, none of the TV claims exist yet: 16:9 layout, D-pad
 focus, remote Back, ef/reduced gating, the Tizen WebView, or the NCS feed. A

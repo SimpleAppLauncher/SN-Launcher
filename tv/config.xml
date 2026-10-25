@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets"
+        xmlns:tizen="http://tizen.org/ns/widgets"
+        id="http://com.giathinh.snlauncher.tv"
+        version="1.0.0"
+        viewmodes="maximized">
+  <tizen:application id="com.giathinh.snlauncher.tv"
+                     package="com.giathinh.snlauncher"
+                     required_version="6.5"/>
+  <content src="index.html"/>
+  <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+  <icon src="assets/icons/icon.png"/>
+  <name>Nest Launcher TV</name>
+  <description>A ten-foot, remote-first launcher for Samsung Tizen TVs.</description>
+  <tizen:profile name="tv"/>
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <tizen:setting screen-orientation="landscape"
+                 context-menu="disable"
+                 background-support="disable"
+                 encryption="disable"
+                 install-location="auto"
+                 hwkey-event="enable"/>
+  <access origin="*" subdomains="true"/>
+</widget>
