@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'src/models/nest_action.dart';
 import 'src/models/photo_credit.dart';
+import 'src/services/app_catalog.dart';
 import 'src/services/assistant_service.dart';
 import 'src/services/calendar_service.dart';
 import 'src/services/feature_flags.dart';
@@ -119,6 +120,11 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   late final PhotoFrameService _photos = PhotoFrameService(
     discover: FeatureFlags.current.isOn('photoDiscovery'),
   );
+
+  /// The real installed-app registry. Empty on platforms that have no package
+  /// manager; the shell then keeps the built-in action set.
+  late final AppCatalog _appCatalog = AppCatalog();
+
   late final AssistantService _assistant = AssistantService();
   final SettingsStore _settings = SettingsStore();
 
@@ -152,6 +158,9 @@ class _NestLauncherAppState extends State<NestLauncherApp>
     // before painting has already lost the race it exists to win.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_controller?.restore());
+      // The first frame must not wait for the package manager. This fills in
+      // the real icons in the drawer when it finishes.
+      unawaited(_appCatalog.load());
       if (FeatureFlags.current.isOn('calendar')) {
         // Without this the weather fetches exactly once and never again:
         // `configure()` triggers a single refresh, and the 15-minute timer that
@@ -260,6 +269,8 @@ class _NestLauncherAppState extends State<NestLauncherApp>
       // A wall display is usually never backgrounded, but a permission dialog
       // does this. Refresh so a calendar granted mid-session appears.
       unawaited(_calendar.refresh());
+      // Also pick up apps installed while the launcher was in the background.
+      unawaited(_appCatalog.refresh());
     }
   }
 
@@ -268,6 +279,7 @@ class _NestLauncherAppState extends State<NestLauncherApp>
     WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
     _calendar.dispose();
+    _appCatalog.dispose();
     _todo.dispose();
     _location.dispose();
     _photos.dispose();
@@ -321,6 +333,7 @@ class _NestLauncherAppState extends State<NestLauncherApp>
                   unawaited(_settings.put(SettingKeys.ncsBaseUrl, value)),
               assistant: _assistant,
               todo: _todo,
+              appCatalog: _appCatalog,
             ),
             if (FrameStats.enabled) PerfOverlay(stats: _frameStats),
           ],

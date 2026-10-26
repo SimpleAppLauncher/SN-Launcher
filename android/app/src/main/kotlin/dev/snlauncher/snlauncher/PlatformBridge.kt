@@ -6,6 +6,9 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -21,6 +24,8 @@ import androidx.core.app.ActivityCompat
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 
@@ -41,6 +46,8 @@ class PlatformBridge(private val activity: Activity) : MethodChannel.MethodCallH
             "setVolume" -> setVolume(call, result)
             "getVolume" -> getVolume(result)
             "openAppSettings" -> openAppSettings(result)
+            "listApps" -> listApps(result)
+            "launchApp" -> launchApp(call, result)
             "hasCamera" -> hasCamera(result)
             "openCamera" -> openCamera(result)
             "requestPermission" -> requestPermission(call, result)
@@ -130,6 +137,115 @@ class PlatformBridge(private val activity: Activity) : MethodChannel.MethodCallH
             } catch (_: Exception) {
                 result.success(mapOf("opened" to false))
             }
+        }
+    }
+
+    /**
+     * Every app that advertises a launcher activity, with the icon the app
+     * itself supplies.
+     *
+     * This runs off the main thread because icon rasterisation touches
+     * resources for every installed package, and doing that on the UI thread
+     * on a UNISOC tablet drops frames before the launcher has even appeared.
+     * The result is a list of maps so the Dart side can keep its own model and
+     * tests do not need to know about Android classes.
+     */
+    private fun listApps(result: MethodChannel.Result) {
+        Thread {
+            val apps = mutableListOf<Map<String, Any>>()
+            try {
+                val pm = activity.packageManager
+                // Tablets use CATEGORY_LAUNCHER. Leanback-only apps — the
+                // normal case on a TV — advertise CATEGORY_LEANBACK_LAUNCHER
+                // instead and would otherwise leave the TV drawer empty.
+                val launcherIntents = listOf(
+                    Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),
+                    Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER),
+                )
+                val seen = HashSet<String>()
+                for (launcherIntent in launcherIntents) {
+                    for (info in pm.queryIntentActivities(launcherIntent, 0)) {
+                        val packageName = info.activityInfo?.packageName ?: continue
+                        if (packageName == activity.packageName || !seen.add(packageName)) continue
+
+                        val label = try {
+                            info.loadLabel(pm).toString().trim()
+                        } catch (_: Exception) {
+                            ""
+                        }
+                        if (label.isEmpty()) continue
+
+                        val iconBytes = try {
+                            drawableToPng(info.loadIcon(pm))
+                        } catch (_: Exception) {
+                            null
+                        }
+
+                        val row = mutableMapOf<String, Any>(
+                            "package" to packageName,
+                            "label" to label,
+                        )
+                        if (iconBytes != null) row["icon"] = iconBytes
+                        apps.add(row)
+                    }
+                }
+                apps.sortWith(
+                    compareBy { (it["label"] as? String ?: "").lowercase(Locale.getDefault()) },
+                )
+                activity.runOnUiThread {
+                    result.success(mapOf("apps" to apps))
+                }
+            } catch (_: Exception) {
+                activity.runOnUiThread {
+                    result.success(mapOf("apps" to emptyList<Map<String, Any>>()))
+                }
+            }
+        }.start()
+    }
+
+    /**
+     * Launches an installed package.
+     *
+     * `getLaunchIntentForPackage` is the tablet path. The leanback fallback is
+     * for the TV build: a leanback-only app has no ordinary launcher intent,
+     * but it is still an app the user can see and choose.
+     */
+    private fun launchApp(call: MethodCall, result: MethodChannel.Result) {
+        val packageName = call.argument<String>("package")?.trim().orEmpty()
+        if (packageName.isEmpty()) {
+            result.success(mapOf("opened" to false))
+            return
+        }
+        activity.runOnUiThread {
+            try {
+                val pm = activity.packageManager
+                val intent = pm.getLaunchIntentForPackage(packageName)
+                    ?: pm.getLeanbackLaunchIntentForPackage(packageName)
+                if (intent == null) {
+                    result.success(mapOf("opened" to false))
+                } else {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    activity.startActivity(intent)
+                    result.success(mapOf("opened" to true))
+                }
+            } catch (_: Exception) {
+                result.success(mapOf("opened" to false))
+            }
+        }
+    }
+
+    private fun drawableToPng(drawable: Drawable): ByteArray? {
+        // 144 px is enough for the sheet's 80 dp badge at 1.8x density without
+        // keeping a full-resolution icon for every installed app in memory.
+        val edge = 144
+        val bitmap = Bitmap.createBitmap(edge, edge, Bitmap.Config.ARGB_8888)
+        return try {
+            drawable.setBounds(0, 0, edge, edge)
+            drawable.draw(Canvas(bitmap))
+            val out = ByteArrayOutputStream()
+            if (bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) out.toByteArray() else null
+        } finally {
+            bitmap.recycle()
         }
     }
 

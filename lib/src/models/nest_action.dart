@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../services/feature_flags.dart';
@@ -33,6 +35,9 @@ enum NestIconKind {
   youtube,
   youtubeTv,
   zoom,
+
+  /// Fallback for an installed app whose icon could not be read.
+  apps,
 }
 
 @immutable
@@ -48,7 +53,31 @@ class NestAction {
     this.intentUrl,
     this.intentPackage,
     this.linuxExec,
+    this.iconBytes,
+    this.installedApp = false,
   });
+
+  /// Creates an entry from an Android launcher activity.
+  ///
+  /// [iconBytes] is the PNG the platform read from the app's own
+  /// `ActivityInfo.loadIcon`. Keeping the bytes on the action is what lets the
+  /// badge render the *real* icon instead of substituting a lookalike glyph.
+  factory NestAction.installed({
+    required String packageName,
+    required String label,
+    Uint8List? iconBytes,
+  }) {
+    return NestAction(
+      id: 'app:$packageName',
+      label: label,
+      icon: NestIconKind.apps,
+      tint: const Color(0xFF5F6368),
+      badgeShape: NestBadgeShape.squircle,
+      intentPackage: packageName,
+      iconBytes: iconBytes,
+      installedApp: true,
+    );
+  }
 
   final String id;
   final String label;
@@ -70,6 +99,18 @@ class NestAction {
 
   /// Linux/Android fallback: an executable or desktop file.
   final String? linuxExec;
+
+  /// The application's own icon, when the platform could provide it.
+  ///
+  /// Null for the built-in Nest entries, which keep their vector brand badges.
+  final Uint8List? iconBytes;
+
+  /// True when this entry came from the installed-app registry. The icon may
+  /// still be null if Android could not rasterise it, but the package is real
+  /// and must be launched by package name.
+  final bool installedApp;
+
+  bool get isInstalledApp => installedApp;
 
   bool get isThirdParty =>
       intentUrl != null || intentPackage != null || linuxExec != null;

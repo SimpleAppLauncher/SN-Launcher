@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/nest_action.dart';
+import 'platform_bridge.dart';
 
 /// Result of a launch attempt, surfaced in the UI as a small toast.
 enum LaunchOutcome { launched, notInstalled, failed }
@@ -38,6 +39,17 @@ class ActionLauncher {
   };
 
   Future<LaunchOutcome> launch(NestAction action) async {
+    // Installed apps are launched by package name. A deep link is not a
+    // substitute: it opens a browser or a chooser, not necessarily the app
+    // whose icon the user just touched.
+    final packageName = action.intentPackage;
+    if (action.isInstalledApp && packageName != null) {
+      final opened = await const PlatformBridge().launchApp(packageName);
+      if (opened) return LaunchOutcome.launched;
+      // Fall through only if the package has a deep link configured. A raw
+      // installed app has none, so this returns notInstalled below.
+    }
+
     final url = action.intentUrl;
     if (url != null) {
       try {

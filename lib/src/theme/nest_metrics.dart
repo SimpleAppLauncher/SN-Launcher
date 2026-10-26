@@ -131,11 +131,12 @@ class NestMetrics {
   static const double qsGlyphSize = 40;
 
   // ──────────────────────────────────────────────────────── LAUNCHER GRID
-  /// "See all" opens the full grid: 6 columns on the Max.
+  /// The Max's own grid is six columns. A general launcher should not force
+  /// six columns onto a 10-inch tablet, so [appGridColumns] adapts instead.
   static const int gridColumns = 6;
-  static const double gridCellHeight = 118;
+  static const double gridCellHeight = 132;
   static const double gridLabelFontSize = 21;
-  static const double gridIconSize = 68;
+  static const double gridIconSize = 72;
 
 
   const NestMetrics._(this.size, this.u);
@@ -169,6 +170,17 @@ class NestMetrics {
 
   double get sheetHeight => size.height * sheetTopFraction;
   double get sheetTop => size.height - sheetHeight;
+
+  /// Columns in the full app drawer.
+  ///
+  /// Six is the Nest Hub Max's count and is right for a TV-width panel. Five
+  /// is the tablet default: bigger targets, and a label that still fits under
+  /// an icon. Four is the fallback for a narrow/portrait window.
+  int get appGridColumns {
+    if (size.width >= 1500) return gridColumns;
+    if (size.width >= 960) return 5;
+    return 4;
+  }
 
   // ── Sheet-local coordinates ──────────────────────────────────────────────
   // The sheet's contents sit in a Stack that is itself placed at [sheetTop],

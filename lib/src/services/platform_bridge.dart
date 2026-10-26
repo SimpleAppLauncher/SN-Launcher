@@ -92,6 +92,45 @@ class PlatformBridge {
     return v;
   }
 
+  /// Every launcher activity the platform can see, with its real icon.
+  ///
+  /// Returns an empty list on platforms without an Android package manager.
+  /// The caller must treat that as "no registry", not as "no apps".
+  Future<List<InstalledApp>> listInstalledApps() async {
+    final r = await _invoke<Map<Object?, Object?>>('listApps');
+    final raw = r?['apps'];
+    if (raw is! List) return const [];
+    final out = <InstalledApp>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final packageName = item['package']?.toString().trim() ?? '';
+      final label = item['label']?.toString().trim() ?? '';
+      if (packageName.isEmpty || label.isEmpty) continue;
+      final icon = item['icon'];
+      final bytes = icon is Uint8List
+          ? icon
+          : icon is List<int>
+              ? Uint8List.fromList(icon)
+              : null;
+      out.add(InstalledApp(
+        packageName: packageName,
+        label: label,
+        iconBytes: bytes,
+      ));
+    }
+    return out;
+  }
+
+  /// Opens an installed package by name. False means the platform had no
+  /// launch intent for it, so the UI can say so rather than pretending.
+  Future<bool> launchApp(String packageName) async {
+    final r = await _invoke<Map<Object?, Object?>>(
+      'launchApp',
+      {'package': packageName},
+    );
+    return r?['opened'] == true;
+  }
+
   // ── Permissions ───────────────────────────────────────────────────────────
   /// Returns false when the user declined, and null on a platform with no
   /// permission model for it (desktop).
@@ -180,6 +219,23 @@ class PlatformBridge {
     }
     return out;
   }
+}
+
+/// One launchable application, already flattened by the platform side.
+@immutable
+class InstalledApp {
+  const InstalledApp({
+    required this.packageName,
+    required this.label,
+    this.iconBytes,
+  });
+
+  final String packageName;
+  final String label;
+
+  /// PNG bytes read from the application's own icon. Null when the platform
+  /// could not rasterise it; the badge then falls back to a glyph.
+  final Uint8List? iconBytes;
 }
 
 /// One calendar instance, already flattened by the platform side.

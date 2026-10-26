@@ -39,6 +39,22 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
+    <!-- Android 11+ package visibility. Without these declarations
+         queryIntentActivities() only returns this app's own activities, which
+         made the app drawer look empty on a modern tablet. This exposes the
+         launcher and leanback-launcher activities only; it is not the
+         QUERY_ALL_PACKAGES permission. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN"/>
+            <category android:name="android.intent.category.LAUNCHER"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN"/>
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
+        </intent>
+    </queries>
+
     <!-- Be explicit that the framework handles Back. Flutter only claims it once
      a Navigator exists and calls setFrameworkHandlesBack(true); opting in keeps
      routing consistent from Android 13 through 16 instead of relying on the

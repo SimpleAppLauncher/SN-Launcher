@@ -63,6 +63,18 @@ class LauncherSheet extends StatelessWidget {
     final glyph = metrics.px(NestMetrics.qsGlyphSize);
     final padding = metrics.px(NestMetrics.sheetPaddingX);
     final sheetH = metrics.sheetHeight;
+    // The dock keeps the device's 80 px badges, and adds the name underneath.
+    // A launcher whose icons are unlabelled is a guessing game for the first
+    // few sessions; the grid already had labels, the quick row did not.
+    final labelH = metrics.px(22);
+    final cellH = badge + metrics.px(8) + labelH;
+    final labelStyle = TextStyle(
+      fontFamily: NestType.display,
+      fontSize: metrics.px(16),
+      height: 1.1,
+      fontWeight: FontWeight.w500,
+      color: palette.onSurfaceStrong.withValues(alpha: 0.84),
+    );
 
     // The sheet tracks the finger 1:1 and slides back off the bottom edge when
     // dismissed. Translating (rather than fading) is what the real device does,
@@ -116,10 +128,10 @@ class LauncherSheet extends StatelessWidget {
                     // App row. Offsets are sheet-relative because this Stack
                     // already lives inside the sheet's own coordinate space.
                     Positioned(
-                      top: metrics.sheetLocalAppRowCenter - badge / 2,
+                      top: metrics.sheetLocalAppRowCenter - cellH / 2,
                       left: padding,
                       right: padding,
-                      height: badge,
+                      height: cellH,
                       child: Row(
                         children: [
                           // The device spaces the six badges at a fixed pitch
@@ -135,6 +147,7 @@ class LauncherSheet extends StatelessWidget {
                             _PressableBadge(
                               action: suggested[i],
                               size: badge,
+                              labelStyle: labelStyle,
                               onTap: () => onActionTap(suggested[i]),
                             ),
                           ],
@@ -335,17 +348,43 @@ class _PressableScaleState extends State<PressableScale> {
 }
 
 class _PressableBadge extends StatelessWidget {
-  const _PressableBadge({required this.action, required this.size, required this.onTap});
+  const _PressableBadge({
+    required this.action,
+    required this.size,
+    required this.labelStyle,
+    required this.onTap,
+  });
 
   final NestAction action;
   final double size;
+  final TextStyle labelStyle;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: NestAppBadge(action: action, size: size),
+    return Semantics(
+      button: true,
+      label: action.label,
+      child: PressableScale(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            NestAppBadge(action: action, size: size),
+            SizedBox(height: size * 0.10),
+            SizedBox(
+              width: size,
+              child: Text(
+                action.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: labelStyle,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

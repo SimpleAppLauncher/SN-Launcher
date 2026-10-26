@@ -107,6 +107,7 @@ class NestGlyphPainter extends CustomPainter {
         NestIconKind.assistant => NestIcons.AutoAwesome,
         NestIconKind.broadcast => NestIcons.CastConnected,
         NestIconKind.zoom => NestIcons.Videocam,
+        NestIconKind.apps => NestIcons.Apps,
         // Netflix and Pandora are wordmarks, not glyphs; they keep their paths.
         NestIconKind.netflix => null,
         NestIconKind.pandora => null,
@@ -402,6 +403,11 @@ class NestGlyphPainter extends CustomPainter {
           ..lineTo(0.44, 0.20)
           ..lineTo(0.22, -0.02)
           ..close());
+
+      case NestIconKind.apps:
+        // Unreachable in practice: symbolFor() maps this to Material Symbols.
+        // Kept so the switch stays exhaustive if that mapping changes.
+        break;
     }
     canvas.restore();
   }
@@ -472,6 +478,31 @@ class NestAppBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bytes = action.iconBytes;
+    if (bytes != null && bytes.isNotEmpty) {
+      return SizedBox.square(
+        dimension: size,
+        child: ClipRRect(
+          // Android adaptive icons are square; the launcher's job is the mask,
+          // not redrawing the icon. Rounded-rect is what the Pixel launcher
+          // uses on every launcher icon that is not already circular.
+          borderRadius: BorderRadius.circular(size * 0.24),
+          child: Image.memory(
+            bytes,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (_, _, _) => _fallbackBadge(),
+          ),
+        ),
+      );
+    }
+    return _fallbackBadge();
+  }
+
+  Widget _fallbackBadge() {
     return SizedBox.square(
       dimension: size,
       child: DecoratedBox(

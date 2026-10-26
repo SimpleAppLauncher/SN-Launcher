@@ -1,11 +1,11 @@
 # Status: what works, what does not, and what to do next
 
-Written against the tree at the point where the Home control page was disabled
-in both builds and the weather/music idle cost was cut. 256 tests pass and one
-is skipped; both release variants are installed and hardware-verified on the
-Nokia T20, and the ef is verified on the SM-X110. This file exists because the
-honest answer to "does it work?" has been longer than a chat message should
-carry, and because the previous answer to that question was wrong.
+Written against the tree after the installed-app drawer landed. 261 tests pass
+and one is skipped; both release variants were installed and hardware-verified
+on the Nokia T20 before this UI change, and the ef on the SM-X110. The new
+installed-app path has **not** been run on either tablet yet. This file exists
+because the honest answer to "does it work?" has been longer than a chat message
+should carry, and because the previous answer to that question was wrong.
 
 Everything below is graded against one standard, which is the only standard
 that matters for a device sitting on a wall:
@@ -47,6 +47,8 @@ These pass their tests and have never been looked at by a person.
 | Clock zoom 1.0–1.2 | The date and clock rectangles do not overlap, measured | How it actually looks |
 | Spring motion | A thrown carousel arrives sooner than an eased one; a critically damped page spring does not overshoot | How it actually feels |
 | Ad blocking (old WebView) | 8 URL cases pass in a node harness against the real 23-host list | The panel is on the disabled Home control page; neither shipped build opens it |
+| Installed-app registry | `AppCatalog` adopts packages, labels and icon bytes; a pixel test proves the badge paints the bytes rather than a glyph; a 1280×800 render shows the grid and search field | Whether `queryIntentActivities` + `loadIcon` returns the expected list on the T20 or SM-X110, whether package launches work, and whether Android 11+ visibility behaves as declared |
+| Labelled app row + grabber hit area | Renders at 1280×800 without overflow; the handle now has a 48 dp opaque target | Whether a thumb finds it, and whether tapping it opens the sheet without the drag listener swallowing the tap |
 | Tizen TV TPK | It builds for `profile tv`; the Samsung distributor certificate names the TV's DUID | Everything. It has never been installed or launched — sdb cannot open the device |
 
 ## 3. Known broken
@@ -118,20 +120,28 @@ service, but it is unreachable while `homeControl` is off.
 
 ## 5. What to do, in this order
 
-### Current, 23 Oct 2026
+### Current, 26 Oct 2026
 
-1. **Run the Linux desktop build.** It has never been launched; the CI
-   artefact is not a run. Do this on the machine that will host it.
-2. **Get the real NCS-SMLauncher contract.** The music page is verified against
+1. **Verify the installed-app drawer on both tablets.** This is the change that
+   just landed and the only thing allowed to happen before new work. Install
+   both variants, open the drawer, confirm the icons are the apps' own, tap a
+   few, use search, then tap the grabber with a thumb. If the list is empty,
+   read `adb logcat` for the package-manager query before changing the code.
+2. **Run the Linux desktop build.** It has never been launched; the CI
+   artefact is not a run. Do this on the machine that will host it. On desktop
+   the catalog has no package manager, so it deliberately falls back to the
+   built-in action set.
+3. **Get the real NCS-SMLauncher contract.** The music page is verified against
    the mock only. Ask the player's author for the port, endpoints, library
    model and playback language, then test the page against the real server on
    the LAN.
-3. **Soak the T20.** Leave the ef release on the home/weather/music pages for
+4. **Soak the T20.** Leave the ef release on the home/weather/music pages for
    72 hours and watch PSS, the poll, and the carousel; then repeat the memory
-   check. The current release PSS is 102 MB ef / 81 MB reduced.
-4. **Settle the weather place name (3a).** It is still the one bug that shows
+   check. The current release PSS is 102 MB ef / 81 MB reduced. Re-measure
+   after the app catalog, which keeps one 144 px PNG per installed app.
+5. **Settle the weather place name (3a).** It is still the one bug that shows
    on the wall: conditions without a place.
-5. **Release signing.** A proper keystore, so upgrades do not require an
+6. **Release signing.** A proper keystore, so upgrades do not require an
    uninstall.
 
 ### Earlier plan (kept for the record; the native-player step is superseded by the NCS remote)
@@ -197,11 +207,16 @@ achievable and should not be claimed again.
 
 ## 6. The honest ratio
 
-At the time of writing: both release variants are built, installed and
+At the time of writing: both older release variants are built, installed and
 hardware-verified on the Nokia T20; the ef is also verified on the SM-X110. The
 Home control page is off in both. The music page is verified against the mock
 only; the real NCS-SMLauncher, the Linux desktop build, and a 72-hour soak are
 still unverified.
+
+The installed-app UI is a separate ratio: five pieces built (package query,
+real icon rasterisation, package launch, labelled dock, searchable adaptive
+drawer), **zero verified on hardware**, one render-harness pass and one pixel
+test. Do not call those icons real until they have been seen on a tablet.
 
 The number that matters is not the first one. It is that **three broken things
 shipped in v0.1.2 and v0.1.3 while the test suite reported all green** — because

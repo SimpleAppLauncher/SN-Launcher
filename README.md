@@ -52,8 +52,10 @@ installing.
 
 ## What you get
 
-**The shipping build** is a launcher: the Nest-style clock and photo, the app
-row and the full app grid, brightness and volume, and a settings page.
+**The shipping build** is a launcher: the Nest-style clock and photo, a dock row
+with labels, a searchable app drawer that uses Android's real installed apps and
+their own icons, brightness and volume, and a settings page. Tap the grabber at
+the bottom to open the dock; swipe up or tap **See all** for the drawer.
 
 Page two holds the two things worth glancing at: a **calendar** that shows the
 date and what's on today, and a **to-do list** you can add to, tick off and
@@ -102,7 +104,7 @@ MT6789, 800x1340) and a **Nokia T20** (Android 13, Unisoc T610, 2000x1200).
 | --- | --- |
 | The clock, date and weather | ✓ |
 | The photo frame, rotating every 10 min | ✓ |
-| The app row and the six-column grid | ✓ |
+| The app row and the full app grid | ✓ for the built-in set; the installed-app version is built but not yet hardware-verified |
 | A calendar reading real events, with the date | ✓ |
 | A to-do list you can add to, tick off and delete | ✓ |
 | The quick-settings row — every button does something | ✓ |
@@ -110,13 +112,20 @@ MT6789, 800x1340) and a **Nokia T20** (Android 13, Unisoc T610, 2000x1200).
 | Settings | ✓ |
 | Cold start | **548 ms** on the Tab A7 Lite release; **509–603 ms** on the T20 release after the first install |
 
-**Not yet verified end to end: the voice assistant and the real NCS-SMLauncher.**
-The assistant has never heard a microphone. The ef music page has now been
-swiped to on both tablets, and it connected to the mock over the LAN on the
-SM-X110 profile, the SM-X110 ef release and the T20 ef release. Pause/next were
-read back from the mock on the T20 and the profile. The real player is still the
-mock's contract only. The old WebView music panel lived on the now-disabled Home
-control page.
+**Not yet verified end to end: installed-app icons, the voice assistant and the
+real NCS-SMLauncher.** The assistant has never heard a microphone. The ef music
+page has now been swiped to on both tablets, and it connected to the mock over
+the LAN on the SM-X110 profile, the SM-X110 ef release and the T20 ef release.
+Pause/next were read back from the mock on the T20 and the profile. The real
+player is still the mock's contract only. The old WebView music panel lived on
+the now-disabled Home control page.
+
+The installed-app drawer is new. It asks Android's `PackageManager` for launcher
+and leanback activities, reads each app's own icon, and launches it by package
+name; the fallback on a platform with no package manager is the built-in action
+set. That path compiles, has a pixel test that proves the icon bytes are what
+get painted, and was looked at in the render harness — but it has **not** been
+run on a tablet since the change, so it is built and tested, not verified.
 
 The ef's first launch straight after installing is 3.3 s (the reduced's is
 1.2 s) while Android extracts the package; every cold start after that is

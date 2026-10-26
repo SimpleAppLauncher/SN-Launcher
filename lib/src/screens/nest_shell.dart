@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 
 import '../models/nest_action.dart';
+import '../services/app_catalog.dart';
 import '../services/assistant_service.dart';
 import '../services/feature_flags.dart';
 import '../services/location_service.dart';
@@ -42,7 +43,7 @@ import '../widgets/weather_page.dart';
 ///   0  ambient background (one paint pass)
 ///   1  page carousel  — photo frame · digest · home control · discover
 ///   2  bottom sheet   — app row + quick settings + drag handle
-///   3  app drawer     — the six-column "See all" grid
+///   3  app drawer     — the installed-app grid behind "See all"
 ///   5  toast
 ///
 /// Gestures follow the device:
@@ -69,6 +70,7 @@ class NestShell extends StatefulWidget {
     this.onNcsAddressChanged,
     this.suggested,
     this.actions,
+    this.appCatalog,
     this.animateDecorations = true,
   });
 
@@ -118,6 +120,10 @@ class NestShell extends StatefulWidget {
 
   /// Overrides the drawer contents.
   final List<NestAction>? actions;
+
+  /// The installed-app registry. Null in tests and on desktop; the shell then
+  /// keeps the built-in action set instead of pretending an app list exists.
+  final AppCatalog? appCatalog;
 
   /// When false, every continuously-animating decoration (the weather glyph)
   /// renders a single static frame. Required for screenshot /
@@ -279,13 +285,75 @@ class _NestShellState extends State<NestShell> {
     _c.onSheetDragEnd(v, _m.sheetHeight, isDiscover: _c.sheetProgress > 0.92);
   }
 
-  /// Suggested six: the device ships most-used actions, and these are the
-  /// defaults observed on a freshly-provisioned Hub.
+  /// The dock's six slots.
+  ///
+  /// On a build with a real app registry this is the installed apps, with a
+  /// short preference list so the dock does not change completely every time
+  /// Android reorders packages. The Nest functions only fill slots that apps
+  /// did not take: Weather is not an installed package, but it is still a real
+  /// thing this launcher can do.
+  List<NestAction> get _suggested {
+    final explicit = widget.suggested;
+    if (explicit != null) return explicit;
+
+    final catalog = widget.appCatalog;
+    // Do not flash the built-in lookalikes while the package manager is still
+    // answering. An empty row for a few frames is honest; a row of fake app
+    // icons that swaps under the finger is not.
+    if (catalog != null && !catalog.loaded) return const [];
+
+    final installed = catalog?.installed ?? const <NestAction>[];
+    if (installed.isEmpty) {
+      // Desktop/Tizen keep the built-in Nest functions. Android with a real
+      // registry but no apps gets an empty dock, not six lookalikes.
+      return catalog != null && catalog.supported
+          ? const []
+          : _defaultSuggested();
+    }
+
+    final byPackage = <String, NestAction>{
+      for (final app in installed)
+        if (app.intentPackage != null) app.intentPackage!: app,
+    };
+    final out = <NestAction>[];
+    for (final package in _preferredDockPackages) {
+      final app = byPackage[package];
+      if (app != null && !out.any((a) => a.id == app.id)) out.add(app);
+    }
+    for (final app in installed) {
+      if (out.length >= 6) break;
+      if (!out.any((a) => a.id == app.id)) out.add(app);
+    }
+    for (final action in _defaultSuggested()) {
+      if (out.length >= 6) break;
+      // Weather, Timer, Calendar and Broadcast are launcher functions, not
+      // installed apps, so they may fill a spare slot. YouTube and Spotify are
+      // only allowed in if a real installed package supplied them above.
+      if (!_nestFunctionIds.contains(action.id)) continue;
+      if (!out.any((a) => a.id == action.id)) out.add(action);
+    }
+    return out;
+  }
+
+  static const List<String> _nestFunctionIds = [
+    'weather',
+    'timer',
+    'calendar',
+    'broadcast',
+  ];
+
+  static const List<String> _preferredDockPackages = [
+    'com.google.android.youtube',
+    'com.spotify.music',
+    'com.google.android.apps.youtube.music',
+    'com.netflix.mediaclient',
+    'com.android.chrome',
+    'com.google.android.apps.photos',
+  ];
+
   /// The device's default six, in the order a freshly-provisioned Hub shows
   /// them (read off the rectified Max photo): weather, YouTube, Spotify,
   /// timer, calendar, broadcast.
-  late final List<NestAction> _suggested = widget.suggested ?? _defaultSuggested();
-
   static List<NestAction> _defaultSuggested() {
     const order = ['weather', 'youtube', 'spotify', 'timer', 'calendar', 'broadcast'];
     return [
@@ -294,9 +362,23 @@ class _NestShellState extends State<NestShell> {
     ];
   }
 
-  late final List<NestAction> _actions =
-      widget.actions ??
-      (List<NestAction>.from(kNestActions)..sort((a, b) => a.label.compareTo(b.label)));
+  List<NestAction> get _actions {
+    final explicit = widget.actions;
+    if (explicit != null) return explicit;
+
+    final catalog = widget.appCatalog;
+    if (catalog != null) {
+      if (!catalog.loaded) return const [];
+      if (catalog.supported) {
+        // An empty answer is an answer. Do not replace it with the built-in
+        // lookalike set just because it is less empty.
+        return catalog.installed;
+      }
+    }
+
+    return List<NestAction>.from(kNestActions)
+      ..sort((a, b) => a.label.compareTo(b.label));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -394,6 +476,7 @@ class _NestShellState extends State<NestShell> {
             if (widget.photos != null) widget.photos!,
             if (widget.assistant != null) widget.assistant!,
             if (widget.todo != null) widget.todo!,
+            if (widget.appCatalog != null) widget.appCatalog!,
           ]),
           builder: (context, _) {
             final palette = _c.palette;
@@ -560,18 +643,40 @@ class _NestShellState extends State<NestShell> {
                                     Positioned(
                                       left: 0,
                                       right: 0,
-                                      bottom:
-                                          _m.size.height - _m.px(NestMetrics.homeHandleCenterY) - 4,
+                                      // The grabber is the touch target, not
+                                      // just the five-pixel pill. A 48-pixel
+                                      // transparent band around it is the
+                                      // difference between "tap the handle"
+                                      // and "hit a hairline".
+                                      bottom: _m.size.height -
+                                          _m.px(NestMetrics.homeHandleCenterY) -
+                                          _m.px(24),
                                       child: Opacity(
                                         opacity: 1 - progress * 2,
                                         child: Center(
-                                          child: DragHandle(
-                                            // White on the photo frame, palette
-                                            // ink elsewhere.
-                                            color: _c.page == ShellPage.home
-                                                ? const Color(0xFFFFFFFF)
-                                                : palette.onSurface,
-                                            scale: _m.u,
+                                          child: Semantics(
+                                            button: true,
+                                            label: 'Open apps',
+                                            child: GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onTap: _c.toggleSheet,
+                                              child: SizedBox(
+                                                width: _m.px(140),
+                                                height: _m.px(48),
+                                                child: Center(
+                                                  child: DragHandle(
+                                                    // White on the photo frame,
+                                                    // palette ink elsewhere.
+                                                    color: _c.page ==
+                                                            ShellPage.home
+                                                        ? const Color(
+                                                            0xFFFFFFFF)
+                                                        : palette.onSurface,
+                                                    scale: _m.u,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -591,12 +696,38 @@ class _NestShellState extends State<NestShell> {
                               actions: _actions,
                               reveal: _c.sheetProgress,
                               onActionTap: _c.openAction,
+                              onClose: _c.closeSheet,
+                              loading: widget.appCatalog?.isLoading ?? false,
                             ),
                           ),
 
                         // ── Toast ──────────────────────────────────────────
-                        if (_c.toast != null)
-                          _Toast(text: _c.toast!, palette: palette, metrics: _m),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 180),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, animation) {
+                            final slide = Tween<Offset>(
+                              begin: const Offset(0, 0.08),
+                              end: Offset.zero,
+                            ).animate(animation);
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: slide,
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: _c.toast == null
+                              ? const SizedBox.shrink(key: ValueKey('no-toast'))
+                              : _Toast(
+                                  key: ValueKey(_c.toast),
+                                  text: _c.toast!,
+                                  palette: palette,
+                                  metrics: _m,
+                                ),
+                        ),
                       ],
                     ),
                   ),
@@ -1941,7 +2072,12 @@ class _HomeControlPage extends StatelessWidget {
 }
 
 class _Toast extends StatelessWidget {
-  const _Toast({required this.text, required this.palette, required this.metrics});
+  const _Toast({
+    super.key,
+    required this.text,
+    required this.palette,
+    required this.metrics,
+  });
 
   final String text;
   final AmbientPalette palette;
