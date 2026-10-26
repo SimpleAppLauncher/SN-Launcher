@@ -93,3 +93,6 @@ dist/
 # android/app/src/main/jniLibs, so the APK can be built without a Rust
 # toolchain — but the intermediate cargo target directory is not.
 native/licence_filter/target/
+
+# Downloaded by tool/build_icons.py; regenerate it instead of committing it.
+.msym-cache/
