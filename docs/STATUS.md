@@ -1,6 +1,6 @@
 # Status: what works, what does not, and what to do next
 
-Written against the tree after the installed-app drawer landed. 261 tests pass
+Written against the tree after the installed-app drawer landed. 262 tests pass
 and one is skipped; both release variants were installed and hardware-verified
 on the Nokia T20 before this UI change, and the ef on the SM-X110. The new
 installed-app path has **not** been run on either tablet yet. This file exists

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sn_launcher/src/screens/nest_shell.dart';
@@ -55,6 +57,23 @@ void main() {
       expect(
         pages.asMap().keys.toList(),
         List.generate(pages.length, (i) => i),
+      );
+    });
+
+    test('the shipped reduced build is exactly home and digest', () {
+      // The normal build must have no Home control stop and no blank stop for
+      // the `discover` sheet sentinel. This is the whole carousel, not a
+      // subset check: a subset check would still pass with a blank page added.
+      FeatureFlags.forTesting = FeatureFlags.parse(
+        File('assets/features.json').readAsStringSync(),
+        'reduced',
+      );
+      final c = controller();
+      addTearDown(c.dispose);
+      expect(
+        c.availablePages,
+        [ShellPage.home, ShellPage.digest],
+        reason: 'normal build must not expose Home control or a blank page',
       );
     });
 
