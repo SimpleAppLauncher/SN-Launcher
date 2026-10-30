@@ -107,6 +107,9 @@ void main() {
       // ef build uses. It was never a feature difference between the two —
       // only a flag that happened to be off.
       'photoRotation',
+      // Added 2026-10-30 at the owner's request: the normal build gets the ef
+      // build's live Commons discovery, not only the hand-checked pool.
+      'photoDiscovery',
     };
 
     test('contains exactly the intended features', () {
@@ -153,9 +156,6 @@ void main() {
         'themePicker',
         'weather',
         'sunTheme',
-        // ef-only: the reduced build rotates through the hand-checked pool,
-        // never through live Commons discovery.
-        'photoDiscovery',
       ]) {
         expect(f.isOn(extra), isFalse, reason: '$extra leaked into reduced');
       }

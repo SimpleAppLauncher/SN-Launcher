@@ -2,12 +2,13 @@
 # Proves which permissions an APK actually declares.
 #
 # This exists because Google Play Protect warns on install when an app asks for
-# the microphone, the calendar, the location, or the notification listener, and
-# the warning is correct: each of those can read something private, and the
-# notification listener can read every notification on the device.
+# the microphone, the calendar, or the location, and the warning is correct:
+# each of those can read something private.
 #
-# The safe build must declare none of them. If this script fails, the build is
-# not the build people are supposed to be installing.
+# The safe build must declare none of those runtime permissions. The
+# notification-listener service is not checked here: it is always declared so
+# the launcher can read active media sessions, but it is bound by the system
+# and does nothing until the user grants Notification access in Settings.
 #
 #     tool/verify_permissions.sh <apk> [expected: safe|sensitive]
 set -uo pipefail

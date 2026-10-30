@@ -68,12 +68,7 @@ class NowPlayingCard extends StatelessWidget {
             color: p.surface,
             borderRadius: BorderRadius.circular(m.px(20)),
           ),
-          padding: EdgeInsets.fromLTRB(
-            m.px(16),
-            m.px(14),
-            m.px(16),
-            m.px(12),
-          ),
+          padding: EdgeInsets.fromLTRB(m.px(16), m.px(14), m.px(16), m.px(12)),
           child: _body(state),
         );
       },
@@ -86,7 +81,75 @@ class NowPlayingCard extends StatelessWidget {
     if (state.error.isNotEmpty) return _errorView(state);
     final track = state.track;
     if (track == null) return _idleView(state);
+    // Another app's session gets the transport that app advertised. The
+    // buttons are wired through PlaybackService to that session's controller,
+    // so they do not reach this launcher's own player.
+    if (track.isExternal) return _externalView(state, track);
     return _playerView(state, track);
+  }
+
+  /// What another app is playing, with only the transport it advertised.
+  ///
+  /// A `MediaController` is the system's write side for the other app's
+  /// session, so these buttons really pause or skip Spotify rather than
+  /// talking to our own player. A session that publishes no skip action gets
+  /// no skip button; an unavailable control is left out, not drawn dead.
+  Widget _externalView(PlaybackState state, Track track) {
+    final m = metrics;
+    final p = palette;
+    final t = type;
+    final canToggle = state.playing ? state.canPause : state.canPlay;
+    final hasTransport = canToggle || state.canPrevious || state.canNext;
+    return Column(
+      key: const ValueKey('now-playing-external'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              state.playing ? NestIcons.GraphicEq : NestIcons.Pause,
+              size: m.px(22),
+              color: p.onSurfaceVariant,
+            ),
+            SizedBox(width: m.px(12)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (track.title.isNotEmpty)
+                    Text(
+                      track.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.sheetTitle(color: p.onSurfaceStrong),
+                    ),
+                  if (track.artist.isNotEmpty)
+                    Text(
+                      track.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.caption(color: p.onSurfaceVariant),
+                    ),
+                  SizedBox(height: m.px(2)),
+                  Text(
+                    state.playing
+                        ? 'Playing in another app'
+                        : 'Paused in another app',
+                    style: t.caption(color: p.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (hasTransport) ...[
+          SizedBox(height: m.px(8)),
+          _transport(state, external: true),
+        ],
+      ],
+    );
   }
 
   /// Failure, in words, with no working-looking player behind it.
@@ -109,10 +172,7 @@ class NowPlayingCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                state.error,
-                style: t.body(color: p.onSurfaceStrong),
-              ),
+              Text(state.error, style: t.body(color: p.onSurfaceStrong)),
               if (label.isNotEmpty) ...[
                 SizedBox(height: m.px(4)),
                 Text(
@@ -248,12 +308,15 @@ class NowPlayingCard extends StatelessWidget {
     );
   }
 
-  Widget _transport(PlaybackState state) {
+  Widget _transport(PlaybackState state, {bool external = false}) {
     final m = metrics;
     final p = palette;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
+    final showPrevious = !external || state.canPrevious;
+    final showNext = !external || state.canNext;
+    final showToggle =
+        !external || (state.playing ? state.canPause : state.canPlay);
+    final buttons = <Widget>[
+      if (showPrevious)
         _button(
           key: const ValueKey('now-playing-previous'),
           onTap: () => playback.previous(),
@@ -263,7 +326,7 @@ class NowPlayingCard extends StatelessWidget {
             color: p.onSurfaceStrong,
           ),
         ),
-        SizedBox(width: m.px(20)),
+      if (showToggle)
         _button(
           key: const ValueKey('now-playing-play-pause'),
           onTap: state.playing ? _pause : _resume,
@@ -294,7 +357,7 @@ class NowPlayingCard extends StatelessWidget {
                   ),
           ),
         ),
-        SizedBox(width: m.px(20)),
+      if (showNext)
         _button(
           key: const ValueKey('now-playing-next'),
           onTap: () => playback.next(),
@@ -304,6 +367,14 @@ class NowPlayingCard extends StatelessWidget {
             color: p.onSurfaceStrong,
           ),
         ),
+    ];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < buttons.length; i++) ...[
+          if (i > 0) SizedBox(width: m.px(20)),
+          buttons[i],
+        ],
       ],
     );
   }
@@ -323,10 +394,7 @@ class NowPlayingCard extends StatelessWidget {
       key: key,
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Padding(
-        padding: EdgeInsets.all(metrics.px(8)),
-        child: child,
-      ),
+      child: Padding(padding: EdgeInsets.all(metrics.px(8)), child: child),
     );
   }
 }

@@ -47,8 +47,9 @@ class FeatureFlags {
     'ncsPlayer',
     'photoRotation',
     // Fetches new photographs from Wikimedia Commons at runtime instead of
-    // using the hand-checked pool. ef only: the reduced build keeps the
-    // checked pool, which is the behaviour that was already there.
+    // using only the hand-checked pool. On in both builds since 2026-10-30:
+    // the normal build got the ef build's live rotation at the owner's
+    // request. The checked pool remains the fallback when discovery fails.
     'photoDiscovery',
     'themePicker',
     'calendar',

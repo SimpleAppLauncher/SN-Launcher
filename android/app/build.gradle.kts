@@ -75,12 +75,16 @@ android {
 
     // ── Sensitive permissions ────────────────────────────────────────────────
     //
-    // Off by default. The base manifest declares no microphone, no calendar,
-    // no location and no notification listener, because Google Play Protect
-    // warns about all four at install time and the warning is correct: each
-    // can read something private.
+    // Off by default. The base manifest declares no microphone, no calendar
+    // and no location, because Google Play Protect warns about those at install
+    // time and the warning is correct: each can read something private.
     //
-    // A build that wants them merges src/sensitive/manifest-fragment.xml in:
+    // The notification-listener service is not part of this switch. It is
+    // always in the base manifest because the now-playing strip needs it, and
+    // the user must grant Notification access separately in Settings.
+    //
+    // A build that wants the three runtime permissions merges
+    // src/sensitive/manifest-fragment.xml in:
     //
     //     flutter build apk --release -PsnSensitive=true
     //
@@ -103,10 +107,8 @@ android {
         // cannot fail is a string replacement. The *result* is what gets
         // validated, by the manifest merger, and by the permission dump in
         // tool/verify_permissions.sh.
-        val serviceFragment = file("src/sensitive/manifest-service.xml")
         val merged = base.readText()
             .replace("<!-- SENSITIVE-PERMISSIONS -->", fragment.readText().trimEnd())
-            .replace("<!-- SENSITIVE-SERVICE -->", serviceFragment.readText().trimEnd())
         sensitiveManifest.get().asFile.apply {
             parentFile.mkdirs()
             writeText(merged)

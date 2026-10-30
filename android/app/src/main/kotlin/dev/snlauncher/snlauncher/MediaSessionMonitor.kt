@@ -5,6 +5,8 @@ import android.content.Context
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Handler
+import android.os.Looper
 import android.service.notification.NotificationListenerService
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
@@ -60,8 +62,8 @@ class MediaSessionListener : NotificationListenerService() {
 }
 
 /**
- * Reads the system's active media sessions and pushes the interesting one to
- * Flutter.
+ * Reads the system's active media sessions, pushes the interesting one to
+ * Flutter, and writes transport commands back to that same controller.
  */
 class MediaSessionMonitor(
     private val context: Context,
@@ -74,7 +76,22 @@ class MediaSessionMonitor(
 
     private val channel = MethodChannel(messenger, CHANNEL)
     private val executor = Executors.newSingleThreadExecutor()
+    private val main = Handler(Looper.getMainLooper())
     private var listening = false
+
+    /**
+     * The controller for the session currently shown, kept so a transport
+     * button can write to the app that owns the audio. `getActiveSessions`
+     * hands back MediaControllers rather than read-only sessions for exactly
+     * this reason; throwing the controller away made the card display-only.
+     */
+    @Volatile
+    private var currentController: MediaController? = null
+
+    private data class Candidate(
+        val controller: MediaController,
+        val reading: Map<String, Any?>,
+    )
 
     init {
         MediaSessionListener.bound = this
@@ -88,6 +105,7 @@ class MediaSessionMonitor(
             when (call.method) {
                 "hasPermission" -> result.success(hasPermission())
                 "sessions" -> result.success(best())
+                "command" -> result.success(command(call.argument<String>("action") ?: ""))
                 "openSettings" -> {
                     try {
                         context.startActivity(settingsIntent())
@@ -148,15 +166,78 @@ class MediaSessionMonitor(
         } catch (_: SecurityException) {
             // Permission not granted. Returning null is correct: the caller
             // falls back and the card shows nothing rather than guessing.
+            currentController = null
             return null
-        } ?: return null
+        } ?: run {
+            currentController = null
+            return null
+        }
 
-        val candidates = sessions.mapNotNull { c -> describe(c) }
-        if (candidates.isEmpty()) return null
-        return candidates.maxWithOrNull(
-            compareBy<Map<String, Any?>> { (it["playing"] as? Boolean) == true }
-                .thenBy { (it["positionMs"] as? Long) ?: 0L },
+        val candidates = sessions.mapNotNull { c ->
+            describe(c)?.let { Candidate(c, it) }
+        }
+        if (candidates.isEmpty()) {
+            currentController = null
+            return null
+        }
+        val chosen = candidates.maxWithOrNull(
+            compareBy<Candidate> { (it.reading["playing"] as? Boolean) == true }
+                .thenBy { (it.reading["positionMs"] as? Long) ?: 0L },
         )
+        currentController = chosen?.controller
+        return chosen?.reading
+    }
+
+    /**
+     * Sends one transport command to the session currently on screen.
+     *
+     * Capability-checked against the actions the other app published. Returns
+     * false rather than pretending a command was accepted: the card keeps its
+     * last real state, and a button that the app did not advertise is never
+     * drawn in the first place.
+     */
+    fun command(action: String): Boolean {
+        val c = currentController ?: return false
+        val transport = c.transportControls ?: return false
+        val state = try {
+            c.playbackState
+        } catch (_: Exception) {
+            null
+        } ?: return false
+        val actions = state.actions
+        // A session can disappear between the choose and the press. A failed
+        // write is reported as false, never as an optimistic state.
+        return try {
+            when (action) {
+                "play" -> {
+                    val supported = actions and
+                        (PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PLAY_PAUSE) != 0L
+                    if (!supported) return false
+                    transport.play()
+                    true
+                }
+                "pause" -> {
+                    val supported = actions and
+                        (PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE) != 0L
+                    if (!supported) return false
+                    transport.pause()
+                    true
+                }
+                "next" -> {
+                    if (actions and PlaybackState.ACTION_SKIP_TO_NEXT == 0L) return false
+                    transport.skipToNext()
+                    true
+                }
+                "previous" -> {
+                    if (actions and PlaybackState.ACTION_SKIP_TO_PREVIOUS == 0L) return false
+                    transport.skipToPrevious()
+                    true
+                }
+                else -> false
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun describe(session: MediaController): Map<String, Any?>? {
@@ -174,6 +255,13 @@ class MediaSessionMonitor(
         val artPath = art?.let { writeArtwork(it) } ?: ""
 
         val state = session.getPlaybackState()
+        val actions = state?.actions ?: 0L
+        val canPlay = actions and
+            (PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PLAY_PAUSE) != 0L
+        val canPause = actions and
+            (PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE) != 0L
+        val canNext = actions and PlaybackState.ACTION_SKIP_TO_NEXT != 0L
+        val canPrevious = actions and PlaybackState.ACTION_SKIP_TO_PREVIOUS != 0L
         val position = (state?.position ?: 0L)
         val duration = meta.getLong(
             android.media.MediaMetadata.METADATA_KEY_DURATION,
@@ -208,6 +296,10 @@ class MediaSessionMonitor(
             "artworkPath" to artPath,
             "playing" to (state?.state == PlaybackState.STATE_PLAYING),
             "loading" to (state?.state == PlaybackState.STATE_BUFFERING),
+            "canPlay" to canPlay,
+            "canPause" to canPause,
+            "canNext" to canNext,
+            "canPrevious" to canPrevious,
             "positionMs" to resolved,
             "durationMs" to duration,
         )
@@ -257,7 +349,12 @@ class MediaSessionMonitor(
      * alternative is a card that shows a track the user has already paused.
      */
     fun onSessionsMayHaveChanged() {
-        if (!listening || !hasPermission()) return
+        // The notification callback only arrives while the listener is bound,
+        // so `listening` is not a useful gate here — and it was actively
+        // harmful when the activity attached after the service: the callback
+        // fired, saw listening=false, and dropped the new track. Permission is
+        // the only thing that decides whether reading is allowed.
+        if (!hasPermission()) return
         executor.execute { push(best()) }
     }
 
@@ -271,15 +368,23 @@ class MediaSessionMonitor(
     }
 
     private fun push(session: Map<String, Any?>?) {
-        try {
-            channel.invokeMethod("sessionChanged", session)
-        } catch (_: Exception) {
-            // Engine gone. Nothing to do.
+        // Platform channel calls belong on the main thread. This used to be
+        // invoked directly from the session executor, which meant a changed
+        // track could be read and then silently never reach Dart. The Dart
+        // poll masked it while the launcher was foregrounded; a backgrounded
+        // launcher kept the old song until it was restarted.
+        main.post {
+            try {
+                channel.invokeMethod("sessionChanged", session)
+            } catch (_: Exception) {
+                // Engine gone. Nothing to do.
+            }
         }
     }
 
     fun dispose() {
         listening = false
+        currentController = null
         MediaSessionListener.bound = null
         channel.setMethodCallHandler(null)
         executor.shutdownNow()

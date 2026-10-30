@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/nest_action.dart' show AssistantBackend, availableThemes;
 import '../state/shell_controller.dart';
+import '../services/device_media_watcher.dart';
 import '../services/feature_flags.dart';
 import '../theme/ambient_palette.dart';
 import '../theme/nest_icons.dart';
@@ -103,6 +104,7 @@ class SettingsPage extends StatelessWidget {
     required this.palette,
     required this.controller,
     required this.assistant,
+    this.media,
     this.onAssistantChanged,
     this.onTestConnection,
   });
@@ -115,6 +117,13 @@ class SettingsPage extends StatelessWidget {
   /// Current assistant configuration. The source of truth lives in the caller;
   /// this page never mutates it in place, only reports edits.
   final AssistantSettings assistant;
+
+  /// Reads other apps' active media sessions, when Android permits it.
+  ///
+  /// Null on desktop and in tests. The section is hidden rather than shown
+  /// disabled: there is no notification-access setting to grant there, and a
+  /// dead toggle would claim a capability the platform does not have.
+  final DeviceMediaWatcher? media;
 
   /// Called whenever the user changes anything about the assistant.
   ///
@@ -333,6 +342,46 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
+  Widget _nowPlaying(NestMetrics m) {
+    final watcher = media!;
+    final granted = watcher.hasPermission;
+    return _Section(
+      metrics: m,
+      type: type,
+      palette: palette,
+      icon: NestIcons.GraphicEq,
+      title: 'Now playing',
+      children: [
+        Text(
+          granted
+              ? 'Notification access is granted. The launcher shows what '
+                  'another app is playing.'
+              : watcher.explanation,
+          style: type.caption(color: palette.onSurfaceStrong),
+        ),
+        SizedBox(height: m.px(10)),
+        OutlinedButton(
+          onPressed: watcher.requestAccess,
+          style: OutlinedButton.styleFrom(
+            shape: const StadiumBorder(),
+            padding: EdgeInsets.symmetric(horizontal: m.px(16)),
+          ),
+          child: Text(
+            granted ? 'Change access' : 'Allow notification access',
+            style: type.caption(color: palette.onSurfaceStrong),
+          ),
+        ),
+        SizedBox(height: m.px(10)),
+        Text(
+          'Android calls this Notification access. The launcher reads active '
+          'media sessions only; it does not show or store notification '
+          'content.',
+          style: type.caption(color: palette.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+
   Widget _assistant(NestMetrics m) {
     final a = assistant;
     final interactive = a.enabled && onAssistantChanged != null;
@@ -488,7 +537,7 @@ class SettingsPage extends StatelessWidget {
     // listen to the controller. A settings page rebuilding during a drag is a
     // dozen widgets — trivial next to the sheet's budget.
     return AnimatedBuilder(
-      animation: controller,
+      animation: Listenable.merge(<Listenable>[controller, ?media]),
       builder: (context, _) => Theme(
         // Text fields, sliders and switches all reach for the ambient scheme.
         // The shell already wraps itself in this theme; wrapping again is
@@ -518,6 +567,10 @@ class SettingsPage extends StatelessWidget {
                         _appearance(m),
                         SizedBox(height: m.px(14)),
                         _display(m),
+                        if (media != null && media!.supported) ...[
+                          SizedBox(height: m.px(14)),
+                          _nowPlaying(m),
+                        ],
                         SizedBox(height: m.px(14)),
                         _assistant(m),
                         SizedBox(height: m.px(14)),

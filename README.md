@@ -224,6 +224,14 @@ a desktop and what does not, and the now-playing file contract that lets
 another application on the machine — NCS-SMLauncher, chiefly — show its track
 on the launcher's card.
 
+On Android the route is the system itself: the base build declares a
+notification-listener service, and once you grant Notification access in
+**Settings → Now playing**, any app's active media session appears as a small
+strip on the home photo. The strip offers play/pause and skip only for the
+transport actions that app actually advertises, and sends them through
+Android's `MediaController` to the app that owns the audio. A session that
+advertises none stays display-only.
+
 **[INFO.md](INFO.md)** has everything else: how the pixel measurements were
 taken and what is *not* measured, the rendering architecture, the photo
 licensing pipeline, the Gradle quirks, the signing situation, and the honest

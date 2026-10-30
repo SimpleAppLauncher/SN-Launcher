@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sn_launcher/src/services/device_media_watcher.dart';
 import 'package:sn_launcher/src/services/playback_service.dart';
 import 'package:sn_launcher/src/theme/ambient_palette.dart';
 import 'package:sn_launcher/src/theme/nest_icons.dart';
@@ -18,6 +19,7 @@ const _playPauseKey = ValueKey('now-playing-play-pause');
 const _previousKey = ValueKey('now-playing-previous');
 const _nextKey = ValueKey('now-playing-next');
 const _openKey = ValueKey('now-playing-open');
+const _externalKey = ValueKey('now-playing-external');
 const _shotKey = ValueKey('now-playing-shot');
 
 /// A player whose state the test sets directly.
@@ -74,14 +76,13 @@ PlaybackState _playing({
   bool loading = false,
   Duration position = const Duration(seconds: 10),
   Duration duration = const Duration(seconds: 100),
-}) =>
-    PlaybackState(
-      playing: playing,
-      loading: loading,
-      position: position,
-      duration: duration,
-      track: track,
-    );
+}) => PlaybackState(
+  playing: playing,
+  loading: loading,
+  position: position,
+  duration: duration,
+  track: track,
+);
 
 /// A live radio track. The duration is deliberately *set* — a live stream
 /// whose platform happens to report a length must still hide the total, so
@@ -154,8 +155,9 @@ void main() {
   setUpAll(_loadRealFonts);
 
   group('when nothing is playing', () {
-    testWidgets('it says so instead of showing an empty player',
-        (tester) async {
+    testWidgets('it says so instead of showing an empty player', (
+      tester,
+    ) async {
       await _pump(tester, const PlaybackState());
       expect(find.text('Nothing playing'), findsOneWidget);
       expect(find.byKey(_scrubberKey), findsNothing);
@@ -170,11 +172,125 @@ void main() {
       );
     });
 
-    testWidgets('while the platform is still loading it says that',
-        (tester) async {
+    testWidgets('while the platform is still loading it says that', (
+      tester,
+    ) async {
       await _pump(tester, const PlaybackState(loading: true));
       expect(find.text('Loading…'), findsOneWidget);
       expect(find.text('Nothing playing'), findsNothing);
+    });
+  });
+
+  group('a track from another app', () {
+    const external = Track(
+      url: 'external:com.spotify.music',
+      title: 'Nightcall',
+      artist: 'Kavinsky',
+    );
+
+    testWidgets('shows the transport the other app advertises', (tester) async {
+      final fake = await _pump(
+        tester,
+        const PlaybackState(
+          playing: true,
+          track: external,
+          canPlay: true,
+          canPause: true,
+          canNext: true,
+          canPrevious: true,
+        ),
+      );
+
+      expect(find.byKey(_externalKey), findsOneWidget);
+      expect(find.text('Nightcall'), findsOneWidget);
+      expect(find.text('Kavinsky'), findsOneWidget);
+      expect(find.text('Playing in another app'), findsOneWidget);
+      expect(find.byIcon(NestIcons.GraphicEq), findsOneWidget);
+
+      // These now reach the other app's MediaController through the service;
+      // they do not go to our own player.
+      expect(find.byKey(_playPauseKey), findsOneWidget);
+      expect(find.byKey(_previousKey), findsOneWidget);
+      expect(find.byKey(_nextKey), findsOneWidget);
+      // No scrubber: the external view has no seek UI yet.
+      expect(find.byKey(_scrubberKey), findsNothing);
+      expect(find.byKey(_staticTrackKey), findsNothing);
+
+      await tester.tap(find.byKey(_previousKey));
+      await tester.tap(find.byKey(_playPauseKey));
+      await tester.tap(find.byKey(_nextKey));
+      await tester.pump();
+      expect(fake.calls, ['previous', 'pause', 'next']);
+    });
+
+    testWidgets('draws no transport the other app does not advertise', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        const PlaybackState(
+          playing: true,
+          track: external,
+          canPlay: false,
+          canPause: false,
+          canNext: false,
+          canPrevious: false,
+        ),
+      );
+
+      expect(find.byKey(_externalKey), findsOneWidget);
+      expect(find.text('Playing in another app'), findsOneWidget);
+      expect(find.byKey(_playPauseKey), findsNothing);
+      expect(find.byKey(_previousKey), findsNothing);
+      expect(find.byKey(_nextKey), findsNothing);
+    });
+
+    testWidgets('says paused when the other app pauses', (tester) async {
+      await _pump(
+        tester,
+        const PlaybackState(
+          playing: false,
+          track: external,
+          canPlay: true,
+          canPause: true,
+        ),
+      );
+
+      expect(find.byKey(_externalKey), findsOneWidget);
+      expect(find.text('Paused in another app'), findsOneWidget);
+      expect(find.text('Playing in another app'), findsNothing);
+      expect(find.byIcon(NestIcons.Pause), findsOneWidget);
+      expect(find.byIcon(NestIcons.PlayArrow), findsOneWidget);
+    });
+  });
+
+  group('adopting another app session', () {
+    ExternalSession external(String title, {bool canNext = false}) =>
+        ExternalSession(
+          package: 'com.spotify.music',
+          title: title,
+          artist: 'The Stranglers',
+          album: 'Golden Brown',
+          artworkPath: '',
+          playing: true,
+          position: Duration.zero,
+          duration: const Duration(minutes: 3),
+          canPlay: true,
+          canPause: true,
+          canNext: canNext,
+          canPrevious: true,
+        );
+
+    test('a new song replaces the old one without a relaunch', () {
+      final service = PlaybackService();
+      addTearDown(service.dispose);
+
+      service.adoptExternalSession(external('Golden Brown'));
+      service.adoptExternalSession(external('No More Heroes', canNext: true));
+
+      expect(service.state.track?.title, 'No More Heroes');
+      expect(service.state.canNext, isTrue);
+      expect(service.state.canPrevious, isTrue);
     });
   });
 
@@ -188,8 +304,9 @@ void main() {
       expect(find.text('1:40'), findsOneWidget); // total
     });
 
-    testWidgets('the play/pause icon follows the playing state',
-        (tester) async {
+    testWidgets('the play/pause icon follows the playing state', (
+      tester,
+    ) async {
       final fake = await _pump(tester, _playing(playing: true));
       expect(find.byIcon(NestIcons.Pause), findsOneWidget);
       expect(find.byIcon(NestIcons.PlayArrow), findsNothing);
@@ -221,11 +338,7 @@ void main() {
 
     testWidgets('onOpen opens the full player', (tester) async {
       var opened = false;
-      await _pump(
-        tester,
-        _playing(),
-        onOpen: () => opened = true,
-      );
+      await _pump(tester, _playing(), onOpen: () => opened = true);
       await tester.tap(find.byKey(_openKey));
       await tester.pump();
       expect(opened, isTrue);
@@ -245,14 +358,16 @@ void main() {
       final fake = await _pump(tester, _playing());
       expect(find.text('Cirrus'), findsOneWidget);
 
-      fake.set(_playing(
-        track: const Track(
-          url: 'https://example.com/audio/xtal.mp3',
-          title: 'Xtal',
-          artist: 'Autechre',
+      fake.set(
+        _playing(
+          track: const Track(
+            url: 'https://example.com/audio/xtal.mp3',
+            title: 'Xtal',
+            artist: 'Autechre',
+          ),
+          position: Duration.zero,
         ),
-        position: Duration.zero,
-      ));
+      );
       await tester.pump();
 
       expect(find.text('Xtal'), findsOneWidget);
@@ -260,14 +375,13 @@ void main() {
       expect(find.text('Cirrus'), findsNothing);
     });
 
-    testWidgets('an error raised later replaces the player',
-        (tester) async {
+    testWidgets('an error raised later replaces the player', (tester) async {
       final fake = await _pump(tester, _playing());
       expect(find.byKey(_playPauseKey), findsOneWidget);
 
-      fake.set(const PlaybackState(
-        error: 'The player did not accept that track',
-      ));
+      fake.set(
+        const PlaybackState(error: 'The player did not accept that track'),
+      );
       await tester.pump();
 
       expect(find.text('The player did not accept that track'), findsOneWidget);
@@ -282,19 +396,22 @@ void main() {
       expect(find.byKey(_staticTrackKey), findsOneWidget);
     });
 
-    testWidgets('hides the total and says Live, but keeps the elapsed',
-        (tester) async {
+    testWidgets('hides the total and says Live, but keeps the elapsed', (
+      tester,
+    ) async {
       await _pump(tester, _liveState);
       expect(find.text('Live'), findsOneWidget);
       expect(find.text('1:00:00'), findsNothing);
       expect(find.text('5:00'), findsOneWidget);
     });
 
-    testWidgets('cannot be seeked by dragging the static track',
-        (tester) async {
+    testWidgets('cannot be seeked by dragging the static track', (
+      tester,
+    ) async {
       final fake = await _pump(tester, _liveState);
-      final gesture =
-          await tester.startGesture(tester.getCenter(find.byKey(_staticTrackKey)));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(_staticTrackKey)),
+      );
       await gesture.moveBy(const Offset(80, 0));
       await tester.pump();
       await gesture.up();
@@ -304,8 +421,9 @@ void main() {
   });
 
   group('when the duration is unknown', () {
-    testWidgets('the total is hidden rather than shown as 0:00',
-        (tester) async {
+    testWidgets('the total is hidden rather than shown as 0:00', (
+      tester,
+    ) async {
       await _pump(
         tester,
         PlaybackState(
@@ -327,8 +445,9 @@ void main() {
   });
 
   group('the error', () {
-    testWidgets('is shown verbatim, instead of a working-looking player',
-        (tester) async {
+    testWidgets('is shown verbatim, instead of a working-looking player', (
+      tester,
+    ) async {
       await _pump(
         tester,
         const PlaybackState(error: 'This build has no audio player'),
@@ -336,22 +455,26 @@ void main() {
       expect(find.text('This build has no audio player'), findsOneWidget);
       expect(find.byKey(_playPauseKey), findsNothing);
       expect(find.byKey(_scrubberKey), findsNothing);
-      expect(find.text('Nothing playing'), findsNothing,
-          reason: 'a failure must not be dressed up as an idle card');
+      expect(
+        find.text('Nothing playing'),
+        findsNothing,
+        reason: 'a failure must not be dressed up as an idle card',
+      );
     });
 
-    testWidgets('still wins when a track is loaded alongside it',
-        (tester) async {
+    testWidgets('still wins when a track is loaded alongside it', (
+      tester,
+    ) async {
       await _pump(
         tester,
-        PlaybackState(
-          error: 'Playback failed',
-          track: _track,
-        ),
+        PlaybackState(error: 'Playback failed', track: _track),
       );
       expect(find.text('Playback failed'), findsOneWidget);
-      expect(find.byKey(_playPauseKey), findsNothing,
-          reason: 'no normal-looking player over a failure');
+      expect(
+        find.byKey(_playPauseKey),
+        findsNothing,
+        reason: 'no normal-looking player over a failure',
+      );
     });
   });
 
@@ -369,8 +492,11 @@ void main() {
       // value does not depend on where the recogniser decided to fire.
       await gesture.moveBy(Offset(width * 0.15, 0));
       await tester.pump(const Duration(milliseconds: 50));
-      expect(fake.seeks, isEmpty,
-          reason: 'seeking fires on release, not on every pointer move');
+      expect(
+        fake.seeks,
+        isEmpty,
+        reason: 'seeking fires on release, not on every pointer move',
+      );
 
       await gesture.moveBy(Offset(width * 0.10, 0));
       await tester.pump(const Duration(milliseconds: 50));
@@ -388,8 +514,7 @@ void main() {
       );
     });
 
-    testWidgets('thumb sits where the position says it should',
-        (tester) async {
+    testWidgets('thumb sits where the position says it should', (tester) async {
       // 10s into a 100s track: the fill must be a tenth of the width. If the
       // bar ever renders at a constant width, this is what catches it.
       await _pump(tester, _playing());
@@ -405,8 +530,11 @@ void main() {
           .map((c) => c.constraints?.maxWidth)
           .whereType<double>()
           .toList();
-      expect(widths, hasLength(3),
-          reason: 'track, fill and thumb, each explicitly sized');
+      expect(
+        widths,
+        hasLength(3),
+        reason: 'track, fill and thumb, each explicitly sized',
+      );
       expect(
         widths[1] / widths[0],
         closeTo(0.1, 0.01),
@@ -425,8 +553,10 @@ void main() {
     const baselineKey = ValueKey('now-playing-baseline');
 
     double inkIn(ByteData bytes, int width, int height, Rect rect) {
-      final data =
-          bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes);
+      final data = bytes.buffer.asUint8List(
+        bytes.offsetInBytes,
+        bytes.lengthInBytes,
+      );
       var x0 = rect.left.floor();
       var y0 = rect.top.floor();
       var x1 = rect.right.ceil();
@@ -457,11 +587,11 @@ void main() {
     ) async {
       var result = 0.0;
       await tester.runAsync(() async {
-        final repaint =
-            tester.renderObject<RenderRepaintBoundary>(boundary);
+        final repaint = tester.renderObject<RenderRepaintBoundary>(boundary);
         final image = await repaint.toImage(pixelRatio: 1.0);
-        final bytes =
-            await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+        final bytes = await image.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        );
         if (bytes == null) return;
         final origin = tester.getTopLeft(boundary);
         result = inkIn(
@@ -474,16 +604,20 @@ void main() {
       return result;
     }
 
-    testWidgets('the title and the play glyph are ink, not boxes',
-        (tester) async {
+    testWidgets('the title and the play glyph are ink, not boxes', (
+      tester,
+    ) async {
       await _pump(tester, _playing());
 
       // Independent of pixels: an unset font advances every glyph by exactly
       // one em, so a box-font "Cirrus" at 24px would measure ~6 x 24 wide.
       // Google Sans sets it at roughly three ems.
       final titleWidth = tester.getSize(find.text('Cirrus')).width;
-      expect(titleWidth, lessThan(130),
-          reason: 'Cirrus in Google Sans is ~75px; in the box font ~145px');
+      expect(
+        titleWidth,
+        lessThan(130),
+        reason: 'Cirrus in Google Sans is ~75px; in the box font ~145px',
+      );
 
       final titleCov = await coverageOf(
         tester,
@@ -526,19 +660,34 @@ void main() {
         tester.getRect(find.text('III')),
       );
 
-      debugPrint('ink coverage — title: ${titleCov.toStringAsFixed(3)}, '
-          'pause glyph: ${iconCov.toStringAsFixed(3)}, '
-          'box-font baseline: ${blockCov.toStringAsFixed(3)}');
+      debugPrint(
+        'ink coverage — title: ${titleCov.toStringAsFixed(3)}, '
+        'pause glyph: ${iconCov.toStringAsFixed(3)}, '
+        'box-font baseline: ${blockCov.toStringAsFixed(3)}',
+      );
 
-      expect(titleCov, greaterThan(0.05),
-          reason: 'the title rendered nothing at all');
-      expect(titleCov, lessThan(blockCov * 0.75),
-          reason: 'title ink is as dense as solid boxes: wrong font');
-      expect(iconCov, greaterThan(0.05),
-          reason: 'the pause glyph rendered as nothing — missing codepoint '
-              'or font not loaded');
-      expect(iconCov, lessThan(blockCov * 0.75),
-          reason: 'the pause glyph is a solid block, not a glyph');
+      expect(
+        titleCov,
+        greaterThan(0.05),
+        reason: 'the title rendered nothing at all',
+      );
+      expect(
+        titleCov,
+        lessThan(blockCov * 0.75),
+        reason: 'title ink is as dense as solid boxes: wrong font',
+      );
+      expect(
+        iconCov,
+        greaterThan(0.05),
+        reason:
+            'the pause glyph rendered as nothing — missing codepoint '
+            'or font not loaded',
+      );
+      expect(
+        iconCov,
+        lessThan(blockCov * 0.75),
+        reason: 'the pause glyph is a solid block, not a glyph',
+      );
     });
   });
 
@@ -571,6 +720,25 @@ void main() {
     testWidgets('playing', (tester) async {
       await _pump(tester, _playing());
       await shot(tester, 'playing');
+    });
+
+    testWidgets('external', (tester) async {
+      await _pump(
+        tester,
+        const PlaybackState(
+          playing: true,
+          track: Track(
+            url: 'external:com.spotify.music',
+            title: 'Golden Brown - Slowed Down Version',
+            artist: 'The Stranglers',
+          ),
+          canPlay: true,
+          canPause: true,
+          canNext: true,
+          canPrevious: true,
+        ),
+      );
+      await shot(tester, 'external');
     });
 
     testWidgets('live', (tester) async {

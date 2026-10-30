@@ -187,8 +187,10 @@ class _NestShellState extends State<NestShell> {
     if (location == null) return;
     _locationRequested = true;
     final place = await location.resolve();
-    debugPrint('SNLOC resolve -> place=$place error="${location.lastError}" '
-        'resolving=${location.resolving}');
+    debugPrint(
+      'SNLOC resolve -> place=$place error="${location.lastError}" '
+      'resolving=${location.resolving}',
+    );
     // Now that we know where we are, find a photograph of it for the weather
     // page's background. A photograph of a place is only interesting if it is
     // of *this* place.
@@ -273,7 +275,9 @@ class _NestShellState extends State<NestShell> {
   /// second finger cannot cancel the drag in progress.
   int? _dragPointer;
   double _dragStartY = 0;
-  late VelocityTracker _velocity = VelocityTracker.withKind(PointerDeviceKind.touch);
+  late VelocityTracker _velocity = VelocityTracker.withKind(
+    PointerDeviceKind.touch,
+  );
 
   /// Shared tail for pointer-up and pointer-cancel.
   void _settleSheet(PointerEvent e) {
@@ -355,10 +359,18 @@ class _NestShellState extends State<NestShell> {
   /// them (read off the rectified Max photo): weather, YouTube, Spotify,
   /// timer, calendar, broadcast.
   static List<NestAction> _defaultSuggested() {
-    const order = ['weather', 'youtube', 'spotify', 'timer', 'calendar', 'broadcast'];
+    const order = [
+      'weather',
+      'youtube',
+      'spotify',
+      'timer',
+      'calendar',
+      'broadcast',
+    ];
     return [
       for (final id in order)
-        if (kNestActions.any((a) => a.id == id)) kNestActions.firstWhere((a) => a.id == id),
+        if (kNestActions.any((a) => a.id == id))
+          kNestActions.firstWhere((a) => a.id == id),
     ];
   }
 
@@ -493,13 +505,16 @@ class _NestShellState extends State<NestShell> {
                 // Grabbable from the bottom edge, or anywhere on the sheet
                 // while it is already showing. Restricting this to the bottom
                 // strip is what made the sheet impossible to pull back down.
-                final sheetTop = _m.size.height - _c.sheetProgress * _m.sheetHeight;
-                final onSheet = _c.sheetProgress > 0.02 && e.position.dy > sheetTop;
+                final sheetTop =
+                    _m.size.height - _c.sheetProgress * _m.sheetHeight;
+                final onSheet =
+                    _c.sheetProgress > 0.02 && e.position.dy > sheetTop;
                 if (!onSheet && e.position.dy < _m.size.height * 0.72) return;
 
                 _dragPointer = e.pointer;
                 _dragStartY = e.position.dy;
-                _velocity = VelocityTracker.withKind(e.kind)..addPosition(e.timeStamp, e.position);
+                _velocity = VelocityTracker.withKind(e.kind)
+                  ..addPosition(e.timeStamp, e.position);
                 _c.onSheetDragStart(_c.sheetProgress);
               },
               onPointerMove: (e) {
@@ -507,7 +522,10 @@ class _NestShellState extends State<NestShell> {
                 _velocity.addPosition(e.timeStamp, e.position);
                 // Normalised by the sheet's own travel, so it tracks the
                 // finger 1:1.
-                _c.onSheetDragUpdate(e.position.dy - _dragStartY, _m.sheetHeight);
+                _c.onSheetDragUpdate(
+                  e.position.dy - _dragStartY,
+                  _m.sheetHeight,
+                );
               },
               onPointerUp: (e) => _settleSheet(e),
               onPointerCancel: (e) {
@@ -554,7 +572,10 @@ class _NestShellState extends State<NestShell> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        AmbientBackground(palette: palette, brightness: _c.brightness),
+                        AmbientBackground(
+                          palette: palette,
+                          brightness: _c.brightness,
+                        ),
 
                         // Settings, top-right. Deliberately *not* added to the
                         // quick-settings row: that row is seven buttons wide
@@ -574,7 +595,9 @@ class _NestShellState extends State<NestShell> {
                                 child: Icon(
                                   NestIcons.Settings,
                                   size: _m.px(22),
-                                  color: palette.onSurface.withValues(alpha: 0.55),
+                                  color: palette.onSurface.withValues(
+                                    alpha: 0.55,
+                                  ),
                                 ),
                               ),
                             ),
@@ -632,10 +655,13 @@ class _NestShellState extends State<NestShell> {
                                       volume: _c.volume,
                                       cameraEnabled: true,
                                       onActionTap: _c.openAction,
-                                      onSeeAll: () => _c.goToPage(ShellPage.discover),
+                                      onSeeAll: () =>
+                                          _c.goToPage(ShellPage.discover),
                                       onQuickSettingTap: _handleQuickSetting,
-                                      onBrightnessDrag: (d) => _c.setBrightness(_c.brightness + d),
-                                      onVolumeDrag: (d) => _c.setVolume(_c.volume + d),
+                                      onBrightnessDrag: (d) =>
+                                          _c.setBrightness(_c.brightness + d),
+                                      onVolumeDrag: (d) =>
+                                          _c.setVolume(_c.volume + d),
                                     ),
                                   // The home-screen grabber fades out as the sheet
                                   // takes over the bottom edge.
@@ -648,7 +674,8 @@ class _NestShellState extends State<NestShell> {
                                       // transparent band around it is the
                                       // difference between "tap the handle"
                                       // and "hit a hairline".
-                                      bottom: _m.size.height -
+                                      bottom:
+                                          _m.size.height -
                                           _m.px(NestMetrics.homeHandleCenterY) -
                                           _m.px(24),
                                       child: Opacity(
@@ -667,10 +694,12 @@ class _NestShellState extends State<NestShell> {
                                                   child: DragHandle(
                                                     // White on the photo frame,
                                                     // palette ink elsewhere.
-                                                    color: _c.page ==
+                                                    color:
+                                                        _c.page ==
                                                             ShellPage.home
                                                         ? const Color(
-                                                            0xFFFFFFFF)
+                                                            0xFFFFFFFF,
+                                                          )
                                                         : palette.onSurface,
                                                     scale: _m.u,
                                                   ),
@@ -806,8 +835,10 @@ class _NestShellState extends State<NestShell> {
             // The real Nest shows one: the launcher keeps a small strip
             // visible so you can see what the room is playing without going
             // looking for it. It sits at the top of the home page, out of the
-            // way of the clock.
-            if (widget.playback != null && widget.playback!.state.hasTrack)
+            // way of the clock. The strip listens to the playback service
+            // itself; this page otherwise only rebuilds on the minute, which
+            // made a new song wait for a relaunch.
+            if (widget.playback != null)
               Positioned(
                 top: _m.px(18),
                 right: _m.px(18),
@@ -892,7 +923,8 @@ class _NestShellState extends State<NestShell> {
           // a looping animation never lets the tree go idle, so
           // `pumpAndSettle` would time out waiting for a quiescence that is
           // never coming.
-          isCurrent: widget.controller.page == ShellPage.weather &&
+          isCurrent:
+              widget.controller.page == ShellPage.weather &&
               widget.animateDecorations,
         );
       case ShellPage.music:
@@ -952,6 +984,7 @@ class _NestShellState extends State<NestShell> {
           type: NestType(_m),
           palette: _c.palette,
           controller: _c,
+          media: widget.media,
           assistant: assist == null
               ? const AssistantSettings(
                   enabled: false,
@@ -971,19 +1004,23 @@ class _NestShellState extends State<NestShell> {
     );
   }
 
-  AssistantSettings _assistantSettingsOf(AssistantService a) => AssistantSettings(
+  AssistantSettings _assistantSettingsOf(AssistantService a) =>
+      AssistantSettings(
         enabled: a.enabled,
         backend: a.backend,
         geminiKey: a.geminiKeyPreview,
         homeAssistantUrl: a.homeAssistantUrl,
         // Whether a token exists, never the token: the settings page must not
-      // receive the secret back, only the fact that one is stored.
-      homeAssistantToken: a.homeAssistantTokenSet ? '•' : '',
+        // receive the secret back, only the fact that one is stored.
+        homeAssistantToken: a.homeAssistantTokenSet ? '•' : '',
         voiceEnabled: a.speechEnabled,
         busy: a.busy,
       );
 
-  void _applyAssistantSettings(AssistantService? assist, AssistantSettings next) {
+  void _applyAssistantSettings(
+    AssistantService? assist,
+    AssistantSettings next,
+  ) {
     if (assist == null) return;
     assist.configure(
       enabled: next.enabled,
@@ -1059,7 +1096,9 @@ class _NestShellState extends State<NestShell> {
         // Dynamic → White → Day → Afternoon → Night and back.
         c.cycleTheme();
         c.showToast(
-          c.theme == NestTheme.dynamic ? 'Theme: follows the sun' : 'Theme: ${c.theme.label}',
+          c.theme == NestTheme.dynamic
+              ? 'Theme: follows the sun'
+              : 'Theme: ${c.theme.label}',
         );
 
       case QuickSettingKind.zoomIn:
@@ -1070,7 +1109,9 @@ class _NestShellState extends State<NestShell> {
         c.goToPage(ShellPage.digest);
 
       case QuickSettingKind.feedback:
-        final opened = await c.platform.openUrl('https://support.google.com/googlenest/');
+        final opened = await c.platform.openUrl(
+          'https://support.google.com/googlenest/',
+        );
         if (!opened) {
           // ActionLauncher has an independent path; only complain if both fail.
           final viaLauncher = await c.actionLauncher.openUrl(
@@ -1112,50 +1153,108 @@ class _MiniNowPlaying extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = metrics;
-    final track = playback.state.track;
-    if (track == null) return const SizedBox.shrink();
-    final title = track.title.isEmpty ? 'Playing' : track.title;
+    return AnimatedBuilder(
+      animation: playback,
+      builder: (context, _) {
+        final state = playback.state;
+        final track = state.track;
+        if (track == null) return const SizedBox.shrink();
+        final title = track.title.isEmpty ? 'Playing' : track.title;
+        final showPrevious = !track.isExternal || state.canPrevious;
+        final showNext = !track.isExternal || state.canNext;
+        final showToggle =
+            !track.isExternal ||
+            (state.playing ? state.canPause : state.canPlay);
 
-    return Container(
-      constraints: BoxConstraints(maxWidth: m.px(320)),
-      padding: EdgeInsets.symmetric(horizontal: m.px(12), vertical: m.px(8)),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.42),
-        borderRadius: BorderRadius.circular(m.px(20)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            playback.state.playing ? Icons.graphic_eq : Icons.pause,
-            size: m.px(16),
-            color: Colors.white,
+        return Container(
+          constraints: BoxConstraints(maxWidth: m.px(380)),
+          padding: EdgeInsets.symmetric(
+            horizontal: m.px(12),
+            vertical: m.px(8),
           ),
-          SizedBox(width: m.px(8)),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: type.caption(color: Colors.white),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (track.artist.isNotEmpty)
-                  Text(
-                    track.artist,
-                    style: type.caption(
-                      color: Colors.white.withValues(alpha: 0.7),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.42),
+            borderRadius: BorderRadius.circular(m.px(20)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                state.playing ? Icons.graphic_eq : Icons.pause,
+                size: m.px(16),
+                color: Colors.white,
+              ),
+              SizedBox(width: m.px(8)),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: type.caption(color: Colors.white),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
+                    if (track.artist.isNotEmpty)
+                      Text(
+                        track.artist,
+                        style: type.caption(
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+              if (showPrevious)
+                _control(
+                  key: const ValueKey('home-now-playing-previous'),
+                  label: 'Previous track',
+                  icon: NestIcons.SkipPrevious,
+                  onTap: () => playback.previous(),
+                ),
+              if (showToggle)
+                _control(
+                  key: const ValueKey('home-now-playing-play-pause'),
+                  label: state.playing ? 'Pause' : 'Play',
+                  icon: state.playing ? NestIcons.Pause : NestIcons.PlayArrow,
+                  onTap: state.playing
+                      ? () => playback.pause()
+                      : () => playback.resume(),
+                ),
+              if (showNext)
+                _control(
+                  key: const ValueKey('home-now-playing-next'),
+                  label: 'Next track',
+                  icon: NestIcons.SkipNext,
+                  onTap: () => playback.next(),
+                ),
+            ],
           ),
-        ],
+        );
+      },
+    );
+  }
+
+  Widget _control({
+    required Key key,
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        key: key,
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.all(metrics.px(6)),
+          child: Icon(icon, size: metrics.px(20), color: Colors.white),
+        ),
       ),
     );
   }
@@ -1300,7 +1399,11 @@ class _StationButton extends StatelessWidget {
 }
 
 class _PageLayer extends StatelessWidget {
-  const _PageLayer({required this.offset, required this.child, required this.visible});
+  const _PageLayer({
+    required this.offset,
+    required this.child,
+    required this.visible,
+  });
 
   final double offset;
   final bool visible;
@@ -1505,7 +1608,9 @@ class _DigestPage extends StatelessWidget {
                             e.location,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: type.caption(color: palette.onSurfaceVariant),
+                            style: type.caption(
+                              color: palette.onSurfaceVariant,
+                            ),
                           ),
                       ],
                     ),
@@ -1524,84 +1629,84 @@ class _DigestPage extends StatelessWidget {
   /// app start would add a WebView — and its first page load — to a cold start
   /// that currently measures 0.8s on a UNISOC T610.
   Widget _musicCard(NestMetrics m) => _Card(
-        title: 'Music',
-        metrics: m,
-        palette: palette,
-        type: type,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+    title: 'Music',
+    metrics: m,
+    palette: palette,
+    type: type,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Wrap, not Row: the digest columns are narrow and two labelled
+        // pills side by side overflowed by 68px at 1280 wide.
+        Wrap(
+          spacing: m.px(8),
+          runSpacing: m.px(8),
           children: [
-            // Wrap, not Row: the digest columns are narrow and two labelled
-            // pills side by side overflowed by 68px at 1280 wide.
-            Wrap(
-              spacing: m.px(8),
-              runSpacing: m.px(8),
-              children: [
-                _Toggle(
-                  label: 'YouTube',
-                  on: false,
-                  metrics: m,
-                  type: type,
-                  palette: palette,
-                  onTap: () => onOpenMusic('https://m.youtube.com/', 'YouTube'),
-                ),
-                SizedBox(width: m.px(8)),
-                _Toggle(
-                  label: 'Spotify',
-                  on: false,
-                  metrics: m,
-                  type: type,
-                  palette: palette,
-                  onTap: () => onOpenMusic('https://open.spotify.com/', 'Spotify'),
-                ),
-              ],
+            _Toggle(
+              label: 'YouTube',
+              on: false,
+              metrics: m,
+              type: type,
+              palette: palette,
+              onTap: () => onOpenMusic('https://m.youtube.com/', 'YouTube'),
             ),
-            SizedBox(height: m.px(8)),
-            // "Can be blocked", not "blocked". The filter is installed when
-            // the player opens and the page confirms it; this card is shown
-            // before that has happened, and a card that claims a thing has
-            // already happened is the exact thing this project keeps refusing
-            // to do.
-            // Radio, in the ef build.
-            //
-            // These are the buttons that actually work. The YouTube and
-            // Spotify buttons below open a WebView, and a WebView cannot play
-            // audio once the screen locks — so anything promising background
-            // music has to be a real media stream, and a radio station is
-            // exactly that.
-            if (musicEnabled) ...[
-              SizedBox(height: m.px(10)),
-              for (final station in kRadioStations.take(4))
-                _StationButton(
-                  station: station,
-                  metrics: m,
-                  type: type,
-                  palette: palette,
-                  playing: playback?.state.track?.url == station.streamUrl,
-                  onTap: () => _playStation(station),
-                ),
-            ],
-            Text(
-              'YouTube: ads blocked\nSpotify: not blocked',
-              style: type.caption(color: palette.onSurfaceVariant),
+            SizedBox(width: m.px(8)),
+            _Toggle(
+              label: 'Spotify',
+              on: false,
+              metrics: m,
+              type: type,
+              palette: palette,
+              onTap: () => onOpenMusic('https://open.spotify.com/', 'Spotify'),
             ),
-            // The transport, once there is something to transport. Only when
-            // a track is loaded: an idle player showing empty fields and live
-            // controls looks like a broken app rather than a quiet one.
-            if (playback != null && playback!.state.hasTrack) ...[
-              SizedBox(height: m.px(14)),
-              NowPlayingCard(
-                metrics: m,
-                type: type,
-                palette: palette,
-                playback: playback!,
-                onOpen: () => onOpenMusic('', ''),
-              ),
-            ],
           ],
         ),
-      );
+        SizedBox(height: m.px(8)),
+        // "Can be blocked", not "blocked". The filter is installed when
+        // the player opens and the page confirms it; this card is shown
+        // before that has happened, and a card that claims a thing has
+        // already happened is the exact thing this project keeps refusing
+        // to do.
+        // Radio, in the ef build.
+        //
+        // These are the buttons that actually work. The YouTube and
+        // Spotify buttons below open a WebView, and a WebView cannot play
+        // audio once the screen locks — so anything promising background
+        // music has to be a real media stream, and a radio station is
+        // exactly that.
+        if (musicEnabled) ...[
+          SizedBox(height: m.px(10)),
+          for (final station in kRadioStations.take(4))
+            _StationButton(
+              station: station,
+              metrics: m,
+              type: type,
+              palette: palette,
+              playing: playback?.state.track?.url == station.streamUrl,
+              onTap: () => _playStation(station),
+            ),
+        ],
+        Text(
+          'YouTube: ads blocked\nSpotify: not blocked',
+          style: type.caption(color: palette.onSurfaceVariant),
+        ),
+        // The transport, once there is something to transport. Only when
+        // a track is loaded: an idle player showing empty fields and live
+        // controls looks like a broken app rather than a quiet one.
+        if (playback != null && playback!.state.hasTrack) ...[
+          SizedBox(height: m.px(14)),
+          NowPlayingCard(
+            metrics: m,
+            type: type,
+            palette: palette,
+            playback: playback!,
+            onOpen: () => onOpenMusic('', ''),
+          ),
+        ],
+      ],
+    ),
+  );
 
   /// Rotation controls. Returns null when rotation is not available, so the
   /// caller can drop the column instead of showing a dead card.
@@ -1748,11 +1853,7 @@ class _DigestPage extends StatelessWidget {
     final player = playback;
     if (player == null) return;
     await player.play(
-      Track(
-        url: station.streamUrl,
-        title: station.name,
-        artist: station.blurb,
-      ),
+      Track(url: station.streamUrl, title: station.name, artist: station.blurb),
     );
     // Then ask what is actually playing and correct the label.
     final now = await RadioNowPlaying.fetch(station);
@@ -1779,8 +1880,7 @@ class _DigestPage extends StatelessWidget {
     // separator with it. Hand-writing that is how a collection literal ends up
     // unbalanced — which is the bug this replaced.
     final cards = <({int flex, Widget child})>[
-      if (f.isOn('calendar'))
-        (flex: 3, child: _calendarCard(m)),
+      if (f.isOn('calendar')) (flex: 3, child: _calendarCard(m)),
       if (f.isOn('todo') && todo != null)
         (
           flex: 3,
@@ -1791,8 +1891,7 @@ class _DigestPage extends StatelessWidget {
             type: type,
           ),
         ),
-      if (f.isOn('music'))
-        (flex: 2, child: _musicCard(m)),
+      if (f.isOn('music')) (flex: 2, child: _musicCard(m)),
       if (f.isOn('photoRotation'))
         (flex: 2, child: _photosCard(m) ?? const SizedBox.shrink()),
       if (f.isOn('themePicker'))
@@ -1859,9 +1958,7 @@ class _DigestPage extends StatelessWidget {
             style: type.sheetTitle(color: palette.onSurface),
           ),
           SizedBox(height: m.px(22)),
-          Expanded(
-            child: _cardRow(cards, m),
-          ),
+          Expanded(child: _cardRow(cards, m)),
         ],
       ),
     );
@@ -1943,7 +2040,9 @@ class _ThemeSwatch extends StatelessWidget {
     final m = metrics;
     // Dynamic has no single colour to preview, so show the current live one.
     final preview = theme == NestTheme.dynamic
-        ? AmbientPalette.at(DateTime.now().hour.toDouble() + DateTime.now().minute / 60)
+        ? AmbientPalette.at(
+            DateTime.now().hour.toDouble() + DateTime.now().minute / 60,
+          )
         : AmbientPalette.of(theme);
 
     return GestureDetector(
@@ -2000,7 +2099,9 @@ class _Card extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(metrics.px(18)),
       decoration: BoxDecoration(
-        color: palette.onSurface.withValues(alpha: palette.isDark ? 0.10 : 0.06),
+        color: palette.onSurface.withValues(
+          alpha: palette.isDark ? 0.10 : 0.06,
+        ),
         borderRadius: BorderRadius.circular(metrics.px(18)),
       ),
       child: Column(
@@ -2009,7 +2110,12 @@ class _Card extends StatelessWidget {
           Text(title, style: type.sheetTitle(color: palette.onSurface)),
           SizedBox(height: metrics.px(8)),
           Expanded(
-            child: child ?? Text(body ?? '', style: type.body(color: palette.onSurfaceVariant)),
+            child:
+                child ??
+                Text(
+                  body ?? '',
+                  style: type.body(color: palette.onSurfaceVariant),
+                ),
           ),
         ],
       ),
@@ -2019,7 +2125,11 @@ class _Card extends StatelessWidget {
 
 /// Home control page — the room/device grid reached by swiping down.
 class _HomeControlPage extends StatelessWidget {
-  const _HomeControlPage({required this.metrics, required this.type, required this.palette});
+  const _HomeControlPage({
+    required this.metrics,
+    required this.type,
+    required this.palette,
+  });
 
   final NestMetrics metrics;
   final NestType type;
@@ -2057,7 +2167,9 @@ class _HomeControlPage extends StatelessWidget {
                     height: m.px(76),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: palette.onSurface.withValues(alpha: palette.isDark ? 0.10 : 0.06),
+                      color: palette.onSurface.withValues(
+                        alpha: palette.isDark ? 0.10 : 0.06,
+                      ),
                       borderRadius: BorderRadius.circular(m.px(16)),
                     ),
                     child: Text(c, style: type.body(color: palette.onSurface)),
@@ -2089,7 +2201,10 @@ class _Toast extends StatelessWidget {
       child: Align(
         alignment: const Alignment(0, -0.72),
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: metrics.px(22), vertical: metrics.px(12)),
+          padding: EdgeInsets.symmetric(
+            horizontal: metrics.px(22),
+            vertical: metrics.px(12),
+          ),
           decoration: BoxDecoration(
             color: palette.onSurfaceStrong,
             borderRadius: BorderRadius.circular(metrics.px(22)),

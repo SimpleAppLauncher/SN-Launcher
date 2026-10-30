@@ -943,16 +943,21 @@ Written for whoever is about to put it on a tablet they found in a drawer.
 | Android | 7.0 (API 21) | 10+ | API 21 is the floor. |
 | Screen | 800 × 1280 | 1024 × 600 landscape | The layout is designed for a 1024 × 600 panel, which is the Nest Hub's. |
 | Storage | 100 MB free | 500 MB | For the app, the downloaded photographs and the caches. |
-| Network | None needed | Any | Everything except the photo rotation and the weather works offline. |
+| Network | None needed | Any | The bundled photo rotation, clock, calendar and to-do list work offline. Live photo discovery and the weather need a network; both fall back honestly when it is absent. |
 
 ### The two builds, and why they are not the same size
 
 **The reduced build** (`SN-Launcher-0.3.0-rc1.apk`, 32 MB) is the one to put on
 something you are not sure about. It has the launcher, the clock, the calendar,
-the to-do list and the photo frame. It asks for no microphone, location,
-notification-listener or media permission; the calendar permission is requested
-only when the calendar card needs it. The permission check is run against the
-built APK, not against the manifest, by `tool/verify_permissions.sh`.
+the to-do list and the photo frame, and it now uses the same live photo
+discovery as the ef build. It asks for no microphone, calendar or location
+runtime permission; the calendar permission is requested only when the calendar
+card needs it. It does declare one notification-listener service, because
+Android only exposes another app's active media session to that kind of
+service. The service is inert until Notification access is granted, and the
+launcher uses it only to notice which media session is playing — not to read
+notification content. The permission check is run against the built APK, not
+against the manifest, by `tool/verify_permissions.sh`.
 
 **The ef build** (`SN-Launcher-0.3.0-rc1-beta-arm64.apk`, 20 MB for arm64
 only) adds the NCS music page, the weather page with its artwork, the voice
@@ -1007,10 +1012,15 @@ device this section used to describe.
 
 ### Battery
 
-Any media foreground service belongs to NCS-SMLauncher, not the launcher. The
-launcher itself is idle apart from its clock tick and the photo rotation. On
-the ef home the clock shows seconds, so it repaints at 1 Hz; the reduced home
-shows minutes. The photo rotation by default changes every ten minutes.
+Any media foreground service belongs to NCS-SMLauncher or to whichever app is
+playing, not the launcher. The launcher itself is idle apart from its clock
+tick, the photo rotation, and — only after the user grants Notification access
+— a 400 ms poll of Android's active media sessions. With access denied it polls
+nothing and shows nothing; it never keeps another app's audio alive or tries to
+control it. On the ef home the clock shows seconds, so it repaints at 1 Hz; the
+reduced home shows minutes. Bundled photo rotation by default changes every ten
+minutes; live discovery fetches its next licence-checked candidate in the
+background before the current one expires.
 
 ## 15c. Desktop — Linux and macOS
 
@@ -1042,6 +1052,26 @@ What is **not expected** to work on a desktop: the old radio/Media3 panel (a
 foreground service is an Android thing) and the voice assistant (the speech
 recogniser is Android only). Everything else is intended to work, but none of
 it has been run here.
+
+### Active media sessions (Android)
+
+The Android route is the system's own. `MediaSessionListener` is a
+`NotificationListenerService` declared in every build; once the user grants
+**Notification access** (Settings → Now playing), the launcher reads the active
+`MediaSession` list through `MediaSessionManager`. It does not ask for a media
+runtime permission, because Android has no such thing: notification access is
+the gate.
+
+The watcher polls every 400 ms only while access is granted. It shows the
+metadata another app publishes — title, artist, album, artwork and playing or
+paused — on the home photo. Transport is capability-gated: the strip draws
+play/pause and skip only when the owning app's `PlaybackState.actions` contains
+them, and sends those commands through the `MediaController` for that session,
+not through this app's own player. A session that publishes no transport stays
+display-only. If access is revoked, the session disappears; the launcher does
+not keep a stale card.
+
+The desktop contract below is separate and remains for NCS-SMLauncher.
 
 ### The now-playing file contract
 

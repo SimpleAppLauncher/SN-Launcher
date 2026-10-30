@@ -1,9 +1,12 @@
 # Status: what works, what does not, and what to do next
 
-Written against the tree after the installed-app drawer landed. 262 tests pass
-and one is skipped; both release variants were installed and hardware-verified
-on the Nokia T20 before this UI change, and the ef on the SM-X110. The new
-installed-app path has **not** been run on either tablet yet. This file exists
+Written against the tree after the installed-app drawer and the Android
+now-playing work landed. 275 tests pass and one is skipped; both release
+variants were installed on the Nokia T20, and the ef on the SM-X110. The
+Android now-playing strip was observed on the T20 with Spotify and Notification
+access granted; the new external transport and live track replacement have not
+been hardware-verified. The installed-app drawer and live photo discovery also
+remain unverified on hardware. This file exists
 because the honest answer to "does it work?" has been longer than a chat message
 should carry, and because the previous answer to that question was wrong.
 
@@ -49,6 +52,8 @@ These pass their tests and have never been looked at by a person.
 | Ad blocking (old WebView) | 8 URL cases pass in a node harness against the real 23-host list | The panel is on the disabled Home control page; neither shipped build opens it |
 | Installed-app registry | `AppCatalog` adopts packages, labels and icon bytes; a pixel test proves the badge paints the bytes rather than a glyph; a 1280×800 render shows the grid and search field | Whether `queryIntentActivities` + `loadIcon` returns the expected list on the T20 or SM-X110, whether package launches work, and whether Android 11+ visibility behaves as declared |
 | Labelled app row + grabber hit area | Renders at 1280×800 without overflow; the handle now has a 48 dp opaque target | Whether a thumb finds it, and whether tapping it opens the sheet without the drag listener swallowing the tap |
+| Android now-playing | `DeviceMediaWatcher` maps mocked media sessions, permission state and pause/play; tests prove capability-gated external transport, that a new external song replaces the old one without a restart, and that unsupported controls are absent; the base manifest declares the notification-listener service | Whether Notification access can be granted on the T20/SM-X110, whether Spotify/SoundCloud/podcast/PiP accept play/pause/skip through `MediaController`, and whether artwork and titles survive background playback |
+| Live photo discovery in the normal build | The feature-flag test now proves `photoDiscovery` is on; the licence filter and discovery pool have unit tests | Whether the normal build fetches and rotates a fresh Commons photo on the tablet, and whether that changes idle network/battery behaviour |
 | Tizen TV TPK | It builds for `profile tv`; the Samsung distributor certificate names the TV's DUID | Everything. It has never been installed or launched — sdb cannot open the device |
 
 ## 3. Known broken

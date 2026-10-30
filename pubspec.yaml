@@ -13,6 +13,7 @@ dependencies:
 
     sdk: flutter
   cupertino_icons: ^1.0.8
+  path_provider: ^2.1.5
   # Rust FFI: the licence filter. See lib/src/services/licence_filter.dart
   ffi: ^2.1.4
   url_launcher: ^6.3.1

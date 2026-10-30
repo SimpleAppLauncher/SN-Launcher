@@ -77,6 +77,7 @@ class MainActivity : FlutterActivity() {
         // context for the same reason.
         if (::speechBridge.isInitialized) speechBridge.detach()
         if (::sttBridge.isInitialized) sttBridge.detach()
+        sessionMonitor?.dispose()
         super.onDestroy()
     }
 

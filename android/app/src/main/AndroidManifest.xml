@@ -1,20 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- This manifest declares NO sensitive permissions.
+    <!-- This manifest declares no sensitive runtime permissions: no
+         microphone, no calendar, no location. Those live in
+         src/sensitive/manifest-fragment.xml and are merged in only by a build
+         that asks for them with -PsnSensitive=true.
 
-         Google Play Protect warns on install when an app asks for the
-         microphone, the calendar, the location, or the notification listener.
-         The warning is right: each of those can read something private, and
-         the notification listener can read every notification on the device.
+         It does declare one notification-listener service. Android will not
+         expose another app's active media session to an ordinary app, so the
+         "what is playing" strip needs a NotificationListenerService. The
+         service is exported=false and protected by
+         BIND_NOTIFICATION_LISTENER_SERVICE; the user still has to grant
+         Notification access in Settings, and without that grant it is inert.
 
-         So the base build asks for none of them. The ones that genuinely need
-         them live in src/sensitive/manifest-fragment.xml and are merged in
-         only by a build that asks for them with -PsnSensitive=true.
-
-         Everything this app does without them still works: the launcher, the
-         clock, the photo frame, the radio, the to-do list, the weather's
-         current conditions. What is lost is the location fix, the calendar,
-         press-to-talk, and seeing what another app is playing. -->
+         Google Play Protect may warn about notification access. That warning
+         is honest: the service can technically receive notifications. This app
+         uses the callback only to notice that a media session may have changed;
+         it does not display notification content. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.KEEP_SCREEN_ON"/>
@@ -79,7 +80,18 @@
         android:largeHeap="false"
         android:enableOnBackInvokedCallback="true"
         android:isGame="false">
-        <!-- SENSITIVE-SERVICE -->
+        <!-- Always declared. MediaSessionManager requires a notification
+         listener before it will hand over other apps' sessions; the service
+         does nothing until the user grants Notification access in Settings. -->
+    <service
+        android:name=".MediaSessionListener"
+        android:exported="false"
+        android:label="@string/app_name"
+        android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+        <intent-filter>
+            <action android:name="android.service.notification.NotificationListenerService"/>
+        </intent-filter>
+    </service>
 
         <!-- The playback service. mediaPlayback is the one foreground service type
          that survives Android 14's new FGS-type requirement and Android 15's

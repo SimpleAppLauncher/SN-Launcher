@@ -35,15 +35,22 @@ class Track {
   /// rather than sitting at 99% forever pretending.
   final bool isLive;
 
+  /// True when this track was adopted from another app's media session.
+  ///
+  /// The audio belongs to SoundCloud/Spotify/podcasts, not to this process.
+  /// Transport commands are forwarded to that app's `MediaController`; they
+  /// must never be sent to our own player just because it shares a UI.
+  bool get isExternal => url.startsWith('external:');
+
   Map<String, Object?> toChannel() => {
-        'url': url,
-        'title': title,
-        'artist': artist,
-        'album': album,
-        'artworkUrl': artworkUrl,
-        'durationMs': duration?.inMilliseconds ?? 0,
-        'isLive': isLive,
-      };
+    'url': url,
+    'title': title,
+    'artist': artist,
+    'album': album,
+    'artworkUrl': artworkUrl,
+    'durationMs': duration?.inMilliseconds ?? 0,
+    'isLive': isLive,
+  };
 
   @override
   bool operator ==(Object other) =>
@@ -66,6 +73,10 @@ class PlaybackState {
     this.duration = Duration.zero,
     this.track,
     this.error = '',
+    this.canPlay = true,
+    this.canPause = true,
+    this.canNext = true,
+    this.canPrevious = true,
   });
 
   final bool playing;
@@ -73,6 +84,17 @@ class PlaybackState {
   final Duration position;
   final Duration duration;
   final Track? track;
+
+  /// Which transport commands are actually advertised by the session.
+  ///
+  /// Our own player can always be told to play, pause, and skip, so these
+  /// default to true. An adopted session is different: Spotify may offer
+  /// next but a podcast player may not, and drawing the button anyway would
+  /// claim a capability the other app never published.
+  final bool canPlay;
+  final bool canPause;
+  final bool canNext;
+  final bool canPrevious;
 
   /// Why playback stopped, if it did.
   ///
@@ -106,7 +128,7 @@ class PlaybackState {
 /// keeps the licensing decision on the Dart side where it can be tested.
 class PlaybackService extends ChangeNotifier {
   PlaybackService({MethodChannel? channel})
-      : _channel = channel ?? const MethodChannel(channelName);
+    : _channel = channel ?? const MethodChannel(channelName);
 
   @visibleForTesting
   static const channelName = 'dev.snlauncher/playback';
@@ -122,13 +144,19 @@ class PlaybackService extends ChangeNotifier {
   void adoptExternalSession(ExternalSession session) {
     final ours = _state.track;
     // Our own player wins if it is actually playing something; an external
-    // session must not stomp on our own playback.
-    if (ours != null && _state.playing) return;
+    // session must not stomp on our own playback. An *adopted* external track
+    // is not "ours", though: refusing to replace it here is what made a new
+    // song invisible until the launcher was restarted.
+    if (ours != null && !ours.isExternal && _state.playing) return;
     _state = PlaybackState(
       playing: session.playing,
       loading: false,
       position: session.position,
       duration: session.duration,
+      canPlay: session.canPlay,
+      canPause: session.canPause,
+      canNext: session.canNext,
+      canPrevious: session.canPrevious,
       track: Track(
         url: 'external:${session.package}',
         title: session.title,
@@ -183,17 +211,57 @@ class PlaybackService extends ChangeNotifier {
     _update(result);
   }
 
-  Future<void> resume() async => _update(await _invoke<Map>('resume'));
-  Future<void> pause() async => _update(await _invoke<Map>('pause'));
+  Future<void> resume() async {
+    if (_isExternal) {
+      await _controlExternal('play');
+      return;
+    }
+    _update(await _invoke<Map>('resume'));
+  }
+
+  Future<void> pause() async {
+    if (_isExternal) {
+      await _controlExternal('pause');
+      return;
+    }
+    _update(await _invoke<Map>('pause'));
+  }
+
   Future<void> stop() async => _update(await _invoke<Map>('stop'));
 
-  Future<void> seek(Duration to) async => _update(await _invoke<Map>(
-        'seek',
-        {'positionMs': to.inMilliseconds},
-      ));
+  Future<void> seek(Duration to) async =>
+      _update(await _invoke<Map>('seek', {'positionMs': to.inMilliseconds}));
 
-  Future<void> next() async => _update(await _invoke<Map>('next'));
-  Future<void> previous() async => _update(await _invoke<Map>('previous'));
+  Future<void> next() async {
+    if (_isExternal) {
+      await _controlExternal('next');
+      return;
+    }
+    _update(await _invoke<Map>('next'));
+  }
+
+  Future<void> previous() async {
+    if (_isExternal) {
+      await _controlExternal('previous');
+      return;
+    }
+    _update(await _invoke<Map>('previous'));
+  }
+
+  bool get _isExternal => _state.track?.isExternal ?? false;
+
+  /// Sends a transport command to the app that actually owns the audio.
+  ///
+  /// Nothing here goes through our own native player. A MediaController is
+  /// the system's own write side for somebody else's session, so the command
+  /// lands on Spotify or the podcast app exactly as the lock-screen button
+  /// would. The watcher refreshes after the command so the strip follows the
+  /// other app rather than guessing that it obeyed.
+  Future<void> _controlExternal(String action) async {
+    final watcher = _watcher;
+    if (watcher == null) return;
+    await watcher.command(action);
+  }
 
   /// Called by the platform when the user presses a headset button, so the
   /// launcher controls follow the system rather than fighting it.

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../models/photo_credit.dart';
 import 'settings_store.dart';
@@ -240,12 +241,17 @@ class PhotoFrameService extends ChangeNotifier {
   String? _lastTitle;
 
   Directory get _cacheDir {
-    // On Android this is the app's private cache directory: writable with no
-    // permission, and removable by the system if storage gets tight, which is
-    // the correct behaviour for downloaded media.
-    final d = Directory(
-      '${Directory.systemTemp.path}/sn_launcher_photos',
-    );
+    // Persistent documents directory so the photo cache survives app restarts
+    // and the "Next" button can switch instantly to an already-downloaded photo.
+    // Uses a subdirectory so it does not clutter the app's documents.
+    return _cacheDirInstance ??= _createCacheDir();
+  }
+
+  Directory? _cacheDirInstance;
+
+  Directory _createCacheDir() {
+    final docs = Directory.systemTemp; // placeholder; replaced in start()
+    final d = Directory('${docs.path}/sn_launcher_photos');
     if (!d.existsSync()) d.createSync(recursive: true);
     return d;
   }
@@ -253,6 +259,13 @@ class PhotoFrameService extends ChangeNotifier {
   /// Restore settings, show whatever is already cached, then start rotating.
   Future<void> start() async {
     await _settings.load();
+    // Initialize persistent cache directory.
+    final docs = await getApplicationDocumentsDirectory();
+    _cacheDirInstance = Directory('${docs.path}/sn_launcher_photos');
+    if (!_cacheDirInstance!.existsSync()) {
+      _cacheDirInstance!.createSync(recursive: true);
+    }
+
     _enabled = _settings.read(SettingKeys.rotatePhotos, true, (v) => v == 'true');
     final mins = _settings.read(SettingKeys.rotateMinutes, 10, (v) => int.tryParse(v) ?? 10);
     _interval = Duration(minutes: mins.clamp(1, 1440));

@@ -168,19 +168,23 @@ class _NestLauncherAppState extends State<NestLauncherApp>
         // the temperature on the screen was whatever it was when the page was
         // first opened — which is how it ended up stuck on 21° indefinitely.
         _weather.startAutoRefresh();
-        // Polls the system's active media sessions so the card appears when
-        // something else is playing. Without notification access this simply
-        // reports nothing, which is the honest failure — it does not guess.
-        _media.startPolling();
-        // Anything playing anywhere on the device now reaches the card. This
-        // was the missing link: the watcher was polling and the card was
-        // watching the wrong thing, so a Spotify session could never appear.
-        _playback.attach(_media);
-        // And the desktop bridge: a file another application writes.
-        _external.addListener(_onExternalNowPlaying);
-        _external.start();
         unawaited(_calendar.start());
       }
+      // Now-playing is not a calendar feature. Android exposes other apps'
+      // active media sessions, and the launcher should show what is playing
+      // even when the calendar is disabled.
+      //
+      // Polls the system's active media sessions so the card appears when
+      // something else is playing. Without notification access this simply
+      // reports nothing, which is the honest failure — it does not guess.
+      _media.startPolling();
+      // Anything playing anywhere on the device now reaches the card. This
+      // was the missing link: the watcher was polling and the card was
+      // watching the wrong thing, so a Spotify session could never appear.
+      _playback.attach(_media);
+      // And the desktop bridge: a file another application writes.
+      _external.addListener(_onExternalNowPlaying);
+      _external.start();
       // The to-do list is a disk read behind the same settings store the
       // theme came from. Also off the critical path, for the same reason.
       if (FeatureFlags.current.isOn('todo')) {
@@ -271,6 +275,9 @@ class _NestLauncherAppState extends State<NestLauncherApp>
       unawaited(_calendar.refresh());
       // Also pick up apps installed while the launcher was in the background.
       unawaited(_appCatalog.refresh());
+      // The user may have granted or revoked Notification access while the
+      // system Settings page was in front of us.
+      unawaited(_media.probe());
     }
   }
 
