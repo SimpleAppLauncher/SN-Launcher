@@ -1128,8 +1128,6 @@ class _NestShellState extends State<NestShell> {
   }
 }
 
-/// A single carousel page with the Nest's parallax + scale treatment.
-/// A single carousel page with the Nest's parallax + scale treatment.
 /// One radio station, as a row in the music card.
 /// A small strip showing what is playing, on the launcher's home page.
 ///
@@ -1398,6 +1396,7 @@ class _StationButton extends StatelessWidget {
   }
 }
 
+/// A single carousel page in the Nest's cover-slide treatment.
 class _PageLayer extends StatelessWidget {
   const _PageLayer({
     required this.offset,
@@ -1412,27 +1411,20 @@ class _PageLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = offset.clamp(-1.6, 1.6);
-    final scale = 1 - d.abs() * 0.06;
-    final opacity = (1 - d.abs() * 1.25).clamp(0.0, 1.0);
-    // The Opacity is skipped entirely when it would not do anything.
+    // A cover slide, not a crossfade. The incoming page is translated by
+    // exactly one screen width, so the two pages meet edge to edge and cover
+    // the display at every point of the gesture.
     //
-    // An `Opacity` widget allocates a saveLayer — a full-screen offscreen
-    // buffer — for the thing it wraps. The *current* page is at opacity 1.0
-    // and fills the screen, so it was paying for a full-screen saveLayer to
-    // display a page that was not transparent at all, on every frame of a
-    // swipe. At opacity 1.0 there is no layer to allocate, so there is no
-    // reason to ask for one.
-    final Widget moved = Transform.translate(
-      offset: Offset(d * 90, 0),
-      child: Transform.scale(scale: scale, child: child),
-    );
-    if (opacity >= 0.999) {
-      // Fully opaque: no saveLayer needed, so none is allocated.
-      return IgnorePointer(ignoring: false, child: moved);
-    }
+    // The old effect also scaled and faded the outgoing page. Both forced
+    // Flutter to composite a full-screen offscreen layer for the whole tree
+    // on every animation frame: on the T20 that was the single largest
+    // rendering cost, and two such layers exist mid-swipe. Translation alone
+    // is a cheap transform of already-painted content, with no extra buffer.
+    // The photo keeps its own RepaintBoundary; caching the entire page as well
+    // did not reduce raster time in the hardware comparison, so it is gone.
     return IgnorePointer(
-      ignoring: opacity < 0.02,
-      child: Opacity(opacity: opacity, child: moved),
+      ignoring: !visible,
+      child: FractionalTranslation(translation: Offset(d, 0), child: child),
     );
   }
 }

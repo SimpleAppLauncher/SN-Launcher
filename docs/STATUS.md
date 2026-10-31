@@ -1,7 +1,7 @@
 # Status: what works, what does not, and what to do next
 
 Written against the tree after the installed-app drawer and the Android
-now-playing work landed. 275 tests pass and one is skipped; both release
+now-playing work landed. 276 tests pass and one is skipped; both release
 variants were installed on the Nokia T20, and the ef on the SM-X110. The
 Android now-playing strip was observed on the T20 with Spotify and Notification
 access granted; the new external transport and live track replacement have not
