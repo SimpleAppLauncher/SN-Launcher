@@ -494,9 +494,10 @@ Four constraints shaped it, all from the hardware it has to survive:
 * **`FileImage`, not `MemoryImage(File.readAsBytesSync())`.** Reading the file
   inside `build()` defeats the image cache and costs a full JPEG decode per
   frame on a UNISOC.
-* **The API is asked for a 1600px thumbnail**, which is already the right size.
-  Re-encoding would only convert a 300 KB JPEG into a 2 MB PNG — `dart:ui` has
-  no JPEG encoder.
+* **The API is asked for a 2400px thumbnail** for a 2000px panel, so the image
+  is downscaled rather than stretched. Candidates narrower than the panel are
+  refused. Re-encoding would only convert a ~600 KB JPEG into a 2 MB PNG —
+  `dart:ui` has no JPEG encoder.
 * **Plain `dart:io` HttpClient.** One less dependency on a 1 GB tablet.
 
 ### The pool is verified, not remembered

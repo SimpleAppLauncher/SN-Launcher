@@ -13,10 +13,10 @@ import '../theme/nest_metrics.dart';
 /// switching it off.
 ///
 /// Memory matters more here than anywhere else in the app: decoding a
-/// 1600x900 photograph straight to full size costs ~5 MB of bitmap on a device
-/// that may only have a gigabyte to spare, and the home screen is on screen all
-/// day. [cacheWidth] makes Skia decode straight to the on-screen size instead,
-/// which is typically a quarter of that.
+/// 2400x1350 photograph straight to full size costs several megabytes of
+/// bitmap on a device that may only have a gigabyte to spare, and the home
+/// screen is on screen all day. [cacheWidth] makes Skia decode straight to the
+/// on-screen size instead, which is typically a quarter of that.
 class PhotoFrameBackground extends StatelessWidget {
   const PhotoFrameBackground({
     super.key,
@@ -69,12 +69,12 @@ class PhotoFrameBackground extends StatelessWidget {
             //
             // `metrics.size` is already in logical px; multiplying by
             // `metrics.u` as well double-counts the design scale and
-            // over-allocates by that factor. And `allowUpscaling: false` stops
-            // it going further: these photos are 1600px wide on a 2000px panel,
-            // so decoding at 2000 would spend ~3 MB of extra bitmap on detail
-            // that does not exist. `ResizeImage` knows the intrinsic size, so
-            // letting it clamp is more robust than hardcoding the dimensions —
-            // swap in a 4K photo and it still does the right thing.
+            // over-allocates by that factor. Photos are requested at 2400px
+            // for a 2000px panel, so this is a downscale and stays sharp. The
+            // clamp and `allowUpscaling: false` still protect against a bundled
+            // or cached image that is narrower than the panel. `ResizeImage`
+            // knows the intrinsic size, so a 4K photo still does the right
+            // thing.
             image: ResizeImage(
               // FileImage, not MemoryImage(File.readAsBytesSync()).
               // Reading the file inside build() would re-read it and defeat

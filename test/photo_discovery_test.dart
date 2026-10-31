@@ -139,6 +139,16 @@ void main() {
       );
     });
 
+    test('a 1600px original is refused instead of being upscaled', () {
+      // This was the blur: a 1600px Commons file stretched across a 2000px
+      // panel. The minimum now matches the panel width.
+      expect(
+        accept(apiPage(title: 'Soft.jpg', licence: 'CC BY 3.0',
+            width: 1600, height: 1067)),
+        isNull,
+      );
+    });
+
     test('a normal 3:2 landscape is kept', () {
       expect(
         accept(apiPage(title: 'Good.jpg', licence: 'CC BY 3.0',

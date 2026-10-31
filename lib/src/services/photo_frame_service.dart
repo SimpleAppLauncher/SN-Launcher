@@ -152,16 +152,25 @@ class PhotoFrameService extends ChangeNotifier {
   static const double _minAspect = 0.9;
   static const double _maxAspect = 2.6;
 
-  /// Below this the image is not worth showing on a 2000px panel.
-  static const int _minWidth = 1200;
+  /// Below this the image would have to be upscaled on the target panel,
+  /// which is exactly what makes a photograph look soft. The T20 is 2000px
+  /// wide in landscape; 1200px candidates were accepted here before and were
+  /// visibly blurry when stretched across it.
+  static const int _minWidth = 2000;
 
   /// How many downloaded images to keep on disk.
   static const int _cacheLimit = 6;
 
-  /// Kept narrow: the panel is 2000px wide at most on the target hardware, and
-  /// the source files are far larger than that. 1600 keeps a landscape around
-  /// 300 KB, so ten minutes of rotation costs a few hundred KB a day.
-  static const int _maxWidth = 1600;
+  /// The panel is 2000px wide at most on the target hardware. Request 2400 so
+  /// the image is downscaled rather than upscaled, with a little margin for
+  /// `BoxFit.cover` cropping. A 2400px landscape is still well under the 4 MB
+  /// download guard, and six of them fit comfortably in the persistent cache.
+  static const int _maxWidth = 2400;
+
+  /// Bump when the requested image size changes. Cached files are derived
+  /// content, so an old 1600px cache is safe to drop rather than leave the
+  /// first picture after an upgrade looking soft.
+  static const int _cacheVersion = 2;
 
   /// Verified against the live Commons API and looked at before inclusion.
 
@@ -265,6 +274,7 @@ class PhotoFrameService extends ChangeNotifier {
     if (!_cacheDirInstance!.existsSync()) {
       _cacheDirInstance!.createSync(recursive: true);
     }
+    _dropOldResolutionCache();
 
     _enabled = _settings.read(SettingKeys.rotatePhotos, true, (v) => v == 'true');
     final mins = _settings.read(SettingKeys.rotateMinutes, 10, (v) => int.tryParse(v) ?? 10);
@@ -274,6 +284,35 @@ class PhotoFrameService extends ChangeNotifier {
     _schedule();
     if (_enabled) unawaited(prefetchNext());
     notifyListeners();
+  }
+
+  /// Drops cached photographs from an older requested resolution.
+  ///
+  /// The cache is persistent, so without this an upgrade would keep showing
+  /// the old 1600px file until it happened to rotate — and the first thing the
+  /// user sees after installing a sharpness fix should not be the blurry
+  /// version. These files are downloads, not user data, so replacing them is
+  /// safe.
+  void _dropOldResolutionCache() {
+    final dir = _cacheDirInstance;
+    if (dir == null) return;
+    try {
+      final marker = File('${dir.path}/.cache_version');
+      if (marker.existsSync() &&
+          marker.readAsStringSync().trim() == '$_cacheVersion') {
+        return;
+      }
+      for (final entry in dir.listSync()) {
+        try {
+          entry.deleteSync(recursive: true);
+        } catch (_) {
+          // A file being written can wait for the next start.
+        }
+      }
+      marker.writeAsStringSync('$_cacheVersion');
+    } catch (_) {
+      // A cache-cleanup failure must never stop the launcher from starting.
+    }
   }
 
   // ── Public controls ────────────────────────────────────────────────────────
@@ -639,7 +678,7 @@ class PhotoFrameService extends ChangeNotifier {
       final bytes = <int>[];
       await for (final chunk in res) {
         bytes.addAll(chunk);
-        // 4 MB is far above any 1600px JPEG we want; anything larger is a
+        // 4 MB is far above any 2400px JPEG we want; anything larger is a
         // mis-picked URL and is not worth the user's data.
         if (bytes.length > 4 * 1024 * 1024) return null;
       }
@@ -656,9 +695,10 @@ class PhotoFrameService extends ChangeNotifier {
     final out = File(
       '${_cacheDir.path}/photo_${DateTime.now().millisecondsSinceEpoch}.jpg',
     );
-    // Stored verbatim. Commons was asked for a 1600px-wide thumbnail, which is
-    // already exactly what this should be — re-encoding would only be a way to
-    // turn a 300 KB JPEG into a 2 MB PNG, because dart:ui has no JPEG encoder.
+    // Stored verbatim. Commons was asked for a 2400px-wide thumbnail, which is
+    // already slightly larger than the panel — re-encoding would only be a way
+    // to turn a ~600 KB JPEG into a 2 MB PNG, because dart:ui has no JPEG
+    // encoder.
     await out.writeAsBytes(bytes, flush: true);
     try {
       tmp.deleteSync();
