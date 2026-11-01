@@ -46,52 +46,17 @@ const reveal = (frame: number, start: number, end: number): React.CSSProperties 
 });
 
 const Wordmark = ({scale = 1}: {scale?: number}) => (
-  <div style={{display: 'flex', alignItems: 'center', gap: 12 * scale}}>
-    <div
-      style={{
-        width: 34 * scale,
-        height: 34 * scale,
-        borderRadius: '50%',
-        border: `1.6px solid ${GREEN}`,
-        position: 'relative',
-        boxSizing: 'border-box',
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          left: 7 * scale,
-          right: 7 * scale,
-          top: '50%',
-          height: 1.2,
-          background: GREEN,
-          opacity: 0.85,
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          width: 6 * scale,
-          height: 6 * scale,
-          borderRadius: '50%',
-          background: WARM,
-          right: 5 * scale,
-          top: 6 * scale,
-        }}
-      />
-    </div>
-    <span
-      style={{
-        color: INK,
-        fontFamily: FONT,
-        fontWeight: 650,
-        fontSize: 22 * scale,
-        letterSpacing: 0.1,
-      }}
-    >
-      SN-Launcher
-    </span>
-  </div>
+  <span
+    style={{
+      color: INK,
+      fontFamily: FONT,
+      fontWeight: 650,
+      fontSize: 22 * scale,
+      letterSpacing: 0.1,
+    }}
+  >
+    SN-Launcher
+  </span>
 );
 
 const Beta = () => (
