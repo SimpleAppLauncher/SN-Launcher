@@ -96,3 +96,7 @@ native/licence_filter/target/
 
 # Downloaded by tool/build_icons.py; regenerate it instead of committing it.
 .msym-cache/
+
+# Remotion installed packages and renders are local artifacts.
+video/node_modules/
+video/out/
