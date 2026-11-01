@@ -6,7 +6,7 @@
   "scripts": {
     "start": "remotion studio src/index.ts",
     "render": "remotion render src/index.ts SnLauncher out/sn-launcher.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p",
-    "still": "remotion still src/index.ts SnLauncher out/cover.png --frame=130"
+    "still": "remotion still src/index.ts SnLauncher out/cover.png --frame=180"
   },
   "dependencies": {
     "@remotion/cli": "4.0.539",

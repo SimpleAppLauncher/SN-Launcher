@@ -5,7 +5,7 @@ export const RemotionRoot = () => (
   <Composition
     id="SnLauncher"
     component={SnLauncherVideo}
-    durationInFrames={540}
+    durationInFrames={1320}
     fps={30}
     width={1920}
     height={1080}
