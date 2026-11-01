@@ -47,7 +47,10 @@ presented only inside rounded cards.
    controls are forwarded to the app that owns the music.
 5. **Performance** — measured warm open (median of five launches) on the Nokia
    T20: 144 ms for SN-Launcher, 140 ms for the stock launcher, plus APK size,
-   min SDK and tablet layout.
+   min SDK and tablet layout. The same tablet measured **3.3% of one core** for
+   SN-Launcher idle over a 60 s screen-on sample, against **0.15%** for the
+   stock launcher; the card labels this as the cost of the live animated home,
+   not a performance win.
 6. **Comparison** — stock launcher vs SN-Launcher with the concrete differences.
 7. **Outro** — “A calmer Android home.”, beta label and repository URL.
 

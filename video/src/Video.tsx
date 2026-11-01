@@ -711,12 +711,12 @@ const NowPlayingScene = () => {
           <div
             style={{
               position: 'absolute',
-              left: '65.3%',
-              top: '2.1%',
-              width: '32.8%',
-              height: '10.2%',
+              left: '62.0%',
+              top: '2.25%',
+              width: '35.2%',
+              height: '11.9%',
               border: `2px solid rgba(169, 207, 154, ${0.45 + pulse * 0.55})`,
-              borderRadius: 16,
+              borderRadius: 22,
               boxShadow: `0 0 0 7px rgba(169, 207, 154, ${0.12 * pulse})`,
             }}
           />
@@ -981,6 +981,59 @@ const PerformanceScene = () => {
           >
             <span style={{color: INK, fontWeight: 700}}>0.14 s both.</span>{' '}
             A home screen is always resident, so warm open is the honest number.
+          </div>
+        </div>
+
+        <div
+          style={{
+            ...rise(frame, fps, 40, 18),
+            marginTop: 14,
+            padding: '16px 20px',
+            background: PAPER,
+            border: `1px solid ${LINE}`,
+            borderRadius: 18,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 20,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontFamily: FONT,
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: 2.2,
+                color: GREEN,
+              }}
+            >
+              IDLE CPU · 60 S SAMPLE
+            </div>
+            <div
+              style={{
+                marginTop: 6,
+                fontFamily: FONT,
+                fontSize: 14,
+                lineHeight: 1.4,
+                color: MUTED,
+              }}
+            >
+              Screen on, default home, other launcher disabled.
+              {' '}Stock measured 0.15% of one core.
+            </div>
+          </div>
+          <div
+            style={{
+              fontFamily: FONT,
+              fontSize: 38,
+              fontWeight: 650,
+              letterSpacing: -1.4,
+              color: INK,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            3.3%
           </div>
         </div>
 
