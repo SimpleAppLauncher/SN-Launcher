@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -175,10 +177,46 @@ android {
     // because it carries three ABIs, while the arm64 one is 17.6 MB. For a
     // tablet on a metered connection that is a real difference.
 
+    // ── Release signing ────────────────────────────────────────────────────
+    //
+    // `android/key.properties` is local and gitignored, as is the keystore it
+    // points at. Without it (a fresh clone, CI without secrets), release builds
+    // fall back to debug signing so the app still builds and can be installed
+    // for diagnostics. A published APK must never use that fallback.
+    //
+    // The properties file must contain:
+    //     storePassword=...
+    //     keyPassword=...
+    //     keyAlias=sn-launcher
+    //     storeFile=app/sn-launcher-release.jks
+    //
+    // Keep a backup of both files. Losing the keystore means no future APK can
+    // upgrade an installed release build.
+    val keystorePropertiesFile = rootProject.file("key.properties")
+    val keystoreProperties = Properties()
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Replace with a real signing config before publishing.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig =
+                if (keystorePropertiesFile.exists()) {
+                    signingConfigs.getByName("release")
+                } else {
+                    signingConfigs.getByName("debug")
+                }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

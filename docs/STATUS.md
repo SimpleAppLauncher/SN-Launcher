@@ -1,14 +1,16 @@
 # Status: what works, what does not, and what to do next
 
-Written against the tree after the installed-app drawer and the Android
-now-playing work landed. 287 tests pass and one is skipped; both release
-variants were installed on the Nokia T20, and the ef on the SM-X110. The
-Android now-playing strip was observed on the T20 with Spotify and Notification
-access granted; the new external transport and live track replacement have not
-been hardware-verified. The installed-app drawer and live photo discovery also
-remain unverified on hardware. This file exists
-because the honest answer to "does it work?" has been longer than a chat message
-should carry, and because the previous answer to that question was wrong.
+Written against the v0.3.0 release tree. 287 tests pass and one is skipped;
+`flutter analyze` is clean. The reduced and ef 0.3.0 APKs were built and
+signature-verified, but ADB was offline during this release pass, so this exact
+build was not installed on hardware. The Android now-playing strip, external
+transport and live track replacement were verified earlier on the Nokia T20
+with Spotify and Notification access; the real installed-app dock/drawer and
+live photo discovery were used in the T20 promo captures. Full package-launch
+interaction and the time-based theme editor were not re-run on hardware for
+0.3.0. This file exists because the honest answer to "does it work?" has been
+longer than a chat message should carry, and because the previous answer to
+that question was wrong.
 
 Everything below is graded against one standard, which is the only standard
 that matters for a device sitting on a wall:
@@ -19,6 +21,25 @@ A passing test is not verification. A widget test proves a property; it cannot
 prove that a person can see it. This project has now been bitten by that
 distinction twice, and both times the thing that broke was invisible to the
 whole test suite.
+
+---
+
+## 0.3.0 release assessment
+
+- **Built:** six per-ABI APKs (reduced and ef, arm64-v8a/armeabi-v7a/x86_64).
+  `versionName` is 0.3.0; the base `versionCode` is 9001, with the normal ABI
+  split offsets 10001/11001/13001. All six use the release certificate
+  `CN=SN-Launcher, OU=Android, O=SimpleAppLauncher, C=US`, SHA-256
+  `94d75bcb19143281e16a98393b81f2467c3bd528632c696ffde8b3bdf4951804`.
+- **Automated:** `flutter analyze` clean; **287 tests pass, 1 skipped**.
+- **Hardware:** this exact 0.3.0 build was **not installed** in this pass because
+  ADB was offline. Earlier T20 evidence covers the now-playing strip, transport
+  and live track replacement, and the T20 promo captures show the real
+  installed-app dock/drawer and live photo. Package launch and the time-based
+  theme editor were not re-run on hardware for 0.3.0.
+- **Still unverified:** the time-based theme schedule on hardware; the real
+  NCS-SMLauncher and voice assistant; EF-only remote control (not started);
+  store submission and data-safety review (not done).
 
 ---
 

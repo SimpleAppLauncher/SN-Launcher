@@ -141,3 +141,17 @@ were rewritten after the mutation check caught it —
 
 Neither shipped config has `settings` off, which meant the gear gate was
 untested until a third configuration was added that switches it off.
+
+## Release 0.3.0
+
+The 0.3.0 release builds are `versionName 0.3.0`, base `versionCode 9001`.
+Flutter's per-ABI split adds the normal ABI offset: armeabi-v7a is 10001,
+arm64-v8a is 11001, and x86_64 is 13001. The same source produces six APKs:
+reduced and ef across those three ABIs.
+
+Release signing reads `android/key.properties` and the project keystore; both
+are gitignored. Without that file Gradle falls back to debug signing so a clean
+clone still builds, but those APKs are not upgrade-compatible with the release.
+The 0.3.0 certificate is `CN=SN-Launcher, OU=Android, O=SimpleAppLauncher,
+C=US`, SHA-256
+`94d75bcb19143281e16a98393b81f2467c3bd528632c696ffde8b3bdf4951804`.

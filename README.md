@@ -1,6 +1,6 @@
 # SN-Launcher
 
-**v0.1.3** · [Download](#download) · [INFO.md](INFO.md) for the technical record
+**v0.3.0** · [Download](#download) · [Changelog](CHANGELOG.md) · [INFO.md](INFO.md) for the technical record
 
 A Google Nest Hub style launcher for **Android**, for putting an old tablet on
 a wall and having it look like a smart display.
@@ -21,29 +21,40 @@ Grab it from **[releases](../../releases/latest)**.
 
 | File | Size | For |
 |---|---|---|
-| **`SN-Launcher-0.1.2.apk`** | 32 MB | **Start here.** Works on any phone or tablet from roughly 2014 on. |
-| `SN-Launcher-0.1.2-arm64.apk` | 18 MB | Smaller. Nearly all modern tablets. |
-| `SN-Launcher-0.1.2-armv7.apk` | 16 MB | Smaller. Older budget tablets. |
-| `SN-Launcher-0.1.2-x86_64.apk` | 20 MB | Chromebooks, emulators. |
-| `SN-Launcher-0.1.2-beta-arm64.apk` | 18 MB | The beta. Everything on. |
+| **`SN-Launcher-0.3.0-arm64-v8a.apk`** | 10.6 MB | **Start here.** Nearly all modern tablets and phones. |
+| `SN-Launcher-0.3.0-armeabi-v7a.apk` | 10.1 MB | Older 32-bit tablets. |
+| `SN-Launcher-0.3.0-x86_64.apk` | 10.8 MB | Chromebooks and emulators. |
+| `SN-Launcher-ef-0.3.0-arm64-v8a.apk` | 10.6 MB | The beta, with every feature on. |
+| `SN-Launcher-ef-0.3.0-armeabi-v7a.apk` | 10.1 MB | The beta, for older 32-bit tablets. |
+| `SN-Launcher-ef-0.3.0-x86_64.apk` | 10.8 MB | The beta, for Chromebooks and emulators. |
+
+The per-ABI APKs carry the usual Android ABI offset on top of the base
+`versionCode` 9001: armeabi-v7a is 10001, arm64-v8a is 11001, and x86_64 is
+13001. Pick the one that matches the device; the checksums ship beside them in
+`SHA256SUMS`.
 
 Copy the `.apk` to the device and tap it, allowing **Install unknown apps** for
 whatever opened it. Or over USB:
 
 ```bash
-adb install -r SN-Launcher-0.1.2.apk
+adb install -r SN-Launcher-0.3.0-arm64-v8a.apk
 ```
 
 Then set it as your home screen.
 
 ### Two things to know first
 
-**It is signed with a debug key.** Android allows sideloading a debug-signed
-APK, so it installs fine — but there is no release keystore in the repository,
-and the key that signed this file lives on one machine. If a later build is
-signed with a different key, Android refuses to install over the top and you
-have to uninstall first, losing your settings. **Expect to reinstall rather
-than upgrade.**
+**These APKs are signed with the project's release key,** not the Android debug
+key. The certificate is `CN=SN-Launcher, OU=Android, O=SimpleAppLauncher,
+C=US`; its SHA-256 fingerprint is
+`94d75bcb19143281e16a98393b81f2467c3bd528632c696ffde8b3bdf4951804`. The
+release keystore is not in the repository; it lives on the build machine and is
+backed up outside the repository. Keep that backup: losing it means no future
+APK can upgrade over these installs.
+
+If you have an older debug-signed SN-Launcher, uninstall it once before
+installing this build, because Android will not upgrade across different signing
+keys.
 
 **It wants to be the home screen.** Set it as default launcher after
 installing.
@@ -104,7 +115,7 @@ MT6789, 800x1340) and a **Nokia T20** (Android 13, Unisoc T610, 2000x1200).
 | --- | --- |
 | The clock, date and weather | ✓ |
 | The photo frame, rotating every 10 min | ✓ |
-| The app row and the full app grid | ✓ for the built-in set; the installed-app version is built but not yet hardware-verified |
+| The app row and the full app grid | ✓ for the built-in set; the real installed-app dock/drawer was used for the T20 promo captures, though package-launch interaction was not re-run in this release pass |
 | A calendar reading real events, with the date | ✓ |
 | A to-do list you can add to, tick off and delete | ✓ |
 | The quick-settings row — every button does something | ✓ |
@@ -112,20 +123,22 @@ MT6789, 800x1340) and a **Nokia T20** (Android 13, Unisoc T610, 2000x1200).
 | Settings | ✓ |
 | Cold start | **548 ms** on the Tab A7 Lite release; **509–603 ms** on the T20 release after the first install |
 
-**Not yet verified end to end: installed-app icons, the voice assistant and the
-real NCS-SMLauncher.** The assistant has never heard a microphone. The ef music
-page has now been swiped to on both tablets, and it connected to the mock over
-the LAN on the SM-X110 profile, the SM-X110 ef release and the T20 ef release.
-Pause/next were read back from the mock on the T20 and the profile. The real
-player is still the mock's contract only. The old WebView music panel lived on
-the now-disabled Home control page.
+**Not yet verified end to end: the voice assistant and the real
+NCS-SMLauncher.** The assistant has never heard a microphone. The ef music page
+has been swiped to on both tablets, and it connected to the mock over the LAN on
+the SM-X110 profile, the SM-X110 ef release and the T20 ef release. The real
+player is still the mock's contract only.
 
-The installed-app drawer is new. It asks Android's `PackageManager` for launcher
-and leanback activities, reads each app's own icon, and launches it by package
-name; the fallback on a platform with no package manager is the built-in action
-set. That path compiles, has a pixel test that proves the icon bytes are what
-get painted, and was looked at in the render harness — but it has **not** been
-run on a tablet since the change, so it is built and tested, not verified.
+The Android now-playing strip and its external transport were exercised on the
+T20 with Spotify and Notification access: play/pause/next and live track
+replacement were observed. The real installed-app dock/drawer and its package
+icons were used for the T20 promo captures; launching every installed package
+was not re-run in this release pass.
+
+The time-based theme editor is covered by automated tests (window boundaries,
+wrap-past-midnight, malformed data and restart persistence), but it has not been
+checked on the T20. The 0.3.0 APKs were built and signature-verified; ADB was
+offline, so this exact release was not installed on hardware in this pass.
 
 The ef's first launch straight after installing is 3.3 s (the reduced's is
 1.2 s) while Android extracts the package; every cold start after that is
@@ -152,6 +165,13 @@ The weather glyph is **static** on the shipped page. The animation code remains
 in `weather_glyph.dart`; the 60 fps version cost 91.6% CPU on the SM-X110 and the
 static page costs 1.1%. This is a deliberate trade for 1–4 GB tablets, not a
 capability that was removed and then claimed.
+
+A later 60-second screen-on sample of the current home screen measured
+SN-Launcher at **3.3% of one core** and the stock launcher at **0.15%**. That is
+the cost of the live animated home, not a speed win, and the promo video states
+it that way. RAM is deliberately not in that comparison: SN-Launcher used about
+**349 MB PSS** versus **~102 MB** for the stock launcher. The launcher is not a
+memory win.
 
 ---
 
@@ -201,8 +221,13 @@ what makes matching it realistic at all.
 ## Build it yourself
 
 ```bash
-flutter build apk --release --target-platform android-arm,android-arm64
+./tool/build_variants.sh reduced   # the shipping build
+./tool/build_variants.sh ef        # every feature on
 ```
+
+The build reads `android/key.properties` for the release key when it is present
+and falls back to debug signing otherwise. Both that file and the keystore are
+gitignored; a published APK must be built with the release key.
 
 ### Linux and macOS
 

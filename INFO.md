@@ -695,26 +695,36 @@ warning. This was observed, and the guard exists because of it.
 
 ### Android sizes
 
+These are the v0.3.0 per-ABI release APKs. Sizes are decimal MB:
+
 | Artefact | Size |
 | --- | --- |
-| `SN-Launcher-0.1.1.apk` (arm + arm64 universal) | **32 MB** — what people download |
-| `app-arm64-v8a-release.apk` | 18.0 MB |
-| `app-armeabi-v7a-release.apk` | 15.6 MB |
-| `app-x86_64-release.apk` | 19.4 MB |
+| `SN-Launcher-0.3.0-arm64-v8a.apk` | 10.6 MB — nearly all modern tablets and phones |
+| `SN-Launcher-0.3.0-armeabi-v7a.apk` | 10.1 MB — older 32-bit tablets |
+| `SN-Launcher-0.3.0-x86_64.apk` | 10.8 MB — Chromebooks and emulators |
+| `SN-Launcher-ef-0.3.0-arm64-v8a.apk` | 10.6 MB — beta, every feature on |
+| `SN-Launcher-ef-0.3.0-armeabi-v7a.apk` | 10.1 MB — beta, older 32-bit tablets |
+| `SN-Launcher-ef-0.3.0-x86_64.apk` | 10.8 MB — beta, Chromebooks and emulators |
 
-Dropping x86_64 from the universal APK took it from 48 MB to 32 MB, and it
-still covers every real Android phone and tablet from roughly 2014 onward.
+The base `versionCode` is 9001. Android's ABI split offsets make the installed
+codes armeabi-v7a 10001, arm64-v8a 11001 and x86_64 13001; this is why the APK
+reports a higher code than the `pubspec.yaml` base. The old 0.1.x universal APK
+is gone: the per-ABI files are smaller and the build script emits them.
 
 There is deliberately **no `splits` block in `build.gradle.kts`**. Android App
 Bundles forbid ABI splits and fail with *"Multiple shrunk-resources files
-found"*; the bundle format already does per-ABI delivery.
+found"*; the bundle format already does per-ABI delivery. The script uses
+Flutter's `--split-per-abi` flag instead.
 
 ### Gradle quirks this project has to live with
 
 * **Never enable the Gradle configuration cache.** AGP shells out to
   `sdkmanager` during configuration and the cache breaks it.
-* **Never declare `ndkVersion`.** There is no native code; declaring it makes
-  AGP drag in a ~1 GB NDK download for nothing.
+* **Do not change the pinned NDK casually.** `ndkVersion` is pinned to
+  `28.2.13676358` because the Rust licence filter in `native/licence_filter`
+  is native code. The old note said there was no native code and that an NDK
+  download was wasted; that stopped being true when the Rust filter arrived.
+  Changing the pin means a new NDK download and must be re-tested.
 * `resValue` in `defaultConfig` needs `buildFeatures.resValues = true` under
   AGP 8, and the error message does not mention `resValue` at all.
 * `build.gradle.kts` uses `applicationIdSuffix` from a Gradle property, and the
@@ -723,32 +733,39 @@ found"*; the bundle format already does per-ABI delivery.
 
 ### The signing situation — read this before distributing
 
-**There is no keystore in the repository.** The release build signs with
-`signingConfigs.getByName("debug")`, which resolves to
-`~/.android/debug.keystore` on the machine that built it. That file is
-gitignored.
+The release build reads `android/key.properties` and signs with the project
+release keystore. Both that file and the keystore are gitignored and live
+outside the repository. The build falls back to debug signing only when
+`key.properties` is absent (a fresh clone or CI without secrets); a published
+APK must use the release key.
 
-Consequences, all of which are true and all of which are stated in the release
-notes:
+The current release certificate is
+`CN=SN-Launcher, OU=Android, O=SimpleAppLauncher, C=US`, SHA-256
+`94d75bcb19143281e16a98393b81f2467c3bd528632c696ffde8b3bdf4951804`.
 
-* The published APKs install fine — Android permits sideloading a debug-signed
-  APK.
-* It is **not** a Play Store build.
-* If a future build is signed with a *different* key, Android refuses to
-  install over the top and the user must uninstall first, losing their
-  settings. **Expect to reinstall rather than upgrade.**
-* Anyone who clones the repo and builds gets an APK signed with *their* debug
-  key, which will not match the published one.
+Consequences:
 
-A real release key is the obvious next step, and it should not be committed in
-plaintext.
+* The 0.3.0 APKs are release-signed; `apksigner verify` reports that
+  certificate, not the Android debug key.
+* The same key must sign future builds to upgrade an installed release.
+  Losing the keystore means no future APK can update it.
+* Older debug-signed builds need one uninstall before installing a
+  release-signed APK, losing their settings.
+* A clone without the key builds a debug-signed APK; it will not be
+  upgrade-compatible with the published release.
+* Release-signed is not the same as submitted to Google Play; store submission
+  and data-safety review are separate.
+
+Keep a backup of `key.properties` and the `.jks` outside the repository. Never
+commit the passwords. The public SHA-256 is reproducible with
+`apksigner verify --print-certs`.
 
 ---
 
 ## 14. Testing and verification
 
 ```bash
-flutter test                          # 84 tests
+flutter test                          # 287 pass, 1 skipped
 flutter test test/render_shell_test.dart   # writes build/shots/*.png
 ./tool/deploy.sh                      # install + launch, finds the device
 ./tool/e2e.sh                         # exercise every gesture
@@ -843,9 +860,11 @@ date and claimed things that were already true.
    rendered on either tablet; the page shows conditions without a place. The
    page has device location, a build-time pin and an IP fallback. The missing
    piece is the name; see `docs/STATUS.md` §3a.
-9. **Launching apps** is implemented (deep links / native intents) but untested
-   on a real device.
-10. **A proper release keystore** does not exist. See §13.
+9. **Launching apps** is implemented (deep links / native intents). The 0.3.0
+   promo captures show the real installed-app dock/drawer on the T20, but
+   package launch was not re-run in this release pass.
+10. **Store submission and data-safety review** are not done. A release
+    keystore now exists and signed APKs are built; see §13 and [`store/`](store/).
 11. **The real NCS-SMLauncher** does not speak the music page's protocol yet;
     the page is verified against the mock only. See [`docs/NCS.md`](docs/NCS.md).
 12. **The Linux desktop build has never been run.** It compiles in CI; that is
