@@ -140,7 +140,8 @@ service, but it is unreachable while `homeControl` is off.
 - A runtime location picker
 - Any automated test that runs on a device; CI only builds the desktop targets
 - A 72-hour soak on the T20, and the long-session memory/poll behaviour
-- A release signing key (all builds are debug-signed)
+- A hardware smoke run of the exact 0.3.0 APKs; the release is signed, but ADB
+  was offline during the release pass
 - Desktop targets — built in CI, never run here; the Linux build has never been launched
 
 ---

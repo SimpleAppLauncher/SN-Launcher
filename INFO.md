@@ -58,11 +58,11 @@ easier still, and a reader should not have to guess which.
 
 | | |
 | --- | --- |
-| Commits in the history | 31 — every author and committer `Giathinh1234 <Giathinh1234@users.noreply.github.com>` |
-| GitHub's contributor list | `Giathinh1234`, 31 commits, and nobody else |
+| Commits in the history | 71 — every author is `Giathinh1234 <Giathinh1234@users.noreply.github.com>`; the only other committer is GitHub's web-UI identity, `GitHub <noreply@github.com>` |
+| GitHub's contributor list | `Giathinh1234`, and nobody else |
 | `giathinh`'s contributions to this repo | none |
 | Co-author trailers anywhere in the history | none |
-| Tag objects (`v0.1.0`, `v0.1.1`) | both taggered `Giathinh1234` |
+| Tag objects (`v0.1.0`, `v0.1.1`, `v0.3.0`) | all taggered `Giathinh1234` |
 
 ### The rule that came out of it
 
@@ -967,25 +967,24 @@ Written for whoever is about to put it on a tablet they found in a drawer.
 
 ### The two builds, and why they are not the same size
 
-**The reduced build** (`SN-Launcher-0.3.0-rc1.apk`, 32 MB) is the one to put on
-something you are not sure about. It has the launcher, the clock, the calendar,
-the to-do list and the photo frame, and it now uses the same live photo
-discovery as the ef build. It asks for no microphone, calendar or location
-runtime permission; the calendar permission is requested only when the calendar
-card needs it. It does declare one notification-listener service, because
-Android only exposes another app's active media session to that kind of
+**The reduced build** (`SN-Launcher-0.3.0-<abi>.apk`, 10.1–10.8 MB) is the one
+to put on something you are not sure about. It has the launcher, the clock, the
+calendar, the to-do list and the photo frame, and it now uses the same live
+photo discovery as the ef build. It asks for no microphone, calendar or
+location runtime permission; the calendar permission is requested only when the
+calendar card needs it. It does declare one notification-listener service,
+because Android only exposes another app's active media session to that kind of
 service. The service is inert until Notification access is granted, and the
 launcher uses it only to notice which media session is playing — not to read
 notification content. The permission check is run against the built APK, not
 against the manifest, by `tool/verify_permissions.sh`.
 
-**The ef build** (`SN-Launcher-0.3.0-rc1-beta-arm64.apk`, 20 MB for arm64
-only) adds the NCS music page, the weather page with its artwork, the voice
-assistant, the theme picker and the Sun theme. It is the one to put on a device
-you own, where you have decided what it may look at.
+**The ef build** (`SN-Launcher-ef-0.3.0-<abi>.apk`, 10.1–10.8 MB) adds the NCS
+music page, the weather page with its artwork, the voice assistant, the theme
+picker and the Sun theme. It is the one to put on a device you own, where you
+have decided what it may look at.
 
-The version and APK names in this section predate the current builds; the two
-variants are built by `tool/build_variants.sh` and described in
+Both variants are built by `tool/build_variants.sh` and described in
 [`docs/BUILDS.md`](docs/BUILDS.md).
 
 ### What actually costs memory
