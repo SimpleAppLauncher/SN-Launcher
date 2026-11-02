@@ -16,13 +16,14 @@ import 'package:flutter/services.dart';
 /// still start, so every failure path degrades to the default value.
 class SettingsStore {
   SettingsStore({String? fallbackPath})
-      : _fallback = File(
-          fallbackPath ??
-              '${Directory.systemTemp.path}/sn_launcher_settings.json',
-        );
+    : _fallback = File(
+        fallbackPath ??
+            '${Directory.systemTemp.path}/sn_launcher_settings.json',
+      );
 
-  static const MethodChannel _channel =
-      MethodChannel('dev.snlauncher/settings');
+  static const MethodChannel _channel = MethodChannel(
+    'dev.snlauncher/settings',
+  );
 
   /// Desktop fallback. `Directory.systemTemp` is the app-private cache dir on
   /// Android and `/tmp` elsewhere, so this needs no plugin and no permission.
@@ -58,8 +59,10 @@ class SettingsStore {
         }
       }
     } on PlatformException catch (e) {
-      debugPrint('SettingsStore: channel unavailable (${e.code}), '
-          'falling back to a file');
+      debugPrint(
+        'SettingsStore: channel unavailable (${e.code}), '
+        'falling back to a file',
+      );
     } on MissingPluginException {
       // Desktop: no native side, use the file below.
     } catch (e) {
@@ -113,6 +116,11 @@ class SettingsStore {
 /// Keys, so the string literals exist in exactly one place.
 abstract final class SettingKeys {
   static const theme = 'theme';
+
+  /// The user's time-based theme schedule, stored as JSON: an array of
+  /// `{"theme": "Night", "start": 22, "end": 6}` windows. Absent means "no
+  /// schedule", which is the plain time-of-day theme.
+  static const themeSchedule = 'themeSchedule';
   static const weatherEnabled = 'weatherEnabled';
   static const latitude = 'latitude';
   static const longitude = 'longitude';

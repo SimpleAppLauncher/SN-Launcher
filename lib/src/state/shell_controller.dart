@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -134,6 +135,26 @@ class ShellController extends ChangeNotifier {
         _theme = fallbackTheme(FeatureFlags.current);
       }
     }
+    // The time-based theme schedule rides along with the theme: an empty list
+    // means the plain time-of-day theme, which is what a user who never set one
+    // gets. Windows naming a theme this build does not offer are dropped, the
+    // same way a stored base theme is re-checked above.
+    final storedSchedule = _settings.get(SettingKeys.themeSchedule);
+    if (storedSchedule != null) {
+      try {
+        final decoded = jsonDecode(storedSchedule);
+        final allowed = availableThemes(FeatureFlags.current)
+            .where((t) => t != NestTheme.dynamic)
+            .toSet();
+        _overrides = [
+          for (final o in ThemeOverride.listFromJson(decoded))
+            if (allowed.contains(o.theme)) o,
+        ];
+      } catch (_) {
+        // No (or unreadable) schedule. The time-of-day theme applies alone.
+        _overrides = const [];
+      }
+    }
     // The seconds flag has to be applied *after* the hook is attached, because
     // firing the hook is what re-schedules the clock service's timer — a
     // minute-resolution clock that is told to show seconds has to actually
@@ -193,6 +214,11 @@ class ShellController extends ChangeNotifier {
   /// True when the current look came from the clock rather than a pinned
   /// choice — the theme picker labels this row "follows the sun".
   bool get themeIsDynamic => _theme == NestTheme.dynamic;
+
+  /// The user's time-based themes, in the order they were added. Empty means
+  /// the theme simply follows the time of day, with no overrides.
+  List<ThemeOverride> _overrides = const [];
+  List<ThemeOverride> get themeOverrides => _overrides;
 
   bool get darkThemeEnabled => _palette.isDark;
 
@@ -261,11 +287,14 @@ class ShellController extends ChangeNotifier {
   /// A pinned theme ignores the clock entirely — that is the point of pinning
   /// it. Only [NestTheme.dynamic] drifts, and it only notifies when the colour
   /// actually moved, because this runs on every minute tick and a wall display
-  /// must not wake up repainting when nothing changed.
+  /// must not wake up repainting when nothing changed. Scheduled time-based
+  /// themes ride along: an override that contains the current hour replaces the
+  /// time-of-day default.
   void _recomputePalette({bool force = false}) {
     final t = _clockTicker?.now ?? DateTime.now();
     final next = AmbientPalette.resolve(
       _theme,
+      _overrides,
       t.hour.toDouble() + t.minute / 60.0,
     );
     if (force ||
@@ -620,6 +649,49 @@ class ShellController extends ChangeNotifier {
     // A theme stored from a previous install may not exist in this build.
     final at = values.indexOf(_theme);
     setTheme(values[(at < 0 ? 0 : at + 1) % values.length]);
+  }
+
+  /// Adds a scheduled time-based theme: while the clock is inside the
+  /// override's window, that theme is used instead of the time-of-day default.
+  void addThemeOverride(ThemeOverride override) {
+    _overrides = [..._overrides, override];
+    _persistThemeOverrides();
+    _recomputePalette(force: true);
+    showToast('Time-based theme added');
+    notifyListeners();
+  }
+
+  /// Replaces the scheduled theme at [index] — how a pill tap or slider drag
+  /// edits an existing window.
+  void updateThemeOverride(int index, ThemeOverride override) {
+    if (index < 0 || index >= _overrides.length) return;
+    final next = List<ThemeOverride>.of(_overrides);
+    next[index] = override;
+    _overrides = next;
+    _persistThemeOverrides();
+    _recomputePalette(force: true);
+    notifyListeners();
+  }
+
+  /// Drops the scheduled theme at [index].
+  void removeThemeOverride(int index) {
+    if (index < 0 || index >= _overrides.length) return;
+    final next = List<ThemeOverride>.of(_overrides);
+    next.removeAt(index);
+    _overrides = next;
+    _persistThemeOverrides();
+    _recomputePalette(force: true);
+    showToast('Time-based theme removed');
+    notifyListeners();
+  }
+
+  void _persistThemeOverrides() {
+    unawaited(
+      _settings.put(
+        SettingKeys.themeSchedule,
+        jsonEncode([for (final o in _overrides) o.toJson()]),
+      ),
+    );
   }
 
   /// Turns the weather page's background photograph on or off.

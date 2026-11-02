@@ -148,28 +148,26 @@ class SettingsPage extends StatelessWidget {
   // applies to copy too.
 
   static String _backendLabel(AssistantBackend backend) => switch (backend) {
-        AssistantBackend.homeAssistant => 'Home Assistant',
-        AssistantBackend.gemini => 'Gemini',
-        AssistantBackend.localOnly => 'Local only',
-      };
+    AssistantBackend.homeAssistant => 'Home Assistant',
+    AssistantBackend.gemini => 'Gemini',
+    AssistantBackend.localOnly => 'Local only',
+  };
 
   static String _backendNote(AssistantBackend backend) => switch (backend) {
-        AssistantBackend.homeAssistant =>
-          'Controls your own server — lights, switches, media. No general questions.',
-        AssistantBackend.gemini =>
-          "Answers anything via Google's API. Requests leave this device.",
-        AssistantBackend.localOnly =>
-          'Timers, media and volume. No network needed.',
-      };
+    AssistantBackend.homeAssistant => 'Controls your own server — lights, switches, media. No general questions.',
+    AssistantBackend.gemini =>
+      "Answers anything via Google's API. Requests leave this device.",
+    AssistantBackend.localOnly =>
+      'Timers, media and volume. No network needed.',
+  };
 
   /// Presence-only facts: "set" and "missing", never "working".
   String _assistantStatus(AssistantSettings a) => switch (a.backend) {
-        AssistantBackend.homeAssistant => _haStatus(a),
-        AssistantBackend.gemini => a.geminiKey.trim().isEmpty
-            ? 'No API key yet.'
-            : 'API key saved.',
-        AssistantBackend.localOnly => 'Runs entirely on this device.',
-      };
+    AssistantBackend.homeAssistant => _haStatus(a),
+    AssistantBackend.gemini =>
+      a.geminiKey.trim().isEmpty ? 'No API key yet.' : 'API key saved.',
+    AssistantBackend.localOnly => 'Runs entirely on this device.',
+  };
 
   static String _haStatus(AssistantSettings a) {
     final url = a.homeAssistantUrl.trim().isNotEmpty;
@@ -250,6 +248,25 @@ class SettingsPage extends StatelessWidget {
           c.themeIsDynamic ? 'Follows the time of day' : 'Pinned',
           style: type.caption(color: palette.onSurfaceVariant),
         ),
+        if (c.themeIsDynamic) ...[
+          SizedBox(height: m.px(10)),
+          _ThemeSchedule(
+            overrides: c.themeOverrides,
+            metrics: m,
+            type: type,
+            palette: palette,
+            onAdd: () => c.addThemeOverride(
+              const ThemeOverride(
+                theme: NestTheme.night,
+                startHour: 22,
+                endHour: 6,
+              ),
+            ),
+            onUpdate: (index, themeOverride) =>
+                c.updateThemeOverride(index, themeOverride),
+            onRemove: (index) => c.removeThemeOverride(index),
+          ),
+        ],
         _hairline(m),
         _ToggleRow(
           label: '24-hour time',
@@ -308,7 +325,8 @@ class SettingsPage extends StatelessWidget {
         if (FeatureFlags.current.isOn('weather'))
           _ToggleRow(
             label: 'Place photograph',
-            note: 'Shows a photograph of where this device is, behind the '
+            note:
+                'Shows a photograph of where this device is, behind the '
                 'weather. Found on Wikimedia Commons, refreshed hourly.',
             metrics: m,
             type: type,
@@ -355,7 +373,7 @@ class SettingsPage extends StatelessWidget {
         Text(
           granted
               ? 'Notification access is granted. The launcher shows what '
-                  'another app is playing.'
+                    'another app is playing.'
               : watcher.explanation,
           style: type.caption(color: palette.onSurfaceStrong),
         ),
@@ -470,7 +488,8 @@ class SettingsPage extends StatelessWidget {
                 ),
                 SizedBox(height: m.px(12)),
                 _TestConnectionRow(
-                  canTest: interactive &&
+                  canTest:
+                      interactive &&
                       !a.busy &&
                       a.homeAssistantUrl.trim().isNotEmpty &&
                       a.homeAssistantToken.trim().isNotEmpty &&
@@ -521,12 +540,12 @@ class SettingsPage extends StatelessWidget {
   }
 
   Widget _hairline(NestMetrics m) => Padding(
-        padding: EdgeInsets.symmetric(vertical: m.px(12)),
-        child: Container(
-          height: m.px(1),
-          color: palette.onSurfaceVariant.withValues(alpha: 0.14),
-        ),
-      );
+    padding: EdgeInsets.symmetric(vertical: m.px(12)),
+    child: Container(
+      height: m.px(1),
+      color: palette.onSurfaceVariant.withValues(alpha: 0.14),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -549,11 +568,19 @@ class SettingsPage extends StatelessWidget {
           // page's own background out of the way of the ambient gradient.
           type: MaterialType.transparency,
           child: Padding(
-            padding: EdgeInsets.fromLTRB(m.px(48), m.px(36), m.px(48), m.px(20)),
+            padding: EdgeInsets.fromLTRB(
+              m.px(48),
+              m.px(36),
+              m.px(48),
+              m.px(20),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Settings', style: type.sheetTitle(color: palette.onSurface)),
+                Text(
+                  'Settings',
+                  style: type.sheetTitle(color: palette.onSurface),
+                ),
                 SizedBox(height: m.px(14)),
                 Expanded(
                   child: SingleChildScrollView(
@@ -632,7 +659,10 @@ class _Section extends StatelessWidget {
             children: [
               Icon(icon, size: m.px(22), color: palette.onSurfaceStrong),
               SizedBox(width: m.px(10)),
-              Text(title, style: type.sheetTitle(color: palette.onSurfaceStrong)),
+              Text(
+                title,
+                style: type.sheetTitle(color: palette.onSurfaceStrong),
+              ),
             ],
           ),
           SizedBox(height: m.px(14)),
@@ -692,10 +722,7 @@ class _ToggleRow extends StatelessWidget {
         ),
         if (note != null) ...[
           SizedBox(height: m.px(2)),
-          Text(
-            note!,
-            style: type.caption(color: palette.onSurfaceVariant),
-          ),
+          Text(note!, style: type.caption(color: palette.onSurfaceVariant)),
         ],
       ],
     );
@@ -798,14 +825,13 @@ class _PillToggle extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: m.px(14),
-          vertical: m.px(7),
-        ),
+        padding: EdgeInsets.symmetric(horizontal: m.px(14), vertical: m.px(7)),
         decoration: BoxDecoration(
           color: active
               ? const Color(0xFF4285F4)
-              : palette.onSurfaceVariant.withValues(alpha: enabled ? 0.12 : 0.08),
+              : palette.onSurfaceVariant.withValues(
+                  alpha: enabled ? 0.12 : 0.08,
+                ),
           borderRadius: BorderRadius.circular(m.px(10)),
         ),
         child: Text(
@@ -849,8 +875,9 @@ class _ThemeSwatch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = metrics;
-    final preview =
-        theme == NestTheme.dynamic ? live : AmbientPalette.of(theme);
+    final preview = theme == NestTheme.dynamic
+        ? live
+        : AmbientPalette.of(theme);
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -875,6 +902,196 @@ class _ThemeSwatch extends StatelessWidget {
           style: type.caption(color: preview.onSurfaceStrong),
         ),
       ),
+    );
+  }
+}
+
+/// The user's time-based themes: windows that say when a specific theme should
+/// appear while the theme follows the time of day.
+///
+/// An empty schedule means the theme follows the wall clock alone. Each override
+/// names a theme and a window; while the clock is inside the window that theme is
+/// used instead of the time-of-day default, so "at 6am use the Night theme" is
+/// just a window with a start hour and an end hour.
+class _ThemeSchedule extends StatelessWidget {
+  const _ThemeSchedule({
+    required this.overrides,
+    required this.metrics,
+    required this.type,
+    required this.palette,
+    required this.onAdd,
+    required this.onUpdate,
+    required this.onRemove,
+  });
+
+  final List<ThemeOverride> overrides;
+  final NestMetrics metrics;
+  final NestType type;
+  final AmbientPalette palette;
+  final VoidCallback onAdd;
+  final void Function(int index, ThemeOverride themeOverride) onUpdate;
+  final void Function(int index) onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = metrics;
+    final children = <Widget>[
+      Text(
+        'Time-based themes',
+        style: type.caption(color: palette.onSurfaceStrong),
+      ),
+      SizedBox(height: m.px(4)),
+    ];
+    if (overrides.isEmpty) {
+      children.add(
+        Text(
+          'Not set. While the theme follows the time of day, the display '
+          'picks its palette from the wall clock alone.',
+          style: type.caption(color: palette.onSurfaceVariant),
+        ),
+      );
+    }
+    for (var i = 0; i < overrides.length; i++) {
+      children.add(
+        _ThemeOverrideRow(
+          index: i,
+          themeOverride: overrides[i],
+          metrics: m,
+          type: type,
+          palette: palette,
+          onUpdate: (o) => onUpdate(i, o),
+          onRemove: () => onRemove(i),
+        ),
+      );
+      if (i < overrides.length - 1) {
+        children.add(SizedBox(height: m.px(12)));
+      }
+    }
+    if (overrides.isNotEmpty) {
+      children.add(SizedBox(height: m.px(12)));
+    }
+    if (overrides.length > 1) {
+      children.add(
+        Padding(
+          padding: EdgeInsets.only(bottom: m.px(10)),
+          child: Text(
+            'When windows overlap, the first one in this list wins.',
+            style: type.caption(color: palette.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+    children.add(
+      OutlinedButton(
+        onPressed: onAdd,
+        style: OutlinedButton.styleFrom(
+          shape: const StadiumBorder(),
+          padding: EdgeInsets.symmetric(horizontal: m.px(16)),
+        ),
+        child: Text(
+          'Add time-based theme',
+          style: type.caption(color: palette.onSurfaceStrong),
+        ),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+  }
+}
+
+/// One scheduled window: which theme it names and when it is live.
+class _ThemeOverrideRow extends StatelessWidget {
+  const _ThemeOverrideRow({
+    required this.index,
+    required this.themeOverride,
+    required this.metrics,
+    required this.type,
+    required this.palette,
+    required this.onUpdate,
+    required this.onRemove,
+  });
+
+  final int index;
+  final ThemeOverride themeOverride;
+  final NestMetrics metrics;
+  final NestType type;
+  final AmbientPalette palette;
+  final void Function(ThemeOverride themeOverride) onUpdate;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = metrics;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Wrap(
+          spacing: m.px(8),
+          runSpacing: m.px(8),
+          children: [
+            for (final t in availableThemes(FeatureFlags.current))
+              if (t != NestTheme.dynamic)
+                _PillToggle(
+                  label: t.label,
+                  on: themeOverride.theme == t,
+                  metrics: m,
+                  type: type,
+                  palette: palette,
+                  onTap: () => onUpdate(themeOverride.copyWith(theme: t)),
+                ),
+          ],
+        ),
+        SizedBox(height: m.px(8)),
+        _SliderRow(
+          label: 'From',
+          valueText: themeOverride.startLabel,
+          metrics: m,
+          type: type,
+          palette: palette,
+          value: themeOverride.startHour,
+          min: 0,
+          max: 24,
+          divisions: 48,
+          onChanged: (v) => onUpdate(themeOverride.copyWith(startHour: v)),
+        ),
+        SizedBox(height: m.px(8)),
+        _SliderRow(
+          label: 'Until',
+          valueText: themeOverride.endLabel,
+          metrics: m,
+          type: type,
+          palette: palette,
+          value: themeOverride.endHour,
+          min: 0,
+          max: 24,
+          divisions: 48,
+          onChanged: (v) => onUpdate(themeOverride.copyWith(endHour: v)),
+        ),
+        if (themeOverride.startHour == themeOverride.endHour) ...[
+          SizedBox(height: m.px(2)),
+          Text(
+            'Start and end are the same; this window never applies.',
+            style: type.caption(color: palette.onSurfaceVariant),
+          ),
+        ],
+        Align(
+          alignment: Alignment.centerRight,
+          child: IconButton(
+            icon: Icon(
+              NestIcons.Remove,
+              size: m.px(18),
+              color: palette.onSurfaceVariant,
+            ),
+            onPressed: onRemove,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -917,8 +1134,9 @@ class _SyncedTextField extends StatefulWidget {
 }
 
 class _SyncedTextFieldState extends State<_SyncedTextField> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.value);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.value,
+  );
   final FocusNode _focus = FocusNode();
 
   @override
@@ -975,14 +1193,9 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
         hintStyle: widget.type.caption(
           color: p.onSurfaceVariant.withValues(alpha: 0.55),
         ),
-        enabledBorder:
-            border(p.onSurfaceVariant.withValues(alpha: 0.32)),
-        focusedBorder: border(
-          Theme.of(context).colorScheme.primary,
-          m.px(1.5),
-        ),
-        disabledBorder:
-            border(p.onSurfaceVariant.withValues(alpha: 0.12)),
+        enabledBorder: border(p.onSurfaceVariant.withValues(alpha: 0.32)),
+        focusedBorder: border(Theme.of(context).colorScheme.primary, m.px(1.5)),
+        disabledBorder: border(p.onSurfaceVariant.withValues(alpha: 0.12)),
       ),
     );
   }

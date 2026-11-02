@@ -14,6 +14,105 @@ enum NestTheme {
   final String label;
 }
 
+/// One time-based theme from the user's schedule.
+///
+/// While the wall clock is inside the window, the display uses [theme] instead
+/// of the time-of-day default. Hours are fractional — 22.5 is 10:30 — and
+/// [endHour] may be 24 to mean "until midnight".
+///
+/// A window whose start hour is later than its end hour wraps past midnight,
+/// so "night until morning" is one entry: start 22, end 6.
+@immutable
+class ThemeOverride {
+  const ThemeOverride({
+    required this.theme,
+    required this.startHour,
+    required this.endHour,
+  });
+
+  final NestTheme theme;
+  final double startHour;
+  final double endHour;
+
+  ThemeOverride copyWith({
+    NestTheme? theme,
+    double? startHour,
+    double? endHour,
+  }) => ThemeOverride(
+    theme: theme ?? this.theme,
+    startHour: startHour ?? this.startHour,
+    endHour: endHour ?? this.endHour,
+  );
+
+  /// True while [hour] falls inside this window. Hours outside 0..24 are
+  /// clamped, so a clock reading can never throw at an edge.
+  bool contains(double hour) {
+    final h = hour.clamp(0.0, 24.0);
+    final start = startHour.clamp(0.0, 24.0);
+    final end = endHour.clamp(0.0, 24.0);
+    if (start <= end) {
+      // A window inside a single day: [start, end).
+      return h >= start && h < end;
+    }
+    // start > end: the window wraps past midnight.
+    return h >= start || h < end;
+  }
+
+  /// The window edge as a wall-clock label: 6 → "6:00", 22.5 → "22:30".
+  String get startLabel => _label(startHour);
+
+  /// The window edge as a wall-clock label: 6 → "6:00", 22.5 → "22:30".
+  String get endLabel => _label(endHour);
+
+  static String _label(double hour) {
+    final minutes = (hour * 60).round();
+    final h = minutes ~/ 60;
+    final m = (minutes % 60).toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  Map<String, Object> toJson() => {
+    'theme': theme.name,
+    'start': startHour,
+    'end': endHour,
+  };
+
+  /// Parses a decoded JSON value into scheduled overrides.
+  ///
+  /// A value that is not a list returns empty. Individual unusable entries are
+  /// dropped rather than aborting the whole schedule: a bad theme name, a
+  /// non-numeric hour, or an hour outside the 0..24 wall clock cannot make the
+  /// launcher throw. [NestTheme.dynamic] is not a pinned theme, so an entry
+  /// naming it is dropped too.
+  static List<ThemeOverride> listFromJson(Object? raw) {
+    if (raw is! List) return const [];
+    final out = <ThemeOverride>[];
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      final themeName = entry['theme'];
+      NestTheme? theme;
+      if (themeName is String) {
+        for (final t in NestTheme.values) {
+          if (t.name == themeName) {
+            theme = t;
+            break;
+          }
+        }
+      }
+      if (theme == null || theme == NestTheme.dynamic) continue;
+      final rawStart = entry['start'];
+      final rawEnd = entry['end'];
+      if (rawStart is! num || rawEnd is! num) continue;
+      final start = rawStart.toDouble();
+      final end = rawEnd.toDouble();
+      if (!start.isFinite || !end.isFinite) continue;
+      if (start < 0 || start > 24 || end < 0 || end > 24) continue;
+      out.add(ThemeOverride(theme: theme, startHour: start, endHour: end));
+    }
+    return out;
+  }
+}
+
 /// The ambient colour scheme the Nest Hub paints its whole UI with.
 ///
 /// The real device samples its ambient light sensor and the wall clock to pick
@@ -27,6 +126,10 @@ enum NestTheme {
 ///  * a pinned preset ([of]) — a flat scheme the user chose and it stays put.
 ///    Pinning matters on a wall display: a screen that changes colour while
 ///    someone is reading it is worse than one that is consistently dull.
+///
+/// [NestTheme.dynamic] also answers to a user schedule: each [ThemeOverride]
+/// window that contains the current hour replaces the time-of-day default while
+/// it lasts, so the display can be told "from 6am until 12pm, use the Day theme".
 @immutable
 class AmbientPalette {
   const AmbientPalette({
@@ -252,15 +355,15 @@ class AmbientPalette {
   /// The palette for a pinned theme. [NestTheme.dynamic] has no fixed palette —
   /// use [at] for it.
   static AmbientPalette of(NestTheme theme) => switch (theme) {
-        NestTheme.white => white,
-        NestTheme.day => day,
-        NestTheme.afternoon => afternoon,
-        NestTheme.night => night,
-        // Any caller that reaches here with `dynamic` wanted time-of-day
-        // behaviour and will get it from `at`; returning noon is the sanest
-        // static stand-in.
-        NestTheme.dynamic => _daytime,
-      };
+    NestTheme.white => white,
+    NestTheme.day => day,
+    NestTheme.afternoon => afternoon,
+    NestTheme.night => night,
+    // Any caller that reaches here with `dynamic` wanted time-of-day
+    // behaviour and will get it from `at`; returning noon is the sanest
+    // static stand-in.
+    NestTheme.dynamic => _daytime,
+  };
 
   /// Smoothly interpolated palette for a given wall-clock hour (0..24).
   static AmbientPalette at(double hour, {double ambientBrightness = 0.5}) {
@@ -284,14 +387,30 @@ class AmbientPalette {
   }
 
   /// Resolve the user's choice against the current wall-clock hour.
-  static AmbientPalette resolve(NestTheme theme, double hour) =>
-      theme == NestTheme.dynamic ? at(hour) : of(theme);
+  ///
+  /// [overrides] are the user's time-based themes: windows that replace the
+  /// time-of-day default while they contain [hour]. An empty list is the plain
+  /// time-of-day behaviour, so a build with no schedule resolves exactly as it
+  /// always did. A pinned theme ignores both — pinning is the point of pinning.
+  static AmbientPalette resolve(
+    NestTheme theme,
+    List<ThemeOverride> overrides,
+    double hour,
+  ) {
+    if (theme != NestTheme.dynamic) return of(theme);
+    for (final override in overrides) {
+      if (override.contains(hour)) return of(override.theme);
+    }
+    return at(hour);
+  }
 
   AmbientPalette adaptToAmbientLight(double level) {
     // Below 0.5 the room is dim: darken and cool. Above: lighten and warm.
     if ((level - 0.5).abs() < 0.02) return this;
     final amount = (level - 0.5) * 0.28;
-    final target = amount > 0 ? const Color(0xFFFFF8EE) : const Color(0xFF0A0F1C);
+    final target = amount > 0
+        ? const Color(0xFFFFF8EE)
+        : const Color(0xFF0A0F1C);
     final mix = amount.abs();
     return copyWith(
       top: Color.lerp(top, target, mix)!,
@@ -371,10 +490,8 @@ class AmbientPalette {
     for (var i = 0; i < 8 && !candidate.hasReadableInk; i++) {
       candidate = candidate.copyWith(
         onSurface: Color.lerp(candidate.onSurface, target, 0.25)!,
-        onSurfaceStrong:
-            Color.lerp(candidate.onSurfaceStrong, target, 0.25)!,
-        onSurfaceVariant:
-            Color.lerp(candidate.onSurfaceVariant, target, 0.25)!,
+        onSurfaceStrong: Color.lerp(candidate.onSurfaceStrong, target, 0.25)!,
+        onSurfaceVariant: Color.lerp(candidate.onSurfaceVariant, target, 0.25)!,
       );
     }
     if (candidate.hasReadableInk) return candidate;
@@ -385,8 +502,9 @@ class AmbientPalette {
     // surface away from the ink. Four samples out of 144, so the fill shifts
     // only just far enough to clear the threshold.
     final ink = candidate.onSurface.computeLuminance();
-    final surfaceTarget =
-        ink > 0.5 ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
+    final surfaceTarget = ink > 0.5
+        ? const Color(0xFF000000)
+        : const Color(0xFFFFFFFF);
     for (var i = 0; i < 4 && !candidate.hasReadableInk; i++) {
       candidate = candidate.copyWith(
         surface: Color.lerp(candidate.surface, surfaceTarget, 0.25)!,
