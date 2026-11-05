@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Performance
+
+- **Removed per-frame rebuilds during sheet and drawer drags.** The launcher
+  sheet's badge row, divider and quick settings are now built once and cached
+  as an `AnimatedBuilder.child`; the drag only moves the cached layer. The
+  installed-app drawer grid is cached the same way. Previously both surfaces
+  were reconstructed on every pointer move, which is the likely cause of the
+  delayed, laggy feel on lower-end tablets.
+- **Reset the carousel drag distance at gesture start and cancel**, so a
+  cancelled or interrupted drag cannot leave a stale offset behind.
+- **Use `DragStartBehavior.down` for the carousel gesture**, so once Android's
+  touch slop is crossed the page catches up to the finger instead of starting
+  from the post-slop position.
+
+This is an automated-test-only fix for now: `flutter analyze` is clean and the
+full suite passes (287 passed, 1 skipped). ADB was offline, so it has not been
+smoke-tested on the T20 in this pass.
+
 ## 0.3.0 — 2026-11-02
 
 The first release-signed build. `versionName` is 0.3.0; the base

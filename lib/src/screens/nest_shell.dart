@@ -537,6 +537,11 @@ class _NestShellState extends State<NestShell> {
               },
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
+                // Report the drag from the pointer-down position rather than
+                // from the point where the 18 px touch slop was crossed. The
+                // carousel still waits for the slop, but once it wins it
+                // catches up to the finger instead of starting a frame late.
+                dragStartBehavior: DragStartBehavior.down,
                 // Tap-to-talk. A launcher must not claim it is listening when
                 // no microphone exists, so this refuses outright unless the
                 // assistant is enabled *and* speech input is really available.
@@ -549,6 +554,8 @@ class _NestShellState extends State<NestShell> {
                 // drag across the screen did nothing at all — and a synthetic
                 // swipe, which is steady rather than flicked, did nothing
                 // either, which is how this was found.
+                onHorizontalDragStart: (_) => _dragDx = 0,
+                onHorizontalDragCancel: () => _dragDx = 0,
                 onHorizontalDragUpdate: (d) {
                   _dragDx += d.delta.dx;
                   // The carousel follows the finger. Before this it sat still
@@ -639,29 +646,49 @@ class _NestShellState extends State<NestShell> {
                         if (_c.page != ShellPage.discover)
                           AnimatedBuilder(
                             animation: _c.sheetAnim,
-                            builder: (context, _) {
+                            // Build the sheet surface once per data change, not
+                            // once per animation frame. The builder below only
+                            // moves the cached layer; rebuilding the badges,
+                            // divider and seven quick tiles on every pointer
+                            // move was the remaining cost in a sheet drag.
+                            child: LauncherSheet(
+                              metrics: _m,
+                              palette: palette,
+                              progress: 0,
+                              suggested: _suggested,
+                              quickSettings: quickSettingsFor(flags),
+                              brightness: _c.brightness,
+                              volume: _c.volume,
+                              cameraEnabled: true,
+                              onActionTap: _c.openAction,
+                              onSeeAll: () => _c.goToPage(ShellPage.discover),
+                              onQuickSettingTap: _handleQuickSetting,
+                              onBrightnessDrag: (d) =>
+                                  _c.setBrightness(_c.brightness + d),
+                              onVolumeDrag: (d) => _c.setVolume(_c.volume + d),
+                              animate: false,
+                            ),
+                            builder: (context, child) {
                               final progress = _c.sheetProgress;
                               return Stack(
                                 fit: StackFit.expand,
                                 children: [
                                   if (progress > 0.005)
-                                    LauncherSheet(
-                                      metrics: _m,
-                                      palette: palette,
-                                      progress: progress,
-                                      suggested: _suggested,
-                                      quickSettings: quickSettingsFor(flags),
-                                      brightness: _c.brightness,
-                                      volume: _c.volume,
-                                      cameraEnabled: true,
-                                      onActionTap: _c.openAction,
-                                      onSeeAll: () =>
-                                          _c.goToPage(ShellPage.discover),
-                                      onQuickSettingTap: _handleQuickSetting,
-                                      onBrightnessDrag: (d) =>
-                                          _c.setBrightness(_c.brightness + d),
-                                      onVolumeDrag: (d) =>
-                                          _c.setVolume(_c.volume + d),
+                                    Positioned(
+                                      left: 0,
+                                      right: 0,
+                                      bottom: 0,
+                                      height: _m.sheetHeight,
+                                      child: IgnorePointer(
+                                        ignoring: progress < 0.02,
+                                        child: Transform.translate(
+                                          offset: Offset(
+                                            0,
+                                            (1.0 - progress) * _m.sheetHeight,
+                                          ),
+                                          child: RepaintBoundary(child: child!),
+                                        ),
+                                      ),
                                     ),
                                   // The home-screen grabber fades out as the sheet
                                   // takes over the bottom edge.
@@ -719,15 +746,28 @@ class _NestShellState extends State<NestShell> {
                         if (_c.page == ShellPage.discover)
                           AnimatedBuilder(
                             animation: _c.sheetAnim,
-                            builder: (context, _) => AppDrawer(
+                            // Cache the grid surface; only its offset changes
+                            // while the sheet is dragged.
+                            child: AppDrawer(
                               metrics: _m,
                               palette: palette,
                               actions: _actions,
-                              reveal: _c.sheetProgress,
+                              reveal: 0,
                               onActionTap: _c.openAction,
                               onClose: _c.closeSheet,
                               loading: widget.appCatalog?.isLoading ?? false,
+                              animate: false,
                             ),
+                            builder: (context, child) {
+                              final reveal = _c.sheetProgress;
+                              return IgnorePointer(
+                                ignoring: reveal < 0.05,
+                                child: FractionalTranslation(
+                                  translation: Offset(0, 1 - reveal),
+                                  child: child!,
+                                ),
+                              );
+                            },
                           ),
 
                         // ── Toast ──────────────────────────────────────────

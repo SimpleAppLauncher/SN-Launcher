@@ -37,6 +37,7 @@ class LauncherSheet extends StatelessWidget {
     required this.onQuickSettingTap,
     required this.onBrightnessDrag,
     required this.onVolumeDrag,
+    this.animate = true,
   });
 
   final NestMetrics metrics;
@@ -56,6 +57,12 @@ class LauncherSheet extends StatelessWidget {
   final void Function(QuickSettingKind) onQuickSettingTap;
   final ValueChanged<double> onBrightnessDrag;
   final ValueChanged<double> onVolumeDrag;
+
+  /// When false, returns only the sheet surface. The shell uses this to keep
+  /// the surface as a cached `AnimatedBuilder.child` and animate its offset
+  /// outside it, so a sheet drag does not rebuild the badge row and quick
+  /// settings on every frame.
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +88,118 @@ class LauncherSheet extends StatelessWidget {
     // and it keeps the closed state costing literally nothing to composite.
     final lift = (1 - progress.clamp(0.0, 1.0)) * sheetH;
 
+    final surface = ClipRRect(
+      borderRadius: BorderRadius.only(
+        topLeft: Radius.circular(metrics.px(28)),
+        topRight: Radius.circular(metrics.px(28)),
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: palette.surface),
+        child: Stack(
+          children: [
+            // Drag handle, 23 design px below the sheet top.
+            Positioned(
+              top: metrics.sheetLocalHandleY,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: DragHandle(
+                  color: palette.onSurfaceStrong,
+                  scale: metrics.u,
+                ),
+              ),
+            ),
+
+            // App row. Offsets are sheet-relative because this Stack
+            // already lives inside the sheet's own coordinate space.
+            Positioned(
+              top: metrics.sheetLocalAppRowCenter - cellH / 2,
+              left: padding,
+              right: padding,
+              height: cellH,
+              child: Row(
+                children: [
+                  // The device spaces the six badges at a fixed pitch
+                  // (~148px on the Max) rather than stretching them to
+                  // fill the row; the "See all" pill then sits hard
+                  // against the right edge.
+                  for (var i = 0; i < suggested.length && i < 6; i++) ...[
+                    if (i > 0)
+                      SizedBox(
+                        width: (metrics.px(NestMetrics.appRowSpacing) - badge)
+                            .clamp(0.0, double.infinity),
+                      ),
+                    _PressableBadge(
+                      action: suggested[i],
+                      size: badge,
+                      labelStyle: labelStyle,
+                      onTap: () => onActionTap(suggested[i]),
+                    ),
+                  ],
+                  const Spacer(),
+                  _SeeAllPill(
+                    width: metrics.px(NestMetrics.seeAllWidth),
+                    height: metrics.px(NestMetrics.seeAllHeight),
+                    scale: metrics.u,
+                    palette: palette,
+                    onTap: onSeeAll,
+                  ),
+                ],
+              ),
+            ),
+
+            // Hairline divider.
+            Positioned(
+              top: metrics.sheetLocalDividerY,
+              left: padding,
+              right: padding,
+              child: SizedBox(
+                height: 1,
+                child: ColoredBox(
+                  color: palette.onSurfaceStrong.withValues(alpha: 0.10),
+                ),
+              ),
+            ),
+
+            // Quick settings.
+            Positioned(
+              top: metrics.sheetLocalQsRowCenter - glyph / 2,
+              left: 0,
+              right: 0,
+              height: glyph,
+              child: Row(
+                children: [
+                  for (final qs in quickSettings)
+                    Expanded(
+                      child: Center(
+                        child: _QuickTile(
+                          kind: qs.kind,
+                          size: glyph,
+                          color: palette.onSurfaceStrong,
+                          brightness: brightness,
+                          volume: volume,
+                          cameraEnabled: cameraEnabled,
+                          onTap: () => onQuickSettingTap(qs.kind),
+                          onSlide: (delta) => switch (qs.kind) {
+                            QuickSettingKind.brightness => onBrightnessDrag(
+                              delta,
+                            ),
+                            QuickSettingKind.volume => onVolumeDrag(delta),
+                            _ => onQuickSettingTap(qs.kind),
+                          },
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!animate) return surface;
+
     // `Positioned`, not `Align`.
     //
     // `Align` is a RenderPositionedBox, whose `hitTestSelf` returns true and
@@ -88,6 +207,12 @@ class LauncherSheet extends StatelessWidget {
     // on the whole screen. That is why the sheet could not be dragged back
     // down, and why the carousel behind it went dead. Constraining the sheet to
     // the bottom band leaves the rest of the screen hit-testable.
+    //
+    // The surface is built by the caller as an `AnimatedBuilder.child` when
+    // `animate` is false, so only this transform runs per drag frame. The
+    // RepaintBoundary is outside the surface and inside the transform: moving
+    // the cached layer is a blit, while the badge row and quick settings keep
+    // their built/painted state.
     return Positioned(
       left: 0,
       right: 0,
@@ -97,121 +222,7 @@ class LauncherSheet extends StatelessWidget {
         ignoring: progress < 0.02,
         child: Transform.translate(
           offset: Offset(0, lift),
-          // The sheet's contents rasterise once into their own layer and are
-          // then only blitted. Without this the badge row, the divider and
-          // the seven quick-setting glyphs all re-rasterise on every frame of
-          // the drag, which is what tipped the animation over the 60 Hz frame
-          // budget on a UNISOC T610.
-          child: RepaintBoundary(
-              child: ClipRRect(
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(metrics.px(28)),
-                topRight: Radius.circular(metrics.px(28)),
-              ),
-              child: DecoratedBox(
-                decoration: BoxDecoration(color: palette.surface),
-                child: Stack(
-                  children: [
-                    // Drag handle, 23 design px below the sheet top.
-                    Positioned(
-                      top: metrics.sheetLocalHandleY,
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: DragHandle(
-                          color: palette.onSurfaceStrong,
-                          scale: metrics.u,
-                        ),
-                      ),
-                    ),
-
-                    // App row. Offsets are sheet-relative because this Stack
-                    // already lives inside the sheet's own coordinate space.
-                    Positioned(
-                      top: metrics.sheetLocalAppRowCenter - cellH / 2,
-                      left: padding,
-                      right: padding,
-                      height: cellH,
-                      child: Row(
-                        children: [
-                          // The device spaces the six badges at a fixed pitch
-                          // (~148px on the Max) rather than stretching them to
-                          // fill the row; the "See all" pill then sits hard
-                          // against the right edge.
-                          for (var i = 0; i < suggested.length && i < 6; i++) ...[
-                            if (i > 0)
-                              SizedBox(
-                                width: (metrics.px(NestMetrics.appRowSpacing) - badge)
-                                    .clamp(0.0, double.infinity),
-                              ),
-                            _PressableBadge(
-                              action: suggested[i],
-                              size: badge,
-                              labelStyle: labelStyle,
-                              onTap: () => onActionTap(suggested[i]),
-                            ),
-                          ],
-                          const Spacer(),
-                          _SeeAllPill(
-                            width: metrics.px(NestMetrics.seeAllWidth),
-                            height: metrics.px(NestMetrics.seeAllHeight),
-                            scale: metrics.u,
-                            palette: palette,
-                            onTap: onSeeAll,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Hairline divider.
-                    Positioned(
-                      top: metrics.sheetLocalDividerY,
-                      left: padding,
-                      right: padding,
-                      child: SizedBox(
-                        height: 1,
-                        child: ColoredBox(
-                          color: palette.onSurfaceStrong.withValues(alpha: 0.10),
-                        ),
-                      ),
-                    ),
-
-                    // Quick settings.
-                    Positioned(
-                      top: metrics.sheetLocalQsRowCenter - glyph / 2,
-                      left: 0,
-                      right: 0,
-                      height: glyph,
-                      child: Row(
-                        children: [
-                          for (final qs in quickSettings)
-                            Expanded(
-                              child: Center(
-                                child: _QuickTile(
-                                  kind: qs.kind,
-                                  size: glyph,
-                                  color: palette.onSurfaceStrong,
-                                  brightness: brightness,
-                                  volume: volume,
-                                  cameraEnabled: cameraEnabled,
-                                  onTap: () => onQuickSettingTap(qs.kind),
-                                  onSlide: (delta) => switch (qs.kind) {
-                                    QuickSettingKind.brightness =>
-                                      onBrightnessDrag(delta),
-                                    QuickSettingKind.volume => onVolumeDrag(delta),
-                                    _ => onQuickSettingTap(qs.kind),
-                                  },
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          child: RepaintBoundary(child: surface),
         ),
       ),
     );
@@ -232,11 +243,7 @@ class _GridDotsPainter extends CustomPainter {
     final paint = Paint()..color = color;
     for (var x = 0; x < 3; x++) {
       for (var y = 0; y < 3; y++) {
-        canvas.drawCircle(
-          c + Offset((x - 1) * step, (y - 1) * step),
-          r,
-          paint,
-        );
+        canvas.drawCircle(c + Offset((x - 1) * step, (y - 1) * step), r, paint);
       }
     }
   }
@@ -335,8 +342,9 @@ class _PressableScaleState extends State<PressableScale> {
       onTapUp: (_) => setState(() => _down = false),
       onTapCancel: () => setState(() => _down = false),
       onTap: widget.onTap,
-      onHorizontalDragUpdate:
-          widget.onPan == null ? null : (d) => widget.onPan!(d.delta.dx),
+      onHorizontalDragUpdate: widget.onPan == null
+          ? null
+          : (d) => widget.onPan!(d.delta.dx),
       child: AnimatedScale(
         scale: _down ? widget.pressedScale : 1.0,
         duration: const Duration(milliseconds: 110),
@@ -432,7 +440,11 @@ class _QuickTile extends StatelessWidget {
 
 /// Thin arc that fills as a slider is dragged.
 class _LevelRing extends StatelessWidget {
-  const _LevelRing({required this.level, required this.color, required this.size});
+  const _LevelRing({
+    required this.level,
+    required this.color,
+    required this.size,
+  });
 
   final double level;
   final Color color;
@@ -443,7 +455,9 @@ class _LevelRing extends StatelessWidget {
     return IgnorePointer(
       child: SizedBox.square(
         dimension: size * 1.3,
-        child: CustomPaint(painter: _RingPainter(level: level, color: color)),
+        child: CustomPaint(
+          painter: _RingPainter(level: level, color: color),
+        ),
       ),
     );
   }

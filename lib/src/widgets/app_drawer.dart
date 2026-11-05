@@ -28,6 +28,7 @@ class AppDrawer extends StatefulWidget {
     required this.onActionTap,
     this.onClose,
     this.loading = false,
+    this.animate = true,
   });
 
   final NestMetrics metrics;
@@ -46,6 +47,11 @@ class AppDrawer extends StatefulWidget {
   /// True while the platform is still enumerating installed apps. The drawer
   /// shows a progress indicator instead of an empty-state lie.
   final bool loading;
+
+  /// When false, returns only the drawer surface. The shell uses this to keep
+  /// the grid as a cached `AnimatedBuilder.child` and animate the reveal
+  /// outside it, so sliding the sheet does not rebuild every app cell.
+  final bool animate;
 
   @override
   State<AppDrawer> createState() => _AppDrawerState();
@@ -82,6 +88,84 @@ class _AppDrawerState extends State<AppDrawer> {
               if (action.label.toLowerCase().contains(query)) action,
           ];
 
+    final surface = ColoredBox(
+      color: widget.palette.surface,
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(padding, m.px(16), padding, m.px(10)),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _SearchField(
+                    controller: _search,
+                    palette: widget.palette,
+                    metrics: m,
+                    style: type.body(color: fg),
+                    onChanged: (value) => setState(() => _query = value),
+                    onClear: () {
+                      _search.clear();
+                      setState(() => _query = '');
+                    },
+                  ),
+                ),
+                if (widget.onClose != null) ...[
+                  SizedBox(width: m.px(10)),
+                  _CloseButton(
+                    palette: widget.palette,
+                    metrics: m,
+                    onTap: widget.onClose!,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Expanded(
+            child: filtered.isEmpty
+                ? _EmptyDrawer(
+                    palette: widget.palette,
+                    metrics: m,
+                    query: _query,
+                    loading: widget.loading,
+                  )
+                : GridView.builder(
+                    controller: _controller,
+                    padding: EdgeInsets.fromLTRB(
+                      padding,
+                      m.px(4),
+                      padding,
+                      padding,
+                    ),
+                    physics: const ClampingScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: m.appGridColumns,
+                      mainAxisSpacing: m.px(4),
+                      crossAxisSpacing: m.px(4),
+                      mainAxisExtent: cellH,
+                    ),
+                    itemCount: filtered.length,
+                    addAutomaticKeepAlives: false,
+                    addRepaintBoundaries: false,
+                    itemBuilder: (context, i) {
+                      final a = filtered[i];
+                      return _GridCell(
+                        action: a,
+                        iconSize: icon,
+                        label: a.label,
+                        labelStyle: type.appLabel(
+                          color: fg.withValues(alpha: 0.82),
+                        ),
+                        onTap: () => widget.onActionTap(a),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+
+    if (!widget.animate) return surface;
+
     return IgnorePointer(
       ignoring: reveal < 0.05,
       // Slide the opaque sheet in from below. An opacity fade over a
@@ -90,91 +174,11 @@ class _AppDrawerState extends State<AppDrawer> {
       // afford. A translation composites the same painted sheet without an
       // offscreen buffer, and it still reads as the drawer arriving.
       //
-      // No extra RepaintBoundary here: a cached full-screen sheet is another
-      // retained layer, and this animation should not hold one. The grid draws
-      // again while the sheet moves, which is the cheaper trade on this device.
+      // The surface itself is the animated child, not rebuilt inside this
+      // builder, so the grid is not reconstructed on every frame.
       child: FractionalTranslation(
         translation: Offset(0, 1 - reveal),
-        child: ColoredBox(
-          color: widget.palette.surface,
-          child: Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  padding,
-                  m.px(16),
-                  padding,
-                  m.px(10),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _SearchField(
-                        controller: _search,
-                        palette: widget.palette,
-                        metrics: m,
-                        style: type.body(color: fg),
-                        onChanged: (value) => setState(() => _query = value),
-                        onClear: () {
-                          _search.clear();
-                          setState(() => _query = '');
-                        },
-                      ),
-                    ),
-                    if (widget.onClose != null) ...[
-                      SizedBox(width: m.px(10)),
-                      _CloseButton(
-                        palette: widget.palette,
-                        metrics: m,
-                        onTap: widget.onClose!,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              Expanded(
-                child: filtered.isEmpty
-                    ? _EmptyDrawer(
-                        palette: widget.palette,
-                        metrics: m,
-                        query: _query,
-                        loading: widget.loading,
-                      )
-                    : GridView.builder(
-                        controller: _controller,
-                        padding: EdgeInsets.fromLTRB(
-                          padding,
-                          m.px(4),
-                          padding,
-                          padding,
-                        ),
-                        physics: const ClampingScrollPhysics(),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: m.appGridColumns,
-                          mainAxisSpacing: m.px(4),
-                          crossAxisSpacing: m.px(4),
-                          mainAxisExtent: cellH,
-                        ),
-                        itemCount: filtered.length,
-                        addAutomaticKeepAlives: false,
-                        addRepaintBoundaries: false,
-                        itemBuilder: (context, i) {
-                          final a = filtered[i];
-                          return _GridCell(
-                            action: a,
-                            iconSize: icon,
-                            label: a.label,
-                            labelStyle: type.appLabel(
-                              color: fg.withValues(alpha: 0.82),
-                            ),
-                            onTap: () => widget.onActionTap(a),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        ),
+        child: surface,
       ),
     );
   }
