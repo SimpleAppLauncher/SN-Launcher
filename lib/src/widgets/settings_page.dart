@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/nest_action.dart' show AssistantBackend, availableThemes;
 import '../state/shell_controller.dart';
 import '../services/device_media_watcher.dart';
 import '../services/feature_flags.dart';
+import '../services/remote_control_service.dart';
 import '../theme/ambient_palette.dart';
 import '../theme/nest_icons.dart';
 import '../theme/nest_metrics.dart';
@@ -105,6 +109,7 @@ class SettingsPage extends StatelessWidget {
     required this.controller,
     required this.assistant,
     this.media,
+    this.remote,
     this.onAssistantChanged,
     this.onTestConnection,
   });
@@ -124,6 +129,7 @@ class SettingsPage extends StatelessWidget {
   /// disabled: there is no notification-access setting to grant there, and a
   /// dead toggle would claim a capability the platform does not have.
   final DeviceMediaWatcher? media;
+  final RemoteControlService? remote;
 
   /// Called whenever the user changes anything about the assistant.
   ///
@@ -180,6 +186,97 @@ class SettingsPage extends StatelessWidget {
   }
 
   // ── Sections ─────────────────────────────────────────────────────────────
+
+  Widget _remote(NestMetrics m) {
+    final r = remote!;
+    final endpoint = r.addresses.isEmpty
+        ? null
+        : 'http://${r.addresses.first}:${r.port}/';
+
+    return _Section(
+      metrics: m,
+      type: type,
+      palette: palette,
+      icon: NestIcons.Cast,
+      title: 'Remote control',
+      children: [
+        _ToggleRow(
+          label: 'Allow LAN control',
+          note:
+              'EF build only. Starts a small HTTP server on your local '
+              'network. Anyone with the token can change pages, brightness, '
+              'volume, theme or media.',
+          value: r.enabled,
+          metrics: m,
+          type: type,
+          palette: palette,
+          onChanged: (value) => unawaited(r.setEnabled(value)),
+        ),
+        SizedBox(height: m.px(10)),
+        Text(
+          r.running
+              ? (endpoint ?? 'Listening on port ${r.port}')
+              : r.starting
+              ? 'Starting…'
+              : 'Off',
+          style: type.caption(color: palette.onSurfaceStrong),
+        ),
+        if (r.error != null) ...[
+          SizedBox(height: m.px(6)),
+          Text(r.error!, style: type.caption(color: Colors.redAccent)),
+        ],
+        SizedBox(height: m.px(10)),
+        Text('Token', style: type.caption(color: palette.onSurfaceVariant)),
+        SizedBox(height: m.px(4)),
+        SelectableText(
+          r.token.isEmpty ? 'Start the server to create a token.' : r.token,
+          style: type.caption(color: palette.onSurfaceStrong),
+        ),
+        SizedBox(height: m.px(10)),
+        Wrap(
+          spacing: m.px(8),
+          runSpacing: m.px(8),
+          children: [
+            OutlinedButton(
+              onPressed: endpoint == null
+                  ? null
+                  : () => unawaited(
+                      Clipboard.setData(ClipboardData(text: endpoint)),
+                    ),
+              style: OutlinedButton.styleFrom(
+                shape: const StadiumBorder(),
+                padding: EdgeInsets.symmetric(horizontal: m.px(16)),
+              ),
+              child: Text(
+                'Copy URL',
+                style: type.caption(color: palette.onSurfaceStrong),
+              ),
+            ),
+            OutlinedButton(
+              onPressed: r.running
+                  ? () => unawaited(r.regenerateToken())
+                  : null,
+              style: OutlinedButton.styleFrom(
+                shape: const StadiumBorder(),
+                padding: EdgeInsets.symmetric(horizontal: m.px(16)),
+              ),
+              child: Text(
+                'New token',
+                style: type.caption(color: palette.onSurfaceStrong),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: m.px(10)),
+        Text(
+          'LAN only, plain HTTP. The token is a password and is stored on '
+          'this device. Do not expose the port to the internet. This is not '
+          'a TV remote and does not drive a D-pad.',
+          style: type.caption(color: palette.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
 
   /// Which build is this?
   ///
@@ -556,7 +653,7 @@ class SettingsPage extends StatelessWidget {
     // listen to the controller. A settings page rebuilding during a drag is a
     // dozen widgets — trivial next to the sheet's budget.
     return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[controller, ?media]),
+      animation: Listenable.merge(<Listenable>[controller, ?media, ?remote]),
       builder: (context, _) => Theme(
         // Text fields, sliders and switches all reach for the ambient scheme.
         // The shell already wraps itself in this theme; wrapping again is
@@ -600,6 +697,11 @@ class SettingsPage extends StatelessWidget {
                         ],
                         SizedBox(height: m.px(14)),
                         _assistant(m),
+                        if (remote != null &&
+                            FeatureFlags.current.isOn('remoteControl')) ...[
+                          SizedBox(height: m.px(14)),
+                          _remote(m),
+                        ],
                         SizedBox(height: m.px(14)),
                         _build(m),
                         // Handle-side clearance at the bottom of the scroll.

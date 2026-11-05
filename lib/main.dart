@@ -16,6 +16,7 @@ import 'src/services/todo_service.dart';
 import 'src/services/licence_filter.dart';
 import 'src/services/photo_frame_service.dart';
 import 'src/services/device_media_watcher.dart';
+import 'src/services/remote_control_service.dart';
 import 'src/services/place_photo_service.dart';
 import 'src/services/playback_service.dart';
 import 'src/services/platform_bridge.dart';
@@ -116,6 +117,10 @@ class _NestLauncherAppState extends State<NestLauncherApp>
 
   /// Notices whatever is playing on the device, whoever is playing it.
   late final DeviceMediaWatcher _media = DeviceMediaWatcher();
+  late final RemoteControlService _remote = RemoteControlService(
+    settings: _settings,
+    media: _media,
+  );
 
   late final PhotoFrameService _photos = PhotoFrameService(
     discover: FeatureFlags.current.isOn('photoDiscovery'),
@@ -158,6 +163,11 @@ class _NestLauncherAppState extends State<NestLauncherApp>
     // before painting has already lost the race it exists to win.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_controller?.restore());
+      final remoteController = _controller;
+      if (remoteController != null) {
+        _remote.attach(remoteController);
+        unawaited(_remote.restore());
+      }
       // The first frame must not wait for the package manager. This fills in
       // the real icons in the drawer when it finishes.
       unawaited(_appCatalog.load());
@@ -229,14 +239,21 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   Future<void> _restoreAssistant() async {
     await _settings.load();
     if (!mounted) return;
-    final enabled = _settings.read(SettingKeys.assistantEnabled, false,
-        (v) => v == 'true');
+    final enabled = _settings.read(
+      SettingKeys.assistantEnabled,
+      false,
+      (v) => v == 'true',
+    );
     final backendName = _settings.get(SettingKeys.assistantBackend);
     final backend = AssistantBackend.values.firstWhere(
       (b) => b.name == backendName,
       orElse: () => AssistantBackend.localOnly,
     );
-    final voice = _settings.read(SettingKeys.voiceEnabled, true, (v) => v == 'true');
+    final voice = _settings.read(
+      SettingKeys.voiceEnabled,
+      true,
+      (v) => v == 'true',
+    );
 
     _assistant.configure(
       enabled: enabled,
@@ -252,18 +269,15 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   }
 
   void _persistAssistant() {
-    unawaited(_settings.put(
-      SettingKeys.assistantEnabled,
-      '${_assistant.enabled}',
-    ));
-    unawaited(_settings.put(
-      SettingKeys.assistantBackend,
-      _assistant.backend.name,
-    ));
-    unawaited(_settings.put(
-      SettingKeys.voiceEnabled,
-      '${_assistant.speechEnabled}',
-    ));
+    unawaited(
+      _settings.put(SettingKeys.assistantEnabled, '${_assistant.enabled}'),
+    );
+    unawaited(
+      _settings.put(SettingKeys.assistantBackend, _assistant.backend.name),
+    );
+    unawaited(
+      _settings.put(SettingKeys.voiceEnabled, '${_assistant.speechEnabled}'),
+    );
   }
 
   @override
@@ -285,6 +299,7 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
+    _remote.dispose();
     _calendar.dispose();
     _appCatalog.dispose();
     _todo.dispose();
@@ -321,31 +336,34 @@ class _NestLauncherAppState extends State<NestLauncherApp>
       // `PopScope` — which registers against a `ModalRoute` — silently does
       // nothing. Back then falls through to `SystemNavigator.pop()` and the
       // launcher exits, which is exactly what it used to do.
-      home: Builder(builder: (context) {
-        final m = NestMetrics.of(context);
-        _controller ??= ShellController(metrics: m, vsync: this);
-        return Stack(
-          children: [
-            NestShell(
-              controller: _controller!,
-              clock: _clock,
-              weather: _weather,
-              calendar: _calendar,
-              photos: _photos,
-              playback: _playback,
-              placePhoto: _placePhoto,
-              media: _media,
-              ncs: _ncs,
-              onNcsAddressChanged: (value) =>
-                  unawaited(_settings.put(SettingKeys.ncsBaseUrl, value)),
-              assistant: _assistant,
-              todo: _todo,
-              appCatalog: _appCatalog,
-            ),
-            if (FrameStats.enabled) PerfOverlay(stats: _frameStats),
-          ],
-        );
-      }),
+      home: Builder(
+        builder: (context) {
+          final m = NestMetrics.of(context);
+          _controller ??= ShellController(metrics: m, vsync: this);
+          return Stack(
+            children: [
+              NestShell(
+                controller: _controller!,
+                clock: _clock,
+                weather: _weather,
+                calendar: _calendar,
+                photos: _photos,
+                playback: _playback,
+                placePhoto: _placePhoto,
+                media: _media,
+                remote: _remote,
+                ncs: _ncs,
+                onNcsAddressChanged: (value) =>
+                    unawaited(_settings.put(SettingKeys.ncsBaseUrl, value)),
+                assistant: _assistant,
+                todo: _todo,
+                appCatalog: _appCatalog,
+              ),
+              if (FrameStats.enabled) PerfOverlay(stats: _frameStats),
+            ],
+          );
+        },
+      ),
 
       builder: (context, child) {
         // Replace the opaque error box with the actual message, so a failure on
@@ -365,10 +383,12 @@ class _NestLauncherAppState extends State<NestLauncherApp>
         // Logged so on-device geometry can be reconciled with the design
         // canvas: `adb logcat -s flutter`. Catches the case where the first
         // frame reports a different MediaQuery size than the settled one.
-        debugPrint('NESTLAUNCH-GEOMETRY size=${m.size.width.toStringAsFixed(1)}'
-            'x${m.size.height.toStringAsFixed(1)}'
-            ' dpr=${MediaQuery.maybeOf(context)?.devicePixelRatio}'
-            ' u=${m.u.toStringAsFixed(4)}');
+        debugPrint(
+          'NESTLAUNCH-GEOMETRY size=${m.size.width.toStringAsFixed(1)}'
+          'x${m.size.height.toStringAsFixed(1)}'
+          ' dpr=${MediaQuery.maybeOf(context)?.devicePixelRatio}'
+          ' u=${m.u.toStringAsFixed(4)}',
+        );
 
         // Optional pinned location, so weather works without a runtime location
         // prompt — a real cost on a wall-mounted tablet nobody taps again:

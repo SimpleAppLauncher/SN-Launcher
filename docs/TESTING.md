@@ -120,8 +120,10 @@ Then:
 
 ## What is not finished
 
-* **MCP / remote control** — `ShellController` owns every verb, so the bridge is
-  small; the transport and auth are the real work.
+* **LAN remote control** — implemented in the ef build only: Settings → Remote
+  control starts a token-protected HTTP server while the launcher is running.
+  It exposes page, sheet, brightness, volume, theme and media commands. It is
+  not a TV/D-pad remote, has no cloud service and no TLS; not hardware-tested.
 * **Windows** — no runner configured.
 * The four-dot Assistant orb was deleted once and rebuilt as a rainbow lightbar.
   `docs/DEFERRED.md` explains why, and that reason is the test to write when

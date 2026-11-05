@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Remote control (ef only)
+
+- **Added an optional LAN remote for the `ef` build.** Settings → Remote
+  control starts a token-protected HTTP page on the local network. It can change
+  pages, open or close the sheet, nudge brightness and volume, cycle the theme,
+  and send play/pause/next/previous to the active Android media session.
+- The reduced/normal build has no server and no Settings section. The remote is
+  plain HTTP with token auth, not a TV/D-pad feature, and it runs only while the
+  launcher process is alive and the setting is on.
+- `flutter analyze` is clean. It has not been tested on hardware or from another
+  device in this pass, so do not treat the remote as verified.
+
 ### Performance
 
 - **Removed per-frame rebuilds during sheet and drawer drags.** The launcher
@@ -90,8 +102,8 @@ installed codes 11001, 10001 and 13001 respectively; see
 - The voice assistant and the real NCS-SMLauncher are not verified end to end.
 - The weather place name still does not resolve on the T20, so the place photo
   is absent there.
-- EF-only remote control is not implemented; the `ef` build only turns on
-  existing features.
+- The 0.3.0 APKs do not contain the EF-only LAN remote control added after the
+  release; it has not been hardware-tested, and there is no TV/D-pad support.
 - Store submission, the privacy policy/data-safety review, and a hardware
   smoke run are still pending.
 

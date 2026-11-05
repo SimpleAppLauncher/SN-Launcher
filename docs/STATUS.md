@@ -38,8 +38,9 @@ whole test suite.
   installed-app dock/drawer and live photo. Package launch and the time-based
   theme editor were not re-run on hardware for 0.3.0.
 - **Still unverified:** the time-based theme schedule on hardware; the real
-  NCS-SMLauncher and voice assistant; EF-only remote control (not started);
-  store submission and data-safety review (not done).
+  NCS-SMLauncher and voice assistant; the EF-only LAN remote control on
+  hardware (source complete, `flutter analyze` clean); store submission and
+  data-safety review (not done).
 
 ---
 

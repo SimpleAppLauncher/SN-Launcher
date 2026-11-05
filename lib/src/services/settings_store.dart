@@ -160,4 +160,8 @@ abstract final class SettingKeys {
   static const haUrl = 'haUrl';
   static const haToken = 'haToken';
   static const voiceEnabled = 'voiceEnabled';
+
+  // ── EF-only LAN remote ─────────────────────────────────────────────────────
+  static const remoteControlEnabled = 'remoteControlEnabled';
+  static const remoteControlToken = 'remoteControlToken';
 }

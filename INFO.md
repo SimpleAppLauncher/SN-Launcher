@@ -626,7 +626,7 @@ builds, since it is shared code and the complaint was not build-specific.
 | Touch | Tap the grabber or swipe up from the bottom to open the launcher; swipe past the detent or tap **See all** for the app drawer; swipe left/right for the page carousel; tap the centre to talk. The grabber has a 48 dp invisible hit area, and the drawer has a search field and 5–6 columns depending on width |
 | Keyboard / D-pad / Android TV remote | Arrow up opens, down closes, left/right move pages, Esc backs out, Space toggles listening |
 | Microphone | Tap anywhere to speak. One-shot recognition, never a background session. Local intents (time, volume, brightness, media, lights, timers) are answered on-device; anything else goes to Home Assistant or Gemini |
-| MCP / remote | The whole shell is driven through `ShellController`, so a bridge only needs to call its public verbs |
+| LAN remote (ef only) | Settings → Remote control starts a token-protected HTTP page on the local network. It drives the same `ShellController` verbs as the shell: pages, sheet, brightness, volume, theme and media transport. No cloud, no TLS, and not a TV/D-pad remote; the normal build has no server |
 
 The listening affordance is a **rainbow lightbar at the top**, not an orb. The
 old four-dot Assistant mark was deleted, and the rule that came out of it —
@@ -851,9 +851,10 @@ date and claimed things that were already true.
    exercised by widget tests at 1024x600 and 1280x800.
 4. **Navigation is a carousel, not the device's layer model.** See §1.
 5. **Two of the seven dock buttons are the wrong controls.** See §1.
-6. **MCP / remote control** — `ShellController` already exposes every verb, so
-   the bridge is small; the transport and the auth model are the real work. It
-   was cut before any protocol code was written, to keep v1 focused.
+6. **LAN remote control** — implemented in the `ef` build only. Settings →
+   Remote control starts a token-protected HTTP page on the local network and
+   calls the same `ShellController` verbs as the shell. It is plain HTTP with
+   token auth, not a TV/D-pad remote, and it has not been tested on hardware.
 7. **Ambient light sensor** — `adaptToAmbientLight()` works but nothing feeds
    it. Most target hardware has no light sensor, and faking it would be worse.
 8. **Weather place name** — the location path resolves, but the name has never

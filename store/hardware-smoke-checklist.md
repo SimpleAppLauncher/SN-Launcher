@@ -77,7 +77,10 @@ number, and a screenshot for every pass/fail.
 - [ ] Voice assistant is not verified in 0.3.0; do not check it as working.
 - [ ] Real NCS-SMLauncher is not verified end to end; the music page is tested
       against the mock only.
-- [ ] EF-only remote control is not implemented; do not test or claim it.
+- [ ] EF-only remote control: enable Settings → Remote control on a trusted LAN,
+      open the displayed URL from another device, confirm the token is required,
+      and exercise pages, sheet, brightness, volume, theme and media transport.
+      Not tested in this pass; do not claim it as verified until this is done.
 
 ## Performance (record, do not assume)
 

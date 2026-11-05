@@ -33,10 +33,12 @@ to test them.
 - Optional Android now-playing strip and transport, after Notification access.
 - Brightness and volume quick settings.
 
-**Not in this release:** no TV/D-pad support, no remote-control server, no
-voice assistant that is verified end to end, and no claim that the real
-NCS-SMLauncher protocol is finished. Home control is compiled but disabled in
-both builds because the tiles had nothing real behind them.
+**Not in this release:** no TV/D-pad support and no voice assistant that is
+verified end to end. The reduced build has no remote-control server; the ef
+build has an optional EF-only LAN remote control page in Settings, protected by
+a token. There is no claim that the real NCS-SMLauncher protocol is finished.
+Home control is compiled but disabled in both builds because the tiles had
+nothing real behind them.
 
 **Category:** Personalization (tablet)
 
@@ -73,7 +75,9 @@ with mockups. Capture a fresh 0.3.0 set on the T20 when ADB is available.
 - Hardware: the exact 0.3.0 build was **not installed** in this pass because ADB
   was offline. Earlier T20 evidence covers now-playing, its transport and live
   track replacement; promo captures show the real dock/drawer and live photo.
-- Still not done: store submission, the Play Console data-safety form, a fresh
-  hardware smoke run for 0.3.0, and EF-only remote control.
+- EF-only LAN remote control is implemented and `flutter analyze` is clean, but
+  it was not hardware-tested in this pass.
+- Still not done: store submission, the Play Console data-safety form, and a
+  fresh hardware smoke run for 0.3.0.
 
 See `privacy-policy.md` and `data-safety.md` beside this file.

@@ -51,6 +51,7 @@ class FeatureFlags {
     // the normal build got the ef build's live rotation at the owner's
     // request. The checked pool remains the fallback when discovery fails.
     'photoDiscovery',
+    'remoteControl',
     'themePicker',
     'calendar',
     'digestPage',

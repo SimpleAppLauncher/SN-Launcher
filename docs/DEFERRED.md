@@ -50,17 +50,24 @@ lights'" — it is "does it stay silent when there is nothing to hear".
 
 ---
 
-## 2. MCP / remote control — NOT STARTED
+## 2. LAN remote control — EF ONLY, NOT HARDWARE-TESTED
 
-The user asked for this early, then deferred it. Nothing is built.
+The `ef` build now has a **Remote control** section in Settings. It starts a
+token-protected HTTP server on the local network and serves a small control
+page. The page drives the same `ShellController` verbs the shell uses
+(`goToPage`, `toggleSheet`, `nudgeBrightness`, `nudgeVolume`, `cycleTheme`) and
+uses `DeviceMediaWatcher` for play/pause/next/previous.
 
-It is cheap when it is time: `ShellController` already owns every verb the shell
-can perform (`goToPage`, `openAction`, `setTheme`, `setBrightness`,
-`setVolume`, `toggleSheet`, `cycleTheme`). A bridge only needs to call those
-public methods and serialise the arguments; no UI work is required.
+This is deliberately modest:
 
-The hard part is not the bridge, it is the transport and the auth model — and
-neither should be built before the thing it drives is stable.
+* It is **plain HTTP**, protected only by a per-device token. Use it on a
+  trusted LAN and do not expose the port to the internet.
+* It is **not** a TV remote, D-pad, or Tizen feature; those remain deferred.
+* It runs only while the launcher process is alive and the setting is on.
+* The reduced/normal build has no server and no Settings section.
+* It has not been tested on hardware; the source passes `flutter analyze`, and
+  no device or browser session has exercised it yet.
+* The stock launcher is not disabled anywhere; this does not change that.
 
 ---
 

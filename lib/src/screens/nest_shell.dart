@@ -9,6 +9,7 @@ import '../services/feature_flags.dart';
 import '../services/location_service.dart';
 import '../services/ncs_client.dart';
 import '../services/device_media_watcher.dart';
+import '../services/remote_control_service.dart';
 import '../services/place_photo_service.dart';
 import '../services/playback_service.dart';
 import '../services/radio_stations.dart';
@@ -66,6 +67,7 @@ class NestShell extends StatefulWidget {
     this.playback,
     this.placePhoto,
     this.media,
+    this.remote,
     this.ncs,
     this.onNcsAddressChanged,
     this.suggested,
@@ -100,6 +102,10 @@ class NestShell extends StatefulWidget {
 
   /// Active media sessions belonging to other apps.
   final DeviceMediaWatcher? media;
+
+  /// EF-only LAN remote control. Null in the reduced build and in tests that
+  /// do not opt in, so the normal build starts no server and shows no section.
+  final RemoteControlService? remote;
 
   /// The client for NCS-SMLauncher. Null in a build without the music page.
   final NcsClient? ncs;
@@ -1025,6 +1031,7 @@ class _NestShellState extends State<NestShell> {
           palette: _c.palette,
           controller: _c,
           media: widget.media,
+          remote: widget.remote,
           assistant: assist == null
               ? const AssistantSettings(
                   enabled: false,

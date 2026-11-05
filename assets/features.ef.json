@@ -17,6 +17,7 @@
     "weather": true,
     "quickSettings": true,
     "sunTheme": true,
+    "remoteControl": true,
 
     "homeControl": false
   }
