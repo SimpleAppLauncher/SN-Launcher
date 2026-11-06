@@ -297,6 +297,13 @@ class SettingsPage extends StatelessWidget {
       children: [
         Text(f.buildName, style: type.caption(color: palette.onSurfaceStrong)),
         SizedBox(height: m.px(6)),
+        if (f.buildName.contains('ef'))
+          Text(
+            'Experimental / PoC — not for daily use. UI is a prototype, not a finished product.',
+            style: type.caption(color: palette.onSurfaceStrong),
+          ),
+        if (f.buildName.contains('ef'))
+          SizedBox(height: m.px(4)),
         Text(
           on.isEmpty
               ? 'Launcher only'
