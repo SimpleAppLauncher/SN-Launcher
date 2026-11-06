@@ -1846,6 +1846,31 @@ class _DigestPage extends StatelessWidget {
     const gap = 14.0;
     if (cards.isEmpty) return const SizedBox.shrink();
     final g = m.px(gap);
+
+    // Portrait windows: a horizontal row of five wide
+    // cards shrinks them to slivers or shoves them into sideways
+    // scroll, which also kills the carousel swipe on this page.
+    // Stack the same cards full-width instead — full-width columns
+    // scroll vertically and every title fits.
+    // Square windows keep the row: at 1:1 the row still fits, and
+    // the music card is too tall for a fixed-height stack.
+    if (m.isPortrait) {
+      // _Card uses Expanded internally, so each stacked card needs a
+      // fixed height — inside a vertical scroll its Column would
+      // otherwise get unbounded height and blow up.
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < cards.length; i++) ...[
+              SizedBox(height: m.px(180), child: cards[i].child),
+              if (i < cards.length - 1) SizedBox(height: g),
+            ],
+          ],
+        ),
+      );
+    }
+
     final available = m.size.width - m.px(96);
     final share = (available - (cards.length - 1) * g) / cards.length;
 

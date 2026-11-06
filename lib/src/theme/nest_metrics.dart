@@ -148,10 +148,26 @@ class NestMetrics {
   }
 
   factory NestMetrics.forSize(Size size) {
-    final u = math.min(
+    final aspect = size.height == 0 ? 1.7 : size.width / size.height;
+    final fit = math.min(
       size.width / designSize.width,
       size.height / designSize.height,
     );
+    // Landscape / square-wide windows keep the Nest Hub fit behaviour:
+    // the whole 1024x600 canvas scales to fit and stays centred.
+    //
+    // On a portrait or near-square window (aspect < 1.3) that fit is
+    // wrong — min() is dominated by the width ratio, so the clock
+    // shrinks and floats at 1/3 from the top of a tall photo. Those
+    // windows scale by width instead (with a 1.28x boost so a
+    // 600px-wide portrait still gets a readable 81px-equivalent
+    // clock), clamped so the content still fits vertically.
+    var u = fit;
+    if (aspect < 1.3) {
+      final widthScale = (size.width / designSize.width) * 1.28;
+      final heightCap = size.height / designSize.height;
+      u = math.min(widthScale, heightCap);
+    }
     return NestMetrics._(size, u);
   }
 
@@ -159,6 +175,40 @@ class NestMetrics {
   /// height) than 16:9. Keeps the grid from stretching absurdly on a monitor.
   double get aspectExtra =>
       math.max(0, (size.width / size.height) - (designSize.width / designSize.height));
+
+  /// Aspect ratio of the current window (width / height).
+  double get aspect => size.height == 0 ? 1.7 : size.width / size.height;
+
+  /// Portrait — taller than wide (9:16, 3:4, 4:5).
+  bool get isPortrait => size.height > size.width;
+
+  /// Near-square — 1:1 through roughly 5:4, the square-and-below band
+  /// between portrait and the Nest Hub's 16:10 landscape.
+  bool get isSquare => !isPortrait && aspect < 1.35;
+
+  /// Landscape wall-display shape — 4:3 wide or wider.
+  bool get isLandscape => aspect >= 1.35;
+
+  /// Narrow window where a six-badge row cannot fit at full size.
+  bool get isNarrow => size.width < 720;
+
+  /// Distance of the clock's text-box bottom above the bottom edge.
+  ///
+  /// Landscape keeps the measured Nest Hub position (534 design px
+  /// from the top). On tall/square windows the design-px position
+  /// migrates up the photo, so the clock re-anchors to a fraction
+  /// of the height — lower third in portrait, slightly higher in
+  /// square — which keeps it a home-screen anchor instead of a
+  /// floating mid-photo label.
+  double get clockBottomDistance {
+    if (isPortrait) return size.height * 0.20;
+    if (isSquare) return size.height * 0.14;
+    return size.height - px(clockTextBoxBottomY);
+  }
+
+  double get dateBottomDistance => clockBottomDistance + px(89);
+
+  double get albumTitleBottomDistance => clockBottomDistance - px(7);
 
   double px(double designValue) => designValue * u;
 
@@ -175,11 +225,14 @@ class NestMetrics {
   ///
   /// Six is the Nest Hub Max's count and is right for a TV-width panel. Five
   /// is the tablet default: bigger targets, and a label that still fits under
-  /// an icon. Four is the fallback for a narrow/portrait window.
+  /// an icon. Portrait/square windows drop to three or two so a label fits
+  /// under each icon instead of truncating.
   int get appGridColumns {
     if (size.width >= 1500) return gridColumns;
-    if (size.width >= 960) return 5;
-    return 4;
+    if (size.width >= 1100) return 5;
+    if (size.width >= 850) return 4;
+    if (size.width >= 640) return 3;
+    return 2;
   }
 
   // ── Sheet-local coordinates ──────────────────────────────────────────────

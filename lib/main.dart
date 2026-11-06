@@ -54,12 +54,10 @@ Future<void> main() async {
     }
   };
 
-  // A launcher lives on a big screen and must never rotate or letterbox
-  // unexpectedly — lock to landscape, the orientation the Nest Hub ships in.
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
+  // Vertical / square / landscape are all supported layouts now:
+  // the metrics key off aspect ratio, so no orientation lock is
+  // applied. The manifest also uses sensor orientation so the OS
+  // does not force a side either.
 
   // Before the first frame, not after it.
   //

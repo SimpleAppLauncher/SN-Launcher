@@ -177,8 +177,12 @@ memory win.
 
 ## Known rough edges
 
-- **Held in portrait on a portrait-native tablet the layout looks small.** The
-  manifest pins `sensorLandscape`, so turn the tablet sideways.
+- **Portrait / square reflow is widget-test verified, not hardware verified.**
+  The manifest and `main.dart` no longer pin `sensorLandscape`; the clock
+  re-anchors, the sheet badges shrink, and digest cards stack in portrait.
+  1:1, 4:3, 3:4 and 9:16 pass the aspect sweep without overflow. It still
+  needs a real portrait-native tablet (the SM-X110) before anyone should
+  promise it looks right in a room.
 - **The quick-settings row has seven buttons and the spacing is measured
   against a photograph of a real Nest Hub Max — but two of the seven are not
   the same controls the real device shows.**

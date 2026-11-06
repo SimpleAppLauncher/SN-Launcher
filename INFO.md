@@ -187,7 +187,7 @@ are not what the device shows.
 
 ```
 lib/
-  main.dart                          entry: flags, orientation lock, immersive mode
+  main.dart                          entry: flags, orientation-free, immersive mode
   src/
     theme/
       nest_metrics.dart              every measured constant, design-canonical
@@ -807,15 +807,18 @@ has never been seen to fail is not evidence.
 
 ### The aspect sweep
 
-Seven shapes — both reference Nests, the Nokia's logical size, 4:3,
-near-square, ultrawide, and portrait — times home, digest, discover and the
-sheet fully open, with all features on because the widest layout is the one
-most likely to overflow. 29 tests, no GUI touched.
+Eleven shapes — both reference Nests, the Nokia's logical size, 4:3, 1:1
+square, 3:4 portrait, 9:16 vertical, near-square, ultrawide, and portrait —
+times home, digest, discover and the sheet fully open, with all features on
+because the widest layout is the one most likely to overflow. 45 tests, no
+GUI touched.
 
-**This is a weaker claim than it looks.** "No overflow" is not "usable". The
-Galaxy Tab A7 Lite is portrait-native, and this UI is a landscape design; the
-sweep said it would not crash, which is true and not the same as saying it
-would look right. It does not.
+**This is a weaker claim than it looks.** "No overflow" is not "usable".
+The layout now re-anchors the clock, shrinks the sheet badges and stacks
+the digest cards in portrait, and Android no longer locks to landscape,
+but none of that has been seen on a portrait-native tablet. The sweep says
+it would not crash, which is true and not the same as saying it would look
+right on hardware.
 
 ### Testing on new hardware
 
@@ -962,7 +965,7 @@ Written for whoever is about to put it on a tablet they found in a drawer.
 | RAM | 1 GB | 2 GB | 1 GB runs. It is tight, and the WebView is the reason. |
 | CPU | Any armv7 or arm64 | arm64 | 32-bit arm is supported and tested in the build. |
 | Android | 7.0 (API 21) | 10+ | API 21 is the floor. |
-| Screen | 800 × 1280 | 1024 × 600 landscape | The layout is designed for a 1024 × 600 panel, which is the Nest Hub's. |
+| Screen | 800 × 1280 | 1024 × 600 landscape | The layout is designed for a 1024 × 600 panel, which is the Nest Hub's; portrait, square and 4:3 reflow it in software (widget-test verified, not hardware verified). |
 | Storage | 100 MB free | 500 MB | For the app, the downloaded photographs and the caches. |
 | Network | None needed | Any | The bundled photo rotation, clock, calendar and to-do list work offline. Live photo discovery and the weather need a network; both fall back honestly when it is absent. |
 
@@ -1007,8 +1010,9 @@ each other by `tool/verify_licence_parity.sh`.
 ### What has actually been run on
 
 **Samsung Galaxy Tab A7 Lite (SM-X110)** — MediaTek Helio A22 (MT6789), Android
-15, 800 × 1340 portrait, which the app rotates to landscape. This is the device
-most of the performance work was verified on. It has 3.7 GB of RAM, so it is
+15, 800 × 1340 portrait. This is the device most of the performance work
+was verified on in its (then landscape-locked) form; portrait behaviour is
+widget-test verified only, not hardware verified. It has 3.7 GB of RAM, so it is
 the "comfortable" column, not the minimum.
 
 **Nokia T20** — Android 13, 3.8 GB RAM, 2000×1200 landscape. Both release

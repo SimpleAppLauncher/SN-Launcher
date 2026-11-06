@@ -69,12 +69,27 @@ class LauncherSheet extends StatelessWidget {
     final badge = metrics.px(NestMetrics.appBadgeSize);
     final glyph = metrics.px(NestMetrics.qsGlyphSize);
     final padding = metrics.px(NestMetrics.sheetPaddingX);
+    // The fixed Nest Hub pitch (118 design px × 6 + 200 pill) only
+    // fits when the scale allows. Below that — narrow portrait
+    // windows, and square windows where the portrait scale boost
+    // grows the badges — shrink badges first, then the pill
+    // itself collapses to an icon, so the row still fits.
+    final narrow = metrics.isNarrow;
+    final fitBadge = (() {
+      final seeAllW =
+          narrow ? metrics.px(NestMetrics.seeAllHeight) : metrics.px(NestMetrics.seeAllWidth);
+      final rowSpace = metrics.size.width - 2 * padding - seeAllW;
+      final gap = metrics.px(NestMetrics.appRowSpacing) - badge;
+      if (6 * badge + 5 * gap <= rowSpace) return badge;
+      return (rowSpace - 5 * gap) / 6;
+    })();
+    final effectiveBadge = fitBadge.clamp(38.0, badge);
     final sheetH = metrics.sheetHeight;
     // The dock keeps the device's 80 px badges, and adds the name underneath.
     // A launcher whose icons are unlabelled is a guessing game for the first
     // few sessions; the grid already had labels, the quick row did not.
     final labelH = metrics.px(22);
-    final cellH = badge + metrics.px(8) + labelH;
+    final cellH = effectiveBadge + metrics.px(8) + labelH;
     final labelStyle = TextStyle(
       fontFamily: NestType.display,
       fontSize: metrics.px(16),
@@ -126,22 +141,27 @@ class LauncherSheet extends StatelessWidget {
                   for (var i = 0; i < suggested.length && i < 6; i++) ...[
                     if (i > 0)
                       SizedBox(
-                        width: (metrics.px(NestMetrics.appRowSpacing) - badge)
-                            .clamp(0.0, double.infinity),
+                        width: narrow
+                            ? 0
+                            : (metrics.px(NestMetrics.appRowSpacing) - badge)
+                                .clamp(0.0, double.infinity),
                       ),
                     _PressableBadge(
                       action: suggested[i],
-                      size: badge,
+                      size: effectiveBadge,
                       labelStyle: labelStyle,
                       onTap: () => onActionTap(suggested[i]),
                     ),
                   ],
                   const Spacer(),
                   _SeeAllPill(
-                    width: metrics.px(NestMetrics.seeAllWidth),
+                    width: narrow
+                        ? effectiveBadge
+                        : metrics.px(NestMetrics.seeAllWidth),
                     height: metrics.px(NestMetrics.seeAllHeight),
                     scale: metrics.u,
                     palette: palette,
+                    iconOnly: narrow,
                     onTap: onSeeAll,
                   ),
                 ],
@@ -263,6 +283,7 @@ class _SeeAllPill extends StatelessWidget {
     required this.scale,
     required this.palette,
     required this.onTap,
+    this.iconOnly = false,
   });
 
   final double width;
@@ -270,6 +291,7 @@ class _SeeAllPill extends StatelessWidget {
   final double scale;
   final AmbientPalette palette;
   final VoidCallback onTap;
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -293,17 +315,19 @@ class _SeeAllPill extends StatelessWidget {
               size: Size.square(22 * scale),
               painter: _GridDotsPainter(fg),
             ),
-            SizedBox(width: 10 * scale),
-            Text(
-              'See all',
-              style: TextStyle(
-                fontFamily: NestType.display,
-                fontSize: 24 * scale,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.2 * scale,
-                color: palette.isDark ? const Color(0xFF8AB4F8) : kSeeAllBlue,
+            if (!iconOnly) ...[
+              SizedBox(width: 10 * scale),
+              Text(
+                'See all',
+                style: TextStyle(
+                  fontFamily: NestType.display,
+                  fontSize: 24 * scale,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.2 * scale,
+                  color: palette.isDark ? const Color(0xFF8AB4F8) : kSeeAllBlue,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),

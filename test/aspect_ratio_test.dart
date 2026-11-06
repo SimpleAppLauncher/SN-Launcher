@@ -38,6 +38,10 @@ const _shapes = <(String, Size, double)>[
   ('square-ish    1200x1150  1.04', Size(1200, 1150), 1.0),
   ('ultrawide     2000x900   2.22', Size(2000, 900), 1.0),
   ('portrait      800x1280  0.63', Size(800, 1280), 1.0),
+  ('1:1 square     1000x1000  1.00', Size(1000, 1000), 1.0),
+  ('3:4 portrait  1080x1440  0.75', Size(1080, 1440), 1.0),
+  ('9:16 vertical 1080x1920  0.56', Size(1080, 1920), 1.0),
+  ('4:3 wide      1600x1200  1.33', Size(1600, 1200), 1.0),
 ];
 
 class _Harness extends StatefulWidget {

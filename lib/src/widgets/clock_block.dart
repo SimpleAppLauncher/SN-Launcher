@@ -112,16 +112,14 @@ class ClockBlock extends StatelessWidget {
             // which is what this did first — pushed the date down into the
             // clock as soon as the zoom went above 1, and "Sun, Oct 18" ended
             // up printed through the top of the digits. Plus, not minus.
-            bottom: metrics.size.height -
-                metrics.px(NestMetrics.dateTextBoxBottomY) +
-                grew,
+            bottom: metrics.dateBottomDistance + grew,
             child: Text(ClockService.nestDate(now), style: type.date(color: color)),
           ),
 
           // Big clock + weather, baseline-aligned on one row.
           Positioned(
             left: metrics.marginX,
-            bottom: metrics.size.height - metrics.px(NestMetrics.clockTextBoxBottomY),
+            bottom: metrics.clockBottomDistance,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
@@ -180,8 +178,7 @@ class ClockBlock extends StatelessWidget {
           if (albumTitle != null && albumTitle!.isNotEmpty)
             Positioned(
               right: metrics.px(NestMetrics.albumTitleMarginX),
-              bottom:
-                  metrics.size.height - metrics.px(NestMetrics.albumTitleBaselineY),
+              bottom: metrics.albumTitleBottomDistance,
               // Album title on the left, photographer's name on the right.
               // Both required by the photo's licence, and the device's own
               // photo frame does exactly this — the credit belongs with the
