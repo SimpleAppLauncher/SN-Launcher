@@ -54,10 +54,15 @@ Future<void> main() async {
     }
   };
 
-  // Vertical / square / landscape are all supported layouts now:
-  // the metrics key off aspect ratio, so no orientation lock is
-  // applied. The manifest also uses sensor orientation so the OS
-  // does not force a side either.
+  // A launcher lives on a big screen and must never rotate or letterbox
+  // unexpectedly — lock to landscape, the orientation the Nest Hub ships in.
+  // Portrait/square reflow still exists in NestMetrics for desktop
+  // window-resize cases (macOS 1:1, 4:3), but Android tablets are
+  // landscape-locked because the portrait render was judged hideous.
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
 
   // Before the first frame, not after it.
   //

@@ -177,12 +177,12 @@ memory win.
 
 ## Known rough edges
 
-- **Portrait / square reflow is widget-test verified, not hardware verified.**
-  The manifest and `main.dart` no longer pin `sensorLandscape`; the clock
-  re-anchors, the sheet badges shrink, and digest cards stack in portrait.
-  1:1, 4:3, 3:4 and 9:16 pass the aspect sweep without overflow. It still
-  needs a real portrait-native tablet (the SM-X110) before anyone should
-  promise it looks right in a room.
+- **Portrait is disabled on Android tablets by design.** The manifest pins
+  `sensorLandscape` and `main.dart` locks landscape because the portrait
+  render was judged hideous on a wide tablet. The portrait/square reflow
+  (clock re-anchor, badge shrink, digest stack) still exists in the code
+  for square desktop windows (macOS 1:1 / 4:3 resize) and passes the
+  aspect sweep, but you will never see it on an Android tablet.
 - **The quick-settings row has seven buttons and the spacing is measured
   against a photograph of a real Nest Hub Max — but two of the seven are not
   the same controls the real device shows.**

@@ -187,7 +187,7 @@ are not what the device shows.
 
 ```
 lib/
-  main.dart                          entry: flags, orientation-free, immersive mode
+  main.dart                          entry: flags, orientation lock, immersive mode
   src/
     theme/
       nest_metrics.dart              every measured constant, design-canonical
@@ -814,11 +814,10 @@ because the widest layout is the one most likely to overflow. 45 tests, no
 GUI touched.
 
 **This is a weaker claim than it looks.** "No overflow" is not "usable".
-The layout now re-anchors the clock, shrinks the sheet badges and stacks
-the digest cards in portrait, and Android no longer locks to landscape,
-but none of that has been seen on a portrait-native tablet. The sweep says
-it would not crash, which is true and not the same as saying it would look
-right on hardware.
+The portrait reflow was judged hideous on a wide tablet and Android is
+now landscape-locked again; the square/portrait code remains for desktop
+window-resize only. The sweep says the code would not crash at those
+sizes, which is true and not the same as saying Android allows them.
 
 ### Testing on new hardware
 
