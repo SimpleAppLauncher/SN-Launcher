@@ -29,7 +29,6 @@ Dependencies: Python standard library + Pillow only. No `pip install`, and no
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import html
 import json
 import re
@@ -42,6 +41,9 @@ from io import BytesIO
 from pathlib import Path
 
 from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import attribution  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -268,24 +270,11 @@ def main(argv=None) -> int:
         }, f, indent=2)
         f.write("\n")
 
-    today = _dt.date.today().isoformat()
-    with open(OUT_DIR / "ATTRIBUTION.md", "w") as f:
-        f.write(
-            f"# Background photograph\n\n"
-            f"| Field | Value |\n| --- | --- |\n"
-            f"| Title | {meta['title']} |\n"
-            f"| Author (photographer) | {meta['author']} |\n"
-            f"| Licence | {meta['license']} |\n"
-            f"| Licence URL | {meta['licenseUrl']} |\n"
-            f"| Source (Commons) | {meta['sourceUrl']} |\n"
-            f"| Rendered size | {meta['width']} × {meta['height']} px |\n\n"
-            f"*Fetched {today} from Wikimedia Commons via `tool/fetch_photo.py` "
-            f"(re-run to reproduce).*\n\n"
-            f"The author's name is rendered on screen next to the album title in\n"
-            f"`lib/src/widgets/clock_block.dart`, fed by `landscape.json`.\n\n"
-            f"Public domain as a work of the US National Park Service. Credited\n"
-            f"anyway, because the photographer took the picture.\n"
-        )
+    # The attribution file covers every bundled photograph, so it is written
+    # from the sidecars rather than from this one script's data. Re-running
+    # this script must not erase the racing and Alonso rows.
+    dest = attribution.write(OUT_DIR)
+    print("  -> %s" % dest.relative_to(ROOT))
 
     print(f"  -> assets/photo/landscape.jpg ({im.width}x{im.height}, "
           f"{dest.stat().st_size / 1024:.0f} KB)")

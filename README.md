@@ -72,6 +72,20 @@ Page two holds the two things worth glancing at: a **calendar** that shows the
 date and what's on today, and a **to-do list** you can add to, tick off and
 delete. The to-do list is saved on the device, so it is still there tomorrow.
 
+**Settings → Background** picks what the wall shows behind the clock. There are
+three albums: **Landscape** (the nature photographs the launcher has always
+rotated), **Cars** (racing cars — Formula 1, Le Mans prototypes, World
+Endurance and rally), and **Fernando Alonso**, whose album runs his whole
+career: the Renault years, McLaren, Ferrari, and the current Aston Martin.
+Each album bundles one photograph with the app, so the wall is never blank, and
+downloads the rest from Wikimedia Commons afterwards — every one of them public
+domain, CC0 or plain CC-BY, with the photographer's name rendered on screen.
+
+**Settings → Christmas** turns the season on: a midnight-blue-and-pine palette
+with falling snow over the photograph. It can run on its own, or automatically
+between 1 December and 6 January. While it is on, the theme and the theme
+schedule are paused, and the copy in Settings says so.
+
 **The beta** additionally has the voice assistant, a music player, rotating
 photographs, live weather, and the "Sun" theme that follows the time of day. It
 is a *separate app* with its own icon, so you can install both and compare.
@@ -121,6 +135,8 @@ MT6789, 800x1340) and a **Nokia T20** (Android 13, Unisoc T610, 2000x1200).
 | The quick-settings row — every button does something | ✓ |
 | Five themes | ✓ |
 | Settings | ✓ |
+| Background picker — Landscape / Cars / Fernando Alonso | built and covered by tests; **not yet run on hardware** |
+| Christmas mode — seasonal palette and falling snow | built and covered by tests; **not yet run on hardware** |
 | Cold start | **548 ms** on the Tab A7 Lite release; **509–603 ms** on the T20 release after the first install |
 
 **Not yet verified end to end: the voice assistant and the real
@@ -218,6 +234,11 @@ what makes matching it realistic at all.
 * The bundled photograph — *Cub Lake at dawn* by **Debra Miller** — is public
   domain, and her name is rendered on screen because the licence asks for it.
   The rotating pool is public domain, CC0 or plain CC-BY only.
+* The bundled racing and Alonso photographs — a **Renault R25** at the 2005
+  United States Grand Prix by **Ryosuke Yagi**, and **Fernando Alonso** at the
+  2005 Chinese Grand Prix by **Tinou Bao** — are both CC BY 2.0. Every
+  photograph in every album is listed with its author, licence and source in
+  [`assets/photo/ATTRIBUTION.md`](assets/photo/ATTRIBUTION.md).
 * Brand marks (Spotify, Netflix, Pandora, YouTube) are drawn as paths.
 
 ---

@@ -91,11 +91,19 @@ Edit the JSON and rebuild. Nothing else needs touching.
 }
 ```
 
-The reduced build keeps `settings`, `quickSettings`, `digestPage`, `calendar`
-and `todo`, and nothing else beyond the base photo frame. It is a launcher with
-a calendar and a to-do list on page two. `homeControl` is off in both configs,
-so the reduced's carousel is home and digest; the ef's is home, digest, weather
-and music.
+The reduced build keeps `settings`, `quickSettings`, `digestPage`, `calendar`,
+`todo`, `photoRotation`, `photoDiscovery` and `themePicker`, and nothing else
+beyond the base photo frame. It is a launcher with a calendar and a to-do list
+on page two, a rotating background, and the background picker. `homeControl` is
+off in both configs, so the reduced's carousel is home and digest; the ef's is
+home, digest, weather and music.
+
+`photoRotation`, `photoDiscovery` and `themePicker` were ef-only until the
+owner asked for them in both builds — they are shared code over shared
+licences, so gating them was a flag rather than a difference. The reduced
+build's feature set is pinned as an explicit list in
+`test/feature_flags_test.dart`, so adding a flag to the reduced build has to
+be a deliberate edit.
 
 **`digestPage` and `calendar` travel together on purpose.** `calendar` on with
 `digestPage` off is a calendar rendering on a page nobody can reach — which is

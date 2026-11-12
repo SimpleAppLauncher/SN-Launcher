@@ -459,6 +459,46 @@ already fragile (AGP shells out to `sdkmanager` during configuration, which is
 why the Gradle configuration cache has to stay off) and one more plugin is one
 more thing to go wrong for the sake of a dozen strings.
 
+### Christmas mode
+
+A sixth palette, and not one of the five above: it is a *season*, not a
+swatch. Midnight blue at the top, deep pine at the bottom, warm white ink, and
+`isNight` true so the photograph behind it is dimmed the way a night palette
+dims it.
+
+**It overrides the palette completely.** A pinned White theme does not survive
+Christmas mode — the pinned theme and the theme schedule are both paused while
+it is live, because a seasonal mode that merely tinted a pinned White would
+not read as a season at all. The Settings copy says exactly that, in those
+words, so nobody has to guess why their pinned theme stopped applying.
+
+Three switches, all in Settings → Christmas:
+
+* **Christmas mode** — on or off, whatever the date.
+* **Falling snow** — independent of the mode switch, on by default. It is a
+  separate decision: some people want the palette without the weather.
+* **Automatic 1 Dec – 6 Jan** — the window, on by default.
+
+The window is closed on 30 November at 23:59, open at 00:00 on 1 December,
+still open at 23:59 on 6 January, and closed again at 00:00 on 7 January. Those
+four instants are asserted in `test/christmas_mode_test.dart`, because a
+season that starts on the 2nd or ends on the 5th is the kind of off-by-one
+nobody notices until December.
+
+### The snow
+
+One `CustomPainter`, 120 flakes, each with a lane, a fall speed, a drift and a
+radius, seeded from a fixed `math.Random(20261112)` so the arrangement is the
+same on every device. It is painted above the photograph and below the clock.
+
+Two constraints the hardware sets. It is **one painter, not 120 widgets** —
+this project's own note in `ambient_background.dart` says why: a stack of
+translucent containers would force an offscreen layer per element on a low-end
+GPU, and 120 of them would be a slideshow. And it must be **freezable**:
+`animate: false` paints phase 0, so a test can compare two frames byte for
+byte and know that what it is looking at is the layout, not the animation. That
+is the same `animateDecorations` flag the aspect sweep already uses.
+
 ---
 
 ## 7. Icons: Google's, not ours
@@ -520,14 +560,83 @@ This is a deliberate choice over "fetch something random". A photo frame on a
 wall is looked at constantly; a random image search will eventually put a
 portrait, a chart, or a screenshot of someone's desktop on it.
 
+### The bug that made discovery return nothing, always
+
+Commons now appends a tracking string to every URL it hands out:
+
+```
+...Photo.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original
+```
+
+The candidate filter tested the file extension by asking whether the URL
+*ended with* `.jpg`. With the query string attached, it ended with
+`utm_content=original` — so **every single candidate was rejected**, and
+landscape discovery returned nothing, every time, silently. The flag was on,
+the code ran, the network call succeeded, and the result was always empty.
+
+It was found by probing the live API with `curl` and reading what actually came
+back, not by reading the code, because the code looked right. The fix is one
+line — strip the query string before testing the extension — and the test is a
+real API payload with the tracking string on it, next to a tracking-free URL
+that must also be accepted and a `.webm` with parameters that must still be
+refused.
+
+Two entries in the racing pool were also wrong the same way the original pool
+was wrong: one filename had the wrong parenthesised id, and one file recorded
+as public domain is in fact **CC BY-SA 2.0**, which this launcher may not
+install. The verifier found both and both were replaced.
+
+### Three albums, and one bundled photograph each
+
+| Album | What is in it | Bundled hero |
+| --- | --- | --- |
+| **Landscape** | The nature photographs the launcher has always rotated | *Cub Lake at Dawn* — Debra Miller — public domain |
+| **Cars** | Formula 1, Le Mans prototypes, World Endurance, rally — 46 photographs | *Renault R25*, US Grand Prix 2005 — Ryosuke Yagi — CC BY 2.0 |
+| **Fernando Alonso** | His whole career: Renault, McLaren, Ferrari, Aston Martin | *Fernando Alonso*, Chinese Grand Prix 2005 — Tinou Bao — CC BY 2.0 |
+
+The Alonso album is deliberately **half and half**. Some photographs are
+car-forward — him in the car, the car being the subject. Some are
+Alonso-forward — him as the subject, including the 2005 and 2006 championship
+moments. The pool is split into two lists so the balance is a fact about the
+data rather than a hope about the shuffle, and a test asserts the two lists
+stay within 40 % of each other in size.
+
+**Cars and Alonso are pool-only.** Commons' "Featured pictures of" categories
+are hand-curated, but they are curated for *photography*, not for *being a
+racing car* — the category would happily hand back a museum hall with a
+Lancia Stratos in it, or a picture of a car park. The Landscape album keeps
+live discovery because a landscape is a landscape; a racing album needs a human
+to have looked at every one.
+
+**Each album caches into its own directory.** `sn_launcher_photos/<album>/`.
+One shared directory would mean that switching from Cars to Landscape could
+leave the old album's photograph on the wall with the old album's photographer
+underneath it.
+
+**Every album bundles one photograph**, so the wall is never blank and the
+first launch never waits on the network. The other photographs are fetched
+afterwards, at runtime, from the pool.
+
 ### Attribution on screen
 
-The photographer's name is rendered on screen next to "Recent highlights" —
-which the licence and plain decency both ask for. Commons' `Artist` field for
-the bundled file reads "NPS Natural Resources", the owning agency rather than
-the person who took the photograph, so the fetcher prefers the real name. The
-rotating pool's credit updates with the photograph; it is not pinned to the
-bundled one.
+The photographer's name is rendered on screen next to the album title —
+"Recent highlights" for Landscape, "Racing cars" for Cars, "Fernando Alonso"
+for Alonso — which the licence and plain decency both ask for. Commons'
+`Artist` field for the bundled file reads "NPS Natural Resources", the owning
+agency rather than the person who took the photograph, so the fetcher prefers
+the real name. The rotating pool's credit updates with the photograph; it is
+not pinned to the bundled one.
+
+Every pool entry carries a **hand-written** author name. The raw Commons
+`Artist` field is unreliable — it is regularly a wiki link, an agency
+boilerplate, or a dead link — and this string is painted on a wall in a
+living room, so it has to read like a person's name. 88 entries, 88 names,
+written by hand.
+
+Every bundled photograph also ships a sidecar JSON with its title, author,
+licence, licence URL and source URL, and a row in
+`assets/photo/ATTRIBUTION.md`. That file is generated by `tool/attribution.py`
+from the sidecars, so it cannot drift away from what is actually shipped.
 
 ---
 
@@ -642,7 +751,7 @@ file chosen at build time:
 
 | | `ef` — ExtraFeature | reduced |
 | --- | --- | --- |
-| Features | all known flags except `homeControl` | 5: settings, quickSettings, digestPage, calendar, todo; `homeControl` off too |
+| Features | all known flags except `homeControl` | 8: settings, quickSettings, digestPage, calendar, todo, photoRotation, photoDiscovery, themePicker; `homeControl` off too |
 | applicationId | `dev.snlauncher.snlauncher.ef` | `dev.snlauncher.snlauncher` |
 | Label | SN-Launcher ef | SN-Launcher |
 
@@ -651,6 +760,22 @@ value remain in the tree; the flag keeps it out of `availablePages`, and the
 content gate returns an empty box. It was a set of device tiles with nothing
 real behind them, so shipping it would claim a capability the build does not
 have.
+
+**Three flags have moved from ef-only to both builds**, each at the owner's
+request and each because the thing behind them was never really an ef
+capability:
+
+| Flag | Moved | Why |
+| --- | --- | --- |
+| `photoRotation` | 2026-10-19 | The rotating background is shared code over a shared licence-checked pool. The reduced build renders the identical thing. |
+| `photoDiscovery` | 2026-10-30 | Same argument: live Commons discovery is a licensing rule, not a feature. |
+| `themePicker` | 2026-11-12 | The background picker and its three albums — Landscape, Cars, Fernando Alonso — are shared code with shared licences. |
+
+The reduced build's feature set is pinned as an explicit set in
+`test/feature_flags_test.dart`, not as "the core, minus everything else",
+because the second shape silently passes whenever a flag is added to
+`FeatureFlags.known`. Asking to add a feature to the reduced build has to
+require editing that list on purpose.
 
 Different applicationIds means both can be installed on one device at the same
 time and compared directly. The mechanism is one Gradle property

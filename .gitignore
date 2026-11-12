@@ -100,3 +100,7 @@ native/licence_filter/target/
 # Remotion installed packages and renders are local artifacts.
 video/node_modules/
 video/out/
+
+# Python bytecode from the tool/ scripts.
+__pycache__/
+*.pyc

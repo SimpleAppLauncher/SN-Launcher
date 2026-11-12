@@ -1,16 +1,17 @@
 # Status: what works, what does not, and what to do next
 
-Written against the v0.3.0 release tree. 287 tests pass and one is skipped;
-`flutter analyze` is clean. The reduced and ef 0.3.0 APKs were built and
-signature-verified, but ADB was offline during this release pass, so this exact
-build was not installed on hardware. The Android now-playing strip, external
-transport and live track replacement were verified earlier on the Nokia T20
-with Spotify and Notification access; the real installed-app dock/drawer and
-live photo discovery were used in the T20 promo captures. Full package-launch
-interaction and the time-based theme editor were not re-run on hardware for
-0.3.0. This file exists because the honest answer to "does it work?" has been
-longer than a chat message should carry, and because the previous answer to
-that question was wrong.
+Written against the v0.3.0 release tree, plus the background-album and
+Christmas-mode work that has landed since. **347 tests pass and one is
+skipped**; `flutter analyze` is clean. The reduced and ef 0.3.0 APKs were built
+and signature-verified, but ADB was offline during this release pass, so this
+exact build was not installed on hardware. The Android now-playing strip,
+external transport and live track replacement were verified earlier on the
+Nokia T20 with Spotify and Notification access; the real installed-app
+dock/drawer and live photo discovery were used in the T20 promo captures. Full
+package-launch interaction and the time-based theme editor were not re-run on
+hardware for 0.3.0. This file exists because the honest answer to "does it
+work?" has been longer than a chat message should carry, and because the
+previous answer to that question was wrong.
 
 Everything below is graded against one standard, which is the only standard
 that matters for a device sitting on a wall:
@@ -77,6 +78,9 @@ These pass their tests and have never been looked at by a person.
 | Android now-playing | `DeviceMediaWatcher` maps mocked media sessions, permission state and pause/play; tests prove capability-gated external transport, that a new external song replaces the old one without a restart, and that unsupported controls are absent; the base manifest declares the notification-listener service | Whether Notification access can be granted on the T20/SM-X110, whether Spotify/SoundCloud/podcast/PiP accept play/pause/skip through `MediaController`, and whether artwork and titles survive background playback |
 | Live photo discovery in the normal build | The feature-flag test now proves `photoDiscovery` is on; the licence filter and discovery pool have unit tests | Whether the normal build fetches and rotates a fresh Commons photo on the tablet, and whether that changes idle network/battery behaviour |
 | Time-based theme schedule | Override windows resolve correctly for normal and past-midnight ranges; malformed entries are dropped; the schedule survives a controller restart; the Settings editor appears only while the theme is dynamic | Whether the Appearance editor fits and the palette visibly switches on the T20. Hardware smoke was skipped because ADB was offline |
+| **Background albums — Landscape / Cars / Fernando Alonso** | 88 pool entries verified live against the Commons API (file exists, licence redistributable, thumbnail fetchable); each album bundles one hero with its sidecar JSON; the service caches per album; the Settings picker renders without overflow at 1:1, 4:3, 3:4 and 9:16; the reduced build's flag test proves `themePicker` is on | Whether the picker looks right on the tablet, whether the downloaded photographs arrive and rotate, and whether the photographer's credit renders under each one |
+| **Christmas mode** | The palette passes the contrast check and reports itself as a night palette; the automatic window is closed on 30 Nov 23:59, open from 1 Dec 00:00 through 6 Jan 23:59, and closed from 7 Jan 00:00; the mode switch overrides a pinned theme; the snow switch is independent of the mode; the setting survives a restart; the snow paints without overflow at all 11 aspect shapes and is byte-identical across two frames when it is not animating | Whether the snow reads as snow rather than as noise on a 2000×1200 panel, and whether the Christmas palette is legible over a bright photograph |
+| **Live photo discovery (bug fix)** | The candidate filter used to test the file extension by asking whether the URL *ended with* `.jpg`; Commons now appends `?utm_source=…&utm_content=original`, so **every** discovered candidate was being rejected and discovery always returned nothing. The fix strips the query string. A test uses a real API payload with the tracking string, one without it, and a `.webm` with parameters that must still be refused | Whether a fresh Commons photograph now actually arrives and rotates on the tablet — the path that was silently dead before this fix |
 | Tizen TV TPK | It builds for `profile tv`; the Samsung distributor certificate names the TV's DUID | Everything. It has never been installed or launched — sdb cannot open the device |
 
 ## 3. Known broken
@@ -246,6 +250,16 @@ The installed-app UI is a separate ratio: five pieces built (package query,
 real icon rasterisation, package launch, labelled dock, searchable adaptive
 drawer), **zero verified on hardware**, one render-harness pass and one pixel
 test. Do not call those icons real until they have been seen on a tablet.
+
+The newest work is a third ratio. **Built: three background albums (Landscape,
+Cars, Fernando Alonso), one Christmas mode with a seasonal palette and falling
+snow, and one fixed bug in live photo discovery. Verified: zero on hardware.**
+Everything is covered by automated tests — 88 pool entries checked against the
+live Commons API, the December window's four boundary instants, the snow
+byte-identical across two frames — but the owner has not yet installed a build
+containing any of it. Until that happens, the honest description of the
+albums is "the photographs resolve and are licence-clean", not "the albums
+work on a tablet".
 
 The number that matters is not the first one. It is that **three broken things
 shipped in v0.1.2 and v0.1.3 while the test suite reported all green** — because
