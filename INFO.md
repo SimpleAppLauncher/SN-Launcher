@@ -997,6 +997,13 @@ date and claimed things that were already true.
     the page is verified against the mock only. See [`docs/NCS.md`](docs/NCS.md).
 12. **The Linux desktop build has never been run.** It compiles in CI; that is
     not a launch test.
+13. **The background albums and Christmas mode have never run on an Android
+    tablet.** They were run and looked at on the macOS desktop release build —
+    all three albums fetched a photograph, captioned it with the album name and
+    the photographer's name, and the snow fell over the picture. The Android
+    builds containing them have not been installed, so how a 2000 × 1200 panel
+    crops a portrait-shaped photograph, and whether the snow reads as snow at
+    that size, are still open.
 
 The longer reasoning for items 6–8, and the reasoning behind the deleted
 four-dot Assistant orb, is in [`docs/DEFERRED.md`](docs/DEFERRED.md).

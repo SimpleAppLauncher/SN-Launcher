@@ -1,7 +1,7 @@
 # Status: what works, what does not, and what to do next
 
 Written against the v0.3.0 release tree, plus the background-album and
-Christmas-mode work that has landed since. **347 tests pass and one is
+Christmas-mode work that has landed since. **353 tests pass and six are
 skipped**; `flutter analyze` is clean. The reduced and ef 0.3.0 APKs were built
 and signature-verified, but ADB was offline during this release pass, so this
 exact build was not installed on hardware. The Android now-playing strip,
@@ -63,10 +63,14 @@ whole test suite.
 | Release idle cost | T20: home 2.6%, digest 2.3%, weather 3.3%, music 2.6%, reduced digest 0.3% |
 | Release cold start | SM-X110 548 ms; T20 509–603 ms after first install; first T20 launch 3.3 s ef / 1.2 s reduced |
 | Release memory | T20 PSS 102 MB ef / 81 MB reduced; SM-X110 140 MB ef |
+| Background albums — Landscape / Cars / Fernando Alonso | macOS desktop release build: each album fetched a photograph from the Commons pool, captioned it with the album name and the photographer's name, and cached it in its own folder. Landscape fetched a live-discovered photograph, Cars a Renault F1 lineup, Alonso the 2012 Italian GP press conference |
+| Christmas mode | macOS desktop release build: snow falling over the photograph, with the album caption and the clock still legible |
 
 ## 2. Built, tested, never seen on hardware
 
-These pass their tests and have never been looked at by a person.
+These pass their tests and have never been looked at by a person. The three
+rows at the bottom are the exception: they have been seen on the macOS
+desktop release build, and have never been seen on an Android tablet.
 
 | | What the test proves | What nobody has checked |
 | --- | --- | --- |
@@ -78,9 +82,9 @@ These pass their tests and have never been looked at by a person.
 | Android now-playing | `DeviceMediaWatcher` maps mocked media sessions, permission state and pause/play; tests prove capability-gated external transport, that a new external song replaces the old one without a restart, and that unsupported controls are absent; the base manifest declares the notification-listener service | Whether Notification access can be granted on the T20/SM-X110, whether Spotify/SoundCloud/podcast/PiP accept play/pause/skip through `MediaController`, and whether artwork and titles survive background playback |
 | Live photo discovery in the normal build | The feature-flag test now proves `photoDiscovery` is on; the licence filter and discovery pool have unit tests | Whether the normal build fetches and rotates a fresh Commons photo on the tablet, and whether that changes idle network/battery behaviour |
 | Time-based theme schedule | Override windows resolve correctly for normal and past-midnight ranges; malformed entries are dropped; the schedule survives a controller restart; the Settings editor appears only while the theme is dynamic | Whether the Appearance editor fits and the palette visibly switches on the T20. Hardware smoke was skipped because ADB was offline |
-| **Background albums — Landscape / Cars / Fernando Alonso** | 88 pool entries verified live against the Commons API (file exists, licence redistributable, thumbnail fetchable); each album bundles one hero with its sidecar JSON; the service caches per album; the Settings picker renders without overflow at 1:1, 4:3, 3:4 and 9:16; the reduced build's flag test proves `themePicker` is on | Whether the picker looks right on the tablet, whether the downloaded photographs arrive and rotate, and whether the photographer's credit renders under each one |
-| **Christmas mode** | The palette passes the contrast check and reports itself as a night palette; the automatic window is closed on 30 Nov 23:59, open from 1 Dec 00:00 through 6 Jan 23:59, and closed from 7 Jan 00:00; the mode switch overrides a pinned theme; the snow switch is independent of the mode; the setting survives a restart; the snow paints without overflow at all 11 aspect shapes and is byte-identical across two frames when it is not animating | Whether the snow reads as snow rather than as noise on a 2000×1200 panel, and whether the Christmas palette is legible over a bright photograph |
-| **Live photo discovery (bug fix)** | The candidate filter used to test the file extension by asking whether the URL *ended with* `.jpg`; Commons now appends `?utm_source=…&utm_content=original`, so **every** discovered candidate was being rejected and discovery always returned nothing. The fix strips the query string. A test uses a real API payload with the tracking string, one without it, and a `.webm` with parameters that must still be refused | Whether a fresh Commons photograph now actually arrives and rotates on the tablet — the path that was silently dead before this fix |
+| **Background albums — Landscape / Cars / Fernando Alonso** | 88 pool entries verified live against the Commons API (file exists, licence redistributable, thumbnail fetchable); each album bundles one hero with its sidecar JSON; the service caches per album; the Settings picker renders without overflow at 1:1, 4:3, 3:4 and 9:16; the reduced build's flag test proves `themePicker` is on | Whether the picker looks right on the tablet, and whether the downloaded photographs arrive and rotate there. Seen on macOS: the albums fetch, caption and credit correctly |
+| **Christmas mode** | The palette passes the contrast check and reports itself as a night palette; the automatic window is closed on 30 Nov 23:59, open from 1 Dec 00:00 through 6 Jan 23:59, and closed from 7 Jan 00:00; the mode switch overrides a pinned theme; the snow switch is independent of the mode; the setting survives a restart; the snow paints without overflow at all 11 aspect shapes and is byte-identical across two frames when it is not animating | Whether the snow reads as snow rather than as noise on a 2000×1200 panel, and whether the Christmas palette is legible over a bright photograph. Seen on macOS: the snow falls over the photograph and the caption stays legible |
+| **Live photo discovery (bug fix)** | The candidate filter used to test the file extension by asking whether the URL *ended with* `.jpg`; Commons now appends `?utm_source=…&utm_content=original`, so **every** discovered candidate was being rejected and discovery always returned nothing. The fix strips the query string. A test uses a real API payload with the tracking string, one without it, and a `.webm` with parameters that must still be refused | Whether a fresh Commons photograph now actually arrives and rotates on the tablet — the path that was silently dead before this fix. Seen on macOS: the Landscape album fetched a fresh discovered photograph ("Barranco Valle de la Fuente - Fuerteventura", H. Zell) and cached it |
 | Tizen TV TPK | It builds for `profile tv`; the Samsung distributor certificate names the TV's DUID | Everything. It has never been installed or launched — sdb cannot open the device |
 
 ## 3. Known broken
@@ -253,13 +257,17 @@ test. Do not call those icons real until they have been seen on a tablet.
 
 The newest work is a third ratio. **Built: three background albums (Landscape,
 Cars, Fernando Alonso), one Christmas mode with a seasonal palette and falling
-snow, and one fixed bug in live photo discovery. Verified: zero on hardware.**
-Everything is covered by automated tests — 88 pool entries checked against the
-live Commons API, the December window's four boundary instants, the snow
-byte-identical across two frames — but the owner has not yet installed a build
-containing any of it. Until that happens, the honest description of the
-albums is "the photographs resolve and are licence-clean", not "the albums
-work on a tablet".
+snow, and one fixed bug in live photo discovery. Verified: on the macOS
+desktop release build, on all three albums and in both Christmas states;
+zero on Android hardware.** Everything is covered by automated tests — 88 pool
+entries checked against the live Commons API, the December window's four
+boundary instants, the snow byte-identical across two frames — and the
+macOS release build was run and looked at: each album fetched its
+photograph, captioned it with the album name and the photographer's name,
+and the snow fell over the picture. The owner has not yet installed an
+Android build containing any of it. Until that happens, the honest
+description of the albums is "they work on the macOS desktop build", not
+"the albums work on a tablet".
 
 The number that matters is not the first one. It is that **three broken things
 shipped in v0.1.2 and v0.1.3 while the test suite reported all green** — because

@@ -135,8 +135,8 @@ MT6789, 800x1340) and a **Nokia T20** (Android 13, Unisoc T610, 2000x1200).
 | The quick-settings row — every button does something | ✓ |
 | Five themes | ✓ |
 | Settings | ✓ |
-| Background picker — Landscape / Cars / Fernando Alonso | built and covered by tests; **not yet run on hardware** |
-| Christmas mode — seasonal palette and falling snow | built and covered by tests; **not yet run on hardware** |
+| Background picker — Landscape / Cars / Fernando Alonso | run on the macOS desktop release build — all three albums fetch, caption and credit correctly; **not yet run on Android hardware** |
+| Christmas mode — seasonal palette and falling snow | run on the macOS desktop release build — the snow falls over the photograph; **not yet run on Android hardware** |
 | Cold start | **548 ms** on the Tab A7 Lite release; **509–603 ms** on the T20 release after the first install |
 
 **Not yet verified end to end: the voice assistant and the real
