@@ -264,8 +264,11 @@ entries checked against the live Commons API, the December window's four
 boundary instants, the snow byte-identical across two frames — and the
 macOS release build was run and looked at: each album fetched its
 photograph, captioned it with the album name and the photographer's name,
-and the snow fell over the picture. The owner has not yet installed an
-Android build containing any of it. Until that happens, the honest
+and the snow fell over the picture. Both Android release variants also build
+with all of this in them — the applicationIds were checked and are
+`dev.snlauncher.snlauncher` and `dev.snlauncher.snlauncher.ef` — but neither
+has been installed. The owner has not yet installed an Android build
+containing any of it. Until that happens, the honest
 description of the albums is "they work on the macOS desktop build", not
 "the albums work on a tablet".
 
