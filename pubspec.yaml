@@ -44,6 +44,12 @@ flutter:
     # Licence metadata, read at startup so the photographer's name can be
     # rendered on screen — required by the photo's licence.
     - assets/photo/landscape.json
+    # The bundled first photographs of the racing and Alonso albums. Regenerate
+    # with tool/fetch_heroes.py; see assets/photo/ATTRIBUTION.md.
+    - assets/photo/racing.jpg
+    - assets/photo/alonso.jpg
+    - assets/photo/racing.json
+    - assets/photo/alonso.json
     # Feature configuration. assets/features.json is the reduced default build;
     # assets/features.ef.json is the all-on ExtraFeature build. Both ship so one
     # checkout can produce either with a single --dart-define.
