@@ -7,32 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/photo_credit.dart';
+import 'photo_album.dart';
 import 'settings_store.dart';
-
-/// A photograph the rotation is allowed to use.
-///
-/// Not a live search. Every entry is a specific Wikimedia Commons file that has
-/// been looked at and judged: no people, no text, no diagrams, all landscape,
-/// all public domain or CC-BY.
-///
-/// This is a deliberate choice over "fetch something random from the internet".
-/// A photo frame on a wall display is a thing people look at constantly; a
-/// random image search will eventually put a portrait, a chart, or a
-/// screenshot of someone's desktop on it. A curated pool guarantees the thing
-/// is always pleasant and always lawfully redistributable, which a random
-/// fetch can never promise.
-class PhotoSource {
-  const PhotoSource(this.title, this.author);
-  final String title;
-
-  /// The name to put on screen.
-  ///
-  /// Overrides whatever the Commons `Artist` field says. That field routinely
-  /// contains markup, agency boilerplate, or — in one case we picked — a dead
-  /// link, and this string is rendered next to "Recent highlights" on the
-  /// user's wall, so it has to read like a person's name.
-  final String author;
-}
 
 /// Licences we will install onto the user's device. Anything else is refused at
 /// fetch time and the pool entry is skipped.
@@ -167,63 +143,67 @@ class PhotoFrameService extends ChangeNotifier {
   /// download guard, and six of them fit comfortably in the persistent cache.
   static const int _maxWidth = 2400;
 
-  /// Bump when the requested image size changes. Cached files are derived
-  /// content, so an old 1600px cache is safe to drop rather than leave the
-  /// first picture after an upgrade looking soft.
-  static const int _cacheVersion = 2;
+  /// Bump when the requested image size changes, or when a bug could have
+  /// filed a photograph in the wrong album's folder. Cached files are derived
+  /// content, so an old cache is safe to drop rather than leave the first
+  /// picture after an upgrade looking soft — or showing one album's
+  /// photographer's name under another album's title.
+  static const int _cacheVersion = 3;
 
-  /// Verified against the live Commons API and looked at before inclusion.
+  /// The photographs this album may show.
+  ///
+  /// The pool is not a live search. Every entry is a specific Wikimedia
+  /// Commons file that has been looked at and judged: public domain, CC0 or
+  /// CC-BY, and shaped so that a 16:9 wall display does not have to crop a
+  /// person's face off.
+  ///
+  /// This is a deliberate choice over "fetch something random from the
+  /// internet". A photo frame on a wall display is a thing people look at
+  /// constantly; a random image search will eventually put a portrait, a
+  /// chart, or a screenshot of someone's desktop on it. A curated pool
+  /// guarantees the thing is always pleasant and always lawfully
+  /// redistributable, which a random fetch can never promise.
+  List<AlbumPhoto> get pool => album.pool;
 
-  /// Every entry is public domain, CC0 or CC-BY — never share-alike, which
+  /// Which album the background is showing.
+  PhotoAlbum _album = PhotoAlbum.landscape;
+  PhotoAlbum get album => _album;
 
-  /// a launcher cannot honour.
+  /// The bundled photograph that paints before anything is downloaded.
+  String get heroAsset => album.heroAsset;
 
-  static const List<PhotoSource> pool = [
-    PhotoSource(
-      'Jokulsarlon lake, Iceland.jpg',
-      'Kenny Muir',
-    ),
-    PhotoSource(
-      'Lake Kinney mit Mount Whitehorn.jpg',
-      'Florian Fuchs',
-    ),
-    PhotoSource(
-      'Zagedan Lakes, Mountain cirque, Caucasus Mountains.jpg',
-      'Vyacheslav Argenberg',
-    ),
-    PhotoSource(
-      'Early morning light at the top of Poon Hill2.jpg',
-      'Ali Sabbagh',
-    ),
-    PhotoSource(
-      'Himalaya sunrise.jpg',
-      'Ali Sabbagh',
-    ),
-    PhotoSource(
-      'Khodz River Valley in fog, Adygea, Верховья реки Ходзь в тумане и облаках, Адыгея.jpg',
-      'Vyacheslav Argenberg',
-    ),
-    PhotoSource(
-      'Wisła pod Ochodzą w województwie małopolskim, 20231119 0706 2690.jpg',
-      'Elaine Li',
-    ),
-    PhotoSource(
-      'Asbestnaya Mount, Adygea, Гора Асбестная, виды с вершины, Адыгея, Западный Кавказ.jpg',
-      'Vyacheslav Argenberg',
-    ),
-    PhotoSource(
-      'Ella, Sri Lanka, Mountains in clouds, Panorama.jpg',
-      'Vyacheslav Argenberg',
-    ),
-    PhotoSource(
-      'River Running through a Rolling Hills Landscape by Edmund John Nieman .jpg',
-      'Edmund John Nieman (1843-1910)',
-    ),
-    PhotoSource(
-      'Rolling hills and lagoon scenics.jpg',
-      'West Robin L, U.S. Fish and Wildlife Service',
-    ),
-  ];
+  /// The licence that goes with the bundled photograph.
+  PhotoCredit get heroCredit => PhotoCredit.loadFor(album);
+
+  /// Switch to a different album.
+  ///
+  /// The current file and credit are cleared immediately, so the new album's
+  /// hero paints straight away and the previous album's photographer's name
+  /// cannot be left on screen next to the new album's title.
+  Future<void> setAlbum(PhotoAlbum next) async {
+    if (next == _album) return;
+    _album = next;
+    _current = null;
+    _credit = null;
+    _lastTitle = null;
+    if (_docsRoot != null) {
+      _albumDir(next);
+      _dropOldResolutionCache(next);
+      _adoptNewestCached(next);
+    }
+    notifyListeners();
+    // Before [start] has run there is no cache directory to write into and no
+    // timer to reschedule — the real one is set up in [start], which reads
+    // [_album] and so already points at the right folder. Fetching here would
+    // download a photograph into a temporary directory that [start] is about to
+    // walk away from.
+    if (!_started) return;
+    _schedule();
+    // If a fetch is already running it belongs to the album we just left, so
+    // its result is thrown away; [prefetchNext] remembers the request and
+    // runs it as soon as that fetch is done.
+    if (_enabled) unawaited(prefetchNext());
+  }
 
 
   File? _current;
@@ -243,24 +223,37 @@ class PhotoFrameService extends ChangeNotifier {
   bool _busy = false;
   bool get busy => _busy;
 
+  /// True when a prefetch was asked for while another fetch was running.
+  ///
+  /// The running fetch may be for the album that has just been switched away
+  /// from, so its result is thrown away. This flag makes sure the album that
+  /// is now current still gets its own photograph, promptly.
+  bool _pendingPrefetch = false;
+
   Timer? _timer;
   bool _disposed = false;
+
+  /// True once [start] has set the cache directory up.
+  bool _started = false;
 
   /// The last file we showed, so the next pick cannot repeat it.
   String? _lastTitle;
 
-  Directory get _cacheDir {
-    // Persistent documents directory so the photo cache survives app restarts
-    // and the "Next" button can switch instantly to an already-downloaded photo.
-    // Uses a subdirectory so it does not clutter the app's documents.
-    return _cacheDirInstance ??= _createCacheDir();
-  }
+  /// The documents directory, once [start] has found it.
+  Directory? _docsRoot;
 
-  Directory? _cacheDirInstance;
+  /// Points the cache somewhere else. Tests use this; the app never calls it.
+  @visibleForTesting
+  set documentsRoot(Directory root) => _docsRoot = root;
 
-  Directory _createCacheDir() {
-    final docs = Directory.systemTemp; // placeholder; replaced in start()
-    final d = Directory('${docs.path}/sn_launcher_photos');
+  /// The cache directory for one album.
+  ///
+  /// One directory per album, so switching albums cannot show the previous
+  /// album's photograph — or, worse, the previous album's photographer's name
+  /// next to the new album's title.
+  Directory _albumDir(PhotoAlbum which) {
+    final root = _docsRoot ?? Directory.systemTemp;
+    final d = Directory('${root.path}/sn_launcher_photos/${which.name}');
     if (!d.existsSync()) d.createSync(recursive: true);
     return d;
   }
@@ -270,19 +263,18 @@ class PhotoFrameService extends ChangeNotifier {
     await _settings.load();
     // Initialize persistent cache directory.
     final docs = await getApplicationDocumentsDirectory();
-    _cacheDirInstance = Directory('${docs.path}/sn_launcher_photos');
-    if (!_cacheDirInstance!.existsSync()) {
-      _cacheDirInstance!.createSync(recursive: true);
-    }
-    _dropOldResolutionCache();
+    _docsRoot = docs;
+    _albumDir(_album);
+    _dropOldResolutionCache(_album);
 
     _enabled = _settings.read(SettingKeys.rotatePhotos, true, (v) => v == 'true');
     final mins = _settings.read(SettingKeys.rotateMinutes, 10, (v) => int.tryParse(v) ?? 10);
     _interval = Duration(minutes: mins.clamp(1, 1440));
 
-    _adoptNewestCached();
+    _adoptNewestCached(_album);
     _schedule();
     if (_enabled) unawaited(prefetchNext());
+    _started = true;
     notifyListeners();
   }
 
@@ -293,9 +285,8 @@ class PhotoFrameService extends ChangeNotifier {
   /// user sees after installing a sharpness fix should not be the blurry
   /// version. These files are downloads, not user data, so replacing them is
   /// safe.
-  void _dropOldResolutionCache() {
-    final dir = _cacheDirInstance;
-    if (dir == null) return;
+  void _dropOldResolutionCache(PhotoAlbum which) {
+    final dir = _albumDir(which);
     try {
       final marker = File('${dir.path}/.cache_version');
       if (marker.existsSync() &&
@@ -342,15 +333,40 @@ class PhotoFrameService extends ChangeNotifier {
   Future<void> next() async {
     final got = await _fetchIntoCache();
     if (got == null || _disposed) return;
-    _current = got.file;
-    _credit = got.credit;
-    _lastTitle = got.credit.title;
+    adopt(got.album, got.file, got.credit);
+  }
+
+  /// Puts a downloaded photograph on screen — unless the album changed while
+  /// it was downloading.
+  ///
+  /// The album may change mid-fetch: the settings are restored from disk at
+  /// start-up, and the album is restored the same way. A photograph that was
+  /// fetched for the album we just left must not be shown under the new
+  /// album's title, because then one photographer's name sits under another
+  /// photographer's picture. That is exactly what happened once already.
+  ///
+  /// Returns true when the photograph was adopted.
+  @visibleForTesting
+  bool adopt(PhotoAlbum fetchedAlbum, File file, PhotoCredit credit) {
+    if (fetchedAlbum != _album) return false;
+    _current = file;
+    _credit = credit;
+    _lastTitle = credit.title;
     notifyListeners();
+    return true;
   }
 
   /// Download the next picture ahead of time so the swap is instant.
+  ///
+  /// If a fetch is already running, remember that another one was asked for
+  /// and run it as soon as this one finishes. Otherwise an album switch that
+  /// lands mid-fetch would sit on its bundled photograph until the next
+  /// ten-minute rotation.
   Future<void> prefetchNext() async {
-    if (_busy) return;
+    if (_busy) {
+      _pendingPrefetch = true;
+      return;
+    }
     await next();
   }
 
@@ -362,9 +378,9 @@ class PhotoFrameService extends ChangeNotifier {
     _timer = Timer.periodic(_interval, (_) => prefetchNext());
   }
 
-  void _adoptNewestCached() {
+  void _adoptNewestCached(PhotoAlbum which) {
     try {
-      final files = _cachedImages()
+      final files = _cachedImages(which)
         ..sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
       if (files.isEmpty) return;
       _current = files.first;
@@ -374,7 +390,12 @@ class PhotoFrameService extends ChangeNotifier {
     }
   }
 
-  List<File> _cachedImages() => _cacheDir
+  /// The photographs cached for one album.
+  ///
+  /// Takes the album rather than reading the live cache directory, so a
+  /// download that is still running for one album cannot be confused with
+  /// another album's folder.
+  List<File> _cachedImages(PhotoAlbum which) => _albumDir(which)
       .listSync()
       .whereType<File>()
       .where((f) => f.path.endsWith('.jpg'))
@@ -401,8 +422,8 @@ class PhotoFrameService extends ChangeNotifier {
     }
   }
 
-  void _prune() {
-    final files = _cachedImages()
+  void _prune(PhotoAlbum which) {
+    final files = _cachedImages(which)
       ..sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
     for (final old in files.skip(_cacheLimit)) {
       try {
@@ -480,12 +501,16 @@ class PhotoFrameService extends ChangeNotifier {
 
     // Formats a launcher cannot usefully paint, and formats that cost a lot to
     // decode on a weak GPU.
+    //
+    // Commons appends tracking parameters to the URL — `?utm_source=…&utm_content=original`
+    // — so the query string has to come off before the extension is looked
+    // at. Testing the raw URL refused every single discovered photograph.
     final original = info['url'];
     if (original is! String) return null;
-    final lower = original.toLowerCase();
-    if (!(lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.png'))) {
+    final path = original.split('?').first.toLowerCase();
+    if (!(path.endsWith('.jpg') ||
+        path.endsWith('.jpeg') ||
+        path.endsWith('.png'))) {
       return null;
     }
     final thumb = info['thumburl'];
@@ -496,13 +521,27 @@ class PhotoFrameService extends ChangeNotifier {
 
     return PhotoCredit(
       title: title,
-      author: _stripHtml(_metaText(meta['Artist'])),
+      author: _tidyAuthor(_metaText(meta['Artist'])),
       license: licence,
       licenseUrl: _metaText(meta['LicenseUrl']),
       sourceUrl:
           'https://commons.wikimedia.org/wiki/${Uri.encodeComponent(title)}',
       imageUrl: thumb is String && thumb.isNotEmpty ? thumb : original,
     );
+  }
+
+  /// Commons writes the photographer's name twice: once as plain text and once
+  /// as the link text of their user page — "David Marcu davidmarcu". This is
+  /// rendered on the wall, so it has to read like a person's name.
+  ///
+  /// The plain name wins when there is one. When the whole field is a link,
+  /// the link's text is the name.
+  static String _tidyAuthor(String html) {
+    final anchor = RegExp(r'<a\b[^>]*>(.*?)</a>', dotAll: true);
+    final outside = _stripHtml(html.replaceAll(anchor, ' ')).trim();
+    if (outside.isNotEmpty) return outside;
+    final link = anchor.firstMatch(html)?.group(1);
+    return link == null ? '' : _stripHtml(link);
   }
 
   /// Commons returns author fields as HTML fragments — links, and occasionally
@@ -525,8 +564,9 @@ class PhotoFrameService extends ChangeNotifier {
   /// category yields nothing usable. On the measured acceptance rates that is
   /// the *expected* outcome fairly often, so it is a normal return, not an
   /// error worth logging loudly.
-  Future<({File file, PhotoCredit credit})?> _discoverOne(
+  Future<({File file, PhotoCredit credit, PhotoAlbum album})?> _discoverOne(
     HttpClient client,
+    PhotoAlbum which,
   ) async {
     final categories = List<String>.of(discoveryCategories)..shuffle();
     for (final category in categories) {
@@ -537,7 +577,8 @@ class PhotoFrameService extends ChangeNotifier {
       final usable = fresh.isEmpty ? candidates : fresh;
       final pick = usable[DateTime.now().microsecondsSinceEpoch % usable.length];
       final got = await _fetchOne(
-        PhotoSource(pick.title ?? '', pick.author ?? ''),
+        AlbumPhoto(pick.title ?? '', pick.author ?? ''),
+        album: which,
         preResolved: pick,
       );
       if (got != null) return got;
@@ -545,21 +586,30 @@ class PhotoFrameService extends ChangeNotifier {
     return null;
   }
 
-  Future<({File file, PhotoCredit credit})?> _fetchIntoCache() async {
+  Future<({File file, PhotoCredit credit, PhotoAlbum album})?> _fetchIntoCache() async {
     if (_busy) return null;
     _busy = true;
     notifyListeners();
+    // The album this fetch belongs to, captured once.
+    //
+    // The album can change while the download is in flight — the settings are
+    // restored from disk at start-up, and the album is restored the same way.
+    // Reading the live album further down meant a Landscape discovery could be
+    // written into the Alonso folder, and the Alonso caption then went with a
+    // jellyfish and the wrong photographer's name. Every step below now uses
+    // this captured album, and the result is discarded if the album changed.
+    final album = _album;
     try {
       // Try each pool entry in turn. A pool entry can fail (file renamed on
       // Commons, licence changed, network blip) and that must not take the
       // whole rotation down with it.
-      if (discover) {
+      if (discover && album.usesDiscovery) {
         final client =
             HttpClient()..connectionTimeout = const Duration(seconds: 20);
         try {
-          final got = await _discoverOne(client);
+          final got = await _discoverOne(client, album);
           if (got != null) {
-            _prune();
+            _prune(album);
             return got;
           }
         } catch (e) {
@@ -570,10 +620,10 @@ class PhotoFrameService extends ChangeNotifier {
       }
 
       for (var attempt = 0; attempt < 4; attempt++) {
-        final pick = _pickSource();
-        final got = await _fetchOne(pick);
+        final pick = _pickSource(album);
+        final got = await _fetchOne(pick, album: album);
         if (got != null) {
-          _prune();
+          _prune(album);
           return got;
         }
       }
@@ -581,20 +631,27 @@ class PhotoFrameService extends ChangeNotifier {
       return null;
     } finally {
       _busy = false;
+      // A prefetch asked for while this one was running still has to happen —
+      // it is probably for the album that is now current.
+      if (_pendingPrefetch) {
+        _pendingPrefetch = false;
+        unawaited(prefetchNext());
+      }
       if (!_disposed) notifyListeners();
     }
   }
 
   /// Random, but never the picture we are currently showing.
-  PhotoSource _pickSource() {
+  AlbumPhoto _pickSource(PhotoAlbum which) {
     final candidates =
-        pool.where((s) => s.title != _lastTitle).toList(growable: false);
-    final from = candidates.isEmpty ? pool : candidates;
+        which.pool.where((s) => s.title != _lastTitle).toList(growable: false);
+    final from = candidates.isEmpty ? which.pool : candidates;
     return from[DateTime.now().microsecondsSinceEpoch % from.length];
   }
 
-  Future<({File file, PhotoCredit credit})?> _fetchOne(
-    PhotoSource src, {
+  Future<({File file, PhotoCredit credit, PhotoAlbum album})?> _fetchOne(
+    AlbumPhoto src, {
+    required PhotoAlbum album,
     PhotoCredit? preResolved,
   }) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
@@ -613,8 +670,8 @@ class PhotoFrameService extends ChangeNotifier {
       final bytes = await _download(client, meta.imageUrl!);
       if (bytes == null || bytes.length < 20_000) return null;
 
-      final saved = await _write(bytes, meta);
-      return (file: saved, credit: meta);
+      final saved = await _write(bytes, meta, album);
+      return (file: saved, credit: meta, album: album);
     } catch (e) {
       debugPrint('PhotoFrameService: ${src.title} failed — $e');
       return null;
@@ -688,12 +745,19 @@ class PhotoFrameService extends ChangeNotifier {
     }
   }
 
-  Future<File> _write(List<int> bytes, PhotoCredit credit) async {
-    final tmp = File('${_cacheDir.path}/dl.tmp');
+  /// Writes a downloaded photograph into the cache folder of the album it
+  /// belongs to.
+  ///
+  /// The album is passed in rather than read from the live field, because the
+  /// album can change while the download is running — and a photograph must
+  /// never be filed under an album it does not belong to.
+  Future<File> _write(List<int> bytes, PhotoCredit credit, PhotoAlbum album) async {
+    final dir = _albumDir(album);
+    final tmp = File('${dir.path}/dl.tmp');
     await tmp.writeAsBytes(bytes, flush: true);
 
     final out = File(
-      '${_cacheDir.path}/photo_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      '${dir.path}/photo_${DateTime.now().millisecondsSinceEpoch}.jpg',
     );
     // Stored verbatim. Commons was asked for a 2400px-wide thumbnail, which is
     // already slightly larger than the panel — re-encoding would only be a way
@@ -713,6 +777,16 @@ class PhotoFrameService extends ChangeNotifier {
     }));
     return out;
   }
+
+  /// Writes a photograph into an album's cache folder. Tests use this to check
+  /// that a photograph ends up in the folder of the album it belongs to.
+  @visibleForTesting
+  Future<File> writeForTest(
+    List<int> bytes,
+    PhotoCredit credit,
+    PhotoAlbum album,
+  ) =>
+      _write(bytes, credit, album);
 
 
   @override

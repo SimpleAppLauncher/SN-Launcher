@@ -75,6 +75,17 @@ void main() {
       expect(got?.author, 'Marek & Ślusarczyk');
     });
 
+    test('does not print the photographer twice', () {
+      // Commons writes the name, then links it: "David Marcu davidmarcu".
+      // That string ends up on the wall, so only the name belongs there.
+      final got = accept(apiPage(
+        title: 'A.jpg',
+        licence: 'CC BY 4.0',
+        artist: 'David Marcu <a href="//x">davidmarcu</a>',
+      ));
+      expect(got?.author, 'David Marcu');
+    });
+
     test('gives every accepted file a source link and a title', () {
       final got = accept(apiPage(title: 'Cub_Lake_at_dawn.jpg', licence: 'CC0'));
       expect(got?.title, 'Cub Lake at dawn.jpg');
@@ -186,6 +197,47 @@ void main() {
 
     test('an empty title is refused', () {
       expect(accept(apiPage(title: '', licence: 'CC BY 3.0')), isNull);
+    });
+  });
+
+  group('the URL Commons actually sends', () {
+    test('a file URL with tracking parameters is still usable', () {
+      // Commons appends these to every imageinfo url it serves:
+      //   ?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original
+      // A launcher that tested the extension on the raw URL therefore
+      // rejected one hundred per cent of the candidates it was offered, and
+      // landscape discovery silently returned nothing for the whole time the
+      // feature existed.
+      final got = accept(apiPage(
+        title: 'A.jpg',
+        licence: 'CC BY 2.0',
+        url: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/A.jpg'
+            '?utm_source=commons.wikimedia.org&utm_campaign=imageinfo'
+            '&utm_content=original',
+      ));
+      expect(got, isNotNull,
+          reason: 'the extension is in the path, not in the query string');
+      expect(got!.title, 'A.jpg');
+    });
+
+    test('a tracking-free URL is still usable', () {
+      final got = accept(apiPage(
+        title: 'A.jpg',
+        licence: 'CC BY 2.0',
+        url: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/A.jpg',
+      ));
+      expect(got, isNotNull);
+    });
+
+    test('a non-image format is still refused with parameters attached', () {
+      expect(
+        accept(apiPage(
+          title: 'A',
+          licence: 'CC BY 3.0',
+          url: 'https://upload.wikimedia.org/x/Clip.webm?utm_source=commons',
+        )),
+        isNull,
+      );
     });
   });
 

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../services/photo_album.dart';
+
 /// Licence metadata for the bundled background photograph.
 ///
 /// Every photograph that ships with software needs its licence to travel with
@@ -47,20 +49,25 @@ class PhotoCredit {
   /// ordering matters: the shell caches this in a `late final`, so a load that
   /// lands after the first frame would never be picked up and the credit would
   /// silently not render.
-  static String? _assetCache;
-  static PhotoCredit? _parsed;
+  /// One entry per album, so each bundled photograph keeps its own licence.
+  static final Map<String, String> _assetCacheByAlbum = {};
+  static final Map<String, PhotoCredit> _parsedByAlbum = {};
 
   /// Synchronous. Returns [empty] if [preload] has not run or the asset is
   /// missing.
-  static PhotoCredit load() {
-    final cached = _parsed;
+  static PhotoCredit load() => loadFor(PhotoAlbum.landscape);
+
+  /// Synchronous. The licence metadata for one album's bundled photograph.
+  static PhotoCredit loadFor(PhotoAlbum album) {
+    final key = album.heroCreditAsset;
+    final cached = _parsedByAlbum[key];
     if (cached != null) return cached;
-    final raw = _assetCache;
+    final raw = _assetCacheByAlbum[key];
     if (raw == null) return empty;
     try {
       final map = jsonDecode(raw);
       if (map is! Map) return empty;
-      return _parsed = PhotoCredit(
+      return _parsedByAlbum[key] = PhotoCredit(
         title: map['title']?.toString(),
         author: map['author']?.toString(),
         license: map['license']?.toString(),
@@ -68,22 +75,26 @@ class PhotoCredit {
         sourceUrl: map['sourceUrl']?.toString(),
       );
     } catch (e) {
-      debugPrint('PhotoCredit: landscape.json is malformed: $e');
+      debugPrint('PhotoCredit: $key is malformed: $e');
       return empty;
     }
   }
 
   static Future<void> preload() async {
-    try {
-      _assetCache = await rootBundle.loadString('assets/photo/landscape.json');
-      _parsed = null; // force a re-parse
-      load();
-    } catch (_) {
-      _assetCache = null;
-      debugPrint(
-        'PhotoCredit: assets/photo/landscape.json missing — the bundled photo '
-        'will show no author credit, which its licence may require.',
-      );
+    for (final album in PhotoAlbum.values) {
+      final asset = album.heroCreditAsset;
+      try {
+        _assetCacheByAlbum[asset] = await rootBundle.loadString(asset);
+      } catch (_) {
+        _assetCacheByAlbum.remove(asset);
+        debugPrint(
+          'PhotoCredit: $asset missing — the bundled photo will show no author '
+          'credit, which its licence may require.',
+        );
+      }
     }
+    // The landscape sidecar is also the historical fallback.
+    _parsedByAlbum.clear();
+    load();
   }
 }

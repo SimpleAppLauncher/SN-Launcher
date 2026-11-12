@@ -134,6 +134,22 @@ abstract final class SettingKeys {
   static const placePhoto = 'placePhoto';
   static const rotateMinutes = 'rotateMinutes';
 
+  /// Which background album is showing: `landscape`, `racing` or `alonso`.
+  static const photoAlbum = 'photoAlbum';
+
+  // ── Christmas mode ─────────────────────────────────────────────────────────
+
+  /// Whether the Christmas palette is on.
+  static const christmasMode = 'christmasMode';
+
+  /// Whether snow falls over the photograph. Independent of the mode toggle,
+  /// so it can be switched off for a screenshot without switching the season
+  /// off with it.
+  static const snowEnabled = 'snowEnabled';
+
+  /// Whether the Christmas mode switches itself on between 1 Dec and 6 Jan.
+  static const christmasAuto = 'christmasAuto';
+
   /// The to-do list, as a JSON array. Kept in one string rather than one key
   /// per item, so a list of any length is still one write.
   static const todo = 'todo';
