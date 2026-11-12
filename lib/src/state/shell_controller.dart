@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import '../models/nest_action.dart';
 import '../services/action_launcher.dart';
 import '../services/feature_flags.dart';
+import '../services/photo_album.dart';
+import '../services/photo_frame_service.dart';
 import '../services/platform_bridge.dart';
 import '../services/settings_store.dart';
 import '../theme/ambient_palette.dart';
@@ -168,6 +170,25 @@ class ShellController extends ChangeNotifier {
     if (storedZoom != null) {
       _zoom = double.tryParse(storedZoom)?.clamp(1.0, 1.2) ?? 1.0;
     }
+    // The background album. Re-checked against what this build offers, the
+    // same way the theme is: a value written by a newer build must not leave
+    // the launcher pointing at an album that does not exist here.
+    final storedAlbum = _settings.get(SettingKeys.photoAlbum);
+    if (storedAlbum != null) {
+      _photoAlbum = PhotoAlbum.fromName(storedAlbum);
+      _albumTitle = _photoAlbum.caption;
+      // Push it into the service, if it is already attached. Without this the
+      // stored album would be remembered but never shown.
+      unawaited(_photos?.setAlbum(_photoAlbum));
+    }
+    // Christmas mode. Snow defaults on: a user who switches the mode off in
+    // December gets the ordinary palette and no snow.
+    _christmasMode =
+        _settings.read(SettingKeys.christmasMode, false, (v) => v == 'true');
+    _snowEnabled =
+        _settings.read(SettingKeys.snowEnabled, true, (v) => v == 'true');
+    _christmasAuto =
+        _settings.read(SettingKeys.christmasAuto, true, (v) => v == 'true');
     _recomputePalette(force: true);
     notifyListeners();
     unawaited(syncWithDeviceState());
@@ -252,6 +273,91 @@ class ShellController extends ChangeNotifier {
   String _albumTitle = 'Recent highlights';
   String get albumTitle => _albumTitle;
 
+  // ── Background album ──────────────────────────────────────────────────────
+
+  /// Which background album is showing.
+  PhotoAlbum _photoAlbum = PhotoAlbum.landscape;
+  PhotoAlbum get photoAlbum => _photoAlbum;
+
+  /// The photo service, when one has been attached.
+  ///
+  /// The controller owns the album because the Settings page can only reach
+  /// the controller — it has no reference to the service. The service owns the
+  /// photographs and the cache, so the album is pushed into it here rather
+  /// than the two being kept in step by hand.
+  PhotoFrameService? _photos;
+
+  /// Give the controller the photo service, so switching albums actually
+  /// changes what is on screen.
+  void attachPhotos(PhotoFrameService photos) {
+    if (identical(_photos, photos)) return;
+    _photos = photos;
+    unawaited(photos.setAlbum(_photoAlbum));
+  }
+
+  /// Switch the background album.
+  Future<void> setPhotoAlbum(PhotoAlbum album) async {
+    if (album == _photoAlbum) return;
+    _photoAlbum = album;
+    _albumTitle = album.caption;
+    await _settings.put(SettingKeys.photoAlbum, album.storageName);
+    notifyListeners();
+    await _photos?.setAlbum(album);
+  }
+
+  // ── Christmas mode ────────────────────────────────────────────────────────
+
+  /// Whether the user asked for the Christmas palette.
+  bool _christmasMode = false;
+  bool get christmasMode => _christmasMode;
+
+  /// Whether the Christmas palette is on right now.
+  ///
+  /// True when the mode is switched on, or when the automatic window is
+  /// closed and the season has arrived.
+  bool get christmasActive =>
+      _christmasMode || (_christmasAuto && _inChristmasWindow(_now));
+
+  /// Whether snow falls over the photograph.
+  ///
+  /// Independent of [christmasMode] on purpose: a user who wants the palette
+  /// without the snow should not have to switch the season off to get it.
+  bool _snowEnabled = true;
+  bool get snowEnabled => _snowEnabled;
+
+  /// Whether the mode switches itself on between 1 December and 6 January.
+  bool _christmasAuto = true;
+  bool get christmasAuto => _christmasAuto;
+
+  DateTime get _now => _clockTicker?.now ?? DateTime.now();
+
+  /// Is it the season?
+  ///
+  /// The window opens at midnight on 1 December and closes at midnight on
+  /// 7 January — six days of New Year, then the ordinary world again.
+  static bool _inChristmasWindow(DateTime t) =>
+      (t.month == 12) || (t.month == 1 && t.day <= 6);
+
+  void toggleChristmasMode() {
+    _christmasMode = !_christmasMode;
+    unawaited(_settings.put(SettingKeys.christmasMode, '$_christmasMode'));
+    _recomputePalette(force: true);
+    notifyListeners();
+  }
+
+  void toggleSnow() {
+    _snowEnabled = !_snowEnabled;
+    unawaited(_settings.put(SettingKeys.snowEnabled, '$_snowEnabled'));
+    notifyListeners();
+  }
+
+  void toggleChristmasAuto() {
+    _christmasAuto = !_christmasAuto;
+    unawaited(_settings.put(SettingKeys.christmasAuto, '$_christmasAuto'));
+    _recomputePalette(force: true);
+    notifyListeners();
+  }
+
   double _zoom = 1.0;
   double get zoom => _zoom;
 
@@ -292,11 +398,13 @@ class ShellController extends ChangeNotifier {
   /// time-of-day default.
   void _recomputePalette({bool force = false}) {
     final t = _clockTicker?.now ?? DateTime.now();
-    final next = AmbientPalette.resolve(
-      _theme,
-      _overrides,
-      t.hour.toDouble() + t.minute / 60.0,
-    );
+    final next = christmasActive
+        ? AmbientPalette.christmas
+        : AmbientPalette.resolve(
+            _theme,
+            _overrides,
+            t.hour.toDouble() + t.minute / 60.0,
+          );
     if (force ||
         next.top != _palette.top ||
         next.bottom != _palette.bottom ||

@@ -343,6 +343,10 @@ class _NestLauncherAppState extends State<NestLauncherApp>
         builder: (context) {
           final m = NestMetrics.of(context);
           _controller ??= ShellController(metrics: m, vsync: this);
+          // The controller owns the album setting; the service owns the
+          // download. Handing it over is what lets a change in Settings reach
+          // the photograph on the wall.
+          _controller!.attachPhotos(_photos);
           return Stack(
             children: [
               NestShell(

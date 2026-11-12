@@ -237,6 +237,26 @@ class AmbientPalette {
     isNight: true,
   );
 
+  /// The Christmas palette.
+  ///
+  /// Midnight blue into deep pine, with warm white ink — the colour of a
+  /// Christmas tree lit from inside. It is a night palette, so the photograph
+  /// behind the clock is dimmed the same way the night theme dims it.
+  ///
+  /// Not a `NestTheme`: the season is not a theme the user picks from a row
+  /// of swatches, it is a mode that takes over the whole palette.
+  static const AmbientPalette christmas = AmbientPalette(
+    name: 'Christmas',
+    top: Color(0xFF0B1A2A),
+    bottom: Color(0xFF123024),
+    onSurface: Color(0xFFF6F1E4),
+    onSurfaceVariant: Color(0xFFAFC4B4),
+    surface: Color(0xFF1B3328),
+    onSurfaceStrong: Color(0xFFFFFBF0),
+    brightness: Brightness.dark,
+    isNight: true,
+  );
+
   /// ── Dynamic keyframes ────────────────────────────────────────────────────
   // Used only by [at]. Warm tints at dawn and dusk, cool paper at midday, soft
   // blue at night — the behaviour described in Google's own Ambient EQ copy.

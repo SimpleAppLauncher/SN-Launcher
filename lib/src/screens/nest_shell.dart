@@ -34,6 +34,7 @@ import '../widgets/music_player.dart';
 import '../widgets/ncs_music_page.dart';
 import '../widgets/photo_frame.dart';
 import '../widgets/settings_page.dart';
+import '../widgets/snow_overlay.dart';
 import '../widgets/todo_card.dart';
 import '../widgets/now_playing_card.dart';
 import '../widgets/weather_page.dart';
@@ -262,9 +263,6 @@ class _NestShellState extends State<NestShell> {
   NestMetrics get _m => NestMetrics.of(context);
 
   late final ShellController _c = widget.controller;
-
-  /// Licence credit for the bundled photograph. Loaded once.
-  late final PhotoCredit _credit = PhotoCredit.load();
 
   /// Which features this build was compiled with. Read once, synchronously —
   /// the JSON is bundled and resolved before the first frame, so there is no
@@ -875,7 +873,21 @@ class _NestShellState extends State<NestShell> {
               metrics: _m,
               palette: palette,
               file: widget.photos?.currentFile,
+              // The album decides which photograph is bundled. Without this the
+              // racing album would still open on the landscape picture, and the
+              // credit underneath it would name the wrong photographer.
+              asset: widget.photos?.heroAsset ?? 'assets/photo/landscape.jpg',
             ),
+            // Snow, when Christmas mode is on.
+            //
+            // Above the photograph and below the clock: the flakes fall in
+            // front of the picture, and the clock stays legible on top of
+            // them. One paint pass — a hundred and twenty separate widgets
+            // would each be their own layer on a weak GPU.
+            if (_c.christmasActive && _c.snowEnabled)
+              Positioned.fill(
+                child: SnowOverlay(animate: widget.animateDecorations),
+              ),
             // A now-playing indicator, when something is playing.
             //
             // The real Nest shows one: the launcher keeps a small strip
@@ -916,7 +928,13 @@ class _NestShellState extends State<NestShell> {
               animateWeather: false,
               forceLightText: true,
               albumTitle: _c.albumTitle,
-              photoCredit: (widget.photos?.credit ?? _credit).displayCredit,
+              // The credit belongs to whichever photograph is actually on
+              // screen: a downloaded one when there is one, otherwise the
+              // bundled hero for this album.
+              photoCredit: (widget.photos?.credit ??
+                      widget.photos?.heroCredit ??
+                      PhotoCredit.loadFor(_c.photoAlbum))
+                  .displayCredit,
             ),
           ],
         );

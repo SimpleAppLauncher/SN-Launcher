@@ -7,6 +7,7 @@ import '../models/nest_action.dart' show AssistantBackend, availableThemes;
 import '../state/shell_controller.dart';
 import '../services/device_media_watcher.dart';
 import '../services/feature_flags.dart';
+import '../services/photo_album.dart';
 import '../services/remote_control_service.dart';
 import '../theme/ambient_palette.dart';
 import '../theme/nest_icons.dart';
@@ -409,6 +410,157 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
+  /// The background album.
+  ///
+  /// Two rows, one stored value. The top row chooses between the nature
+  /// photographs and the racing photographs; the second row, which only
+  /// appears when the racing photographs are chosen, chooses between any racer
+  /// and Fernando Alonso.
+  ///
+  /// The pictures themselves are not listed here. They are fetched from
+  /// Wikimedia Commons at runtime, and every one of them carries a licence
+  /// that permits redistribution — the photographer's name is printed under
+  /// the album title on the wall.
+  Widget _background(NestMetrics m) {
+    final c = controller;
+    final album = c.photoAlbum;
+    final cars = album != PhotoAlbum.landscape;
+    return _Section(
+      metrics: m,
+      type: type,
+      palette: palette,
+      icon: NestIcons.Wallpaper,
+      title: 'Background',
+      children: [
+        Text(
+          'Photographs',
+          style: type.caption(color: palette.onSurfaceStrong),
+        ),
+        SizedBox(height: m.px(8)),
+        Wrap(
+          spacing: m.px(8),
+          runSpacing: m.px(8),
+          children: [
+            _PillToggle(
+              label: 'Landscape',
+              on: !cars,
+              metrics: m,
+              type: type,
+              palette: palette,
+              onTap: () => c.setPhotoAlbum(PhotoAlbum.landscape),
+            ),
+            _PillToggle(
+              label: 'Cars',
+              on: cars,
+              metrics: m,
+              type: type,
+              palette: palette,
+              onTap: () => c.setPhotoAlbum(
+                album == PhotoAlbum.alonso
+                    ? PhotoAlbum.alonso
+                    : PhotoAlbum.racing,
+              ),
+            ),
+          ],
+        ),
+        if (cars) ...[
+          SizedBox(height: m.px(12)),
+          Text(
+            'Cars focus',
+            style: type.caption(color: palette.onSurfaceStrong),
+          ),
+          SizedBox(height: m.px(8)),
+          Wrap(
+            spacing: m.px(8),
+            runSpacing: m.px(8),
+            children: [
+              _PillToggle(
+                label: 'Any racer',
+                on: album == PhotoAlbum.racing,
+                metrics: m,
+                type: type,
+                palette: palette,
+                onTap: () => c.setPhotoAlbum(PhotoAlbum.racing),
+              ),
+              _PillToggle(
+                label: 'Fernando Alonso',
+                on: album == PhotoAlbum.alonso,
+                metrics: m,
+                type: type,
+                palette: palette,
+                onTap: () => c.setPhotoAlbum(PhotoAlbum.alonso),
+              ),
+            ],
+          ),
+        ],
+        SizedBox(height: m.px(10)),
+        Text(
+          'Fetched from Wikimedia Commons and credited to the photographer. '
+          'The first photograph of each album is bundled with the app, so the '
+          'wall is never blank.',
+          style: type.caption(color: palette.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+
+  /// Christmas mode.
+  ///
+  /// A seasonal palette and falling snow. The palette takes over completely —
+  /// a pinned theme and the theme schedule are both paused while it is on,
+  /// which is why the copy below says so rather than leaving it to be
+  /// discovered.
+  Widget _christmas(NestMetrics m) {
+    final c = controller;
+    return _Section(
+      metrics: m,
+      type: type,
+      palette: palette,
+      icon: NestIcons.Bedtime,
+      title: 'Christmas',
+      children: [
+        _ToggleRow(
+          label: 'Christmas mode',
+          note: c.christmasActive
+              ? 'On now — the palette is the Christmas one.'
+              : 'A deep green and midnight blue palette.',
+          metrics: m,
+          type: type,
+          palette: palette,
+          value: c.christmasMode,
+          onChanged: (_) => c.toggleChristmasMode(),
+        ),
+        _ToggleRow(
+          label: 'Falling snow',
+          note: 'Snow falls over the photograph.',
+          metrics: m,
+          type: type,
+          palette: palette,
+          value: c.snowEnabled,
+          onChanged: c.christmasMode
+              ? (_) => c.toggleSnow()
+              : null,
+        ),
+        _ToggleRow(
+          label: 'Automatic 1 Dec – 6 Jan',
+          note: 'Turns the mode on by itself during December, and off again '
+              'afterwards.',
+          metrics: m,
+          type: type,
+          palette: palette,
+          value: c.christmasAuto,
+          onChanged: (_) => c.toggleChristmasAuto(),
+        ),
+        SizedBox(height: m.px(6)),
+        Text(
+          'While Christmas mode is on, the theme and the theme schedule are '
+          'paused.',
+          style: type.caption(color: palette.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+
   Widget _display(NestMetrics m) {
     final c = controller;
     return _Section(
@@ -696,6 +848,10 @@ class SettingsPage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _appearance(m),
+                        SizedBox(height: m.px(14)),
+                        _background(m),
+                        SizedBox(height: m.px(14)),
+                        _christmas(m),
                         SizedBox(height: m.px(14)),
                         _display(m),
                         if (media != null && media!.supported) ...[
