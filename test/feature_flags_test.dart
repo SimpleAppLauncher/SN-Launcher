@@ -110,6 +110,11 @@ void main() {
       // Added 2026-10-30 at the owner's request: the normal build gets the ef
       // build's live Commons discovery, not only the hand-checked pool.
       'photoDiscovery',
+      // Added 2026-11-12 at the owner's request: the background picker
+      // (Landscape / Cars / Fernando Alonso) belongs to both builds. It was
+      // never an ef-only capability — the pools, the licences and the licence
+      // check are shared.
+      'themePicker',
     };
 
     test('contains exactly the intended features', () {
@@ -150,10 +155,13 @@ void main() {
       // given the same rotating background as the ef build. It was never an
       // ef-only capability — the code and the licence-checked pool are shared,
       // and the reduced build renders the identical thing.
+      //
+      // themePicker was here until 2026-11-12, for the same reason: the
+      // background picker and its three albums are shared code with shared
+      // licences, so gating it to the ef build was a flag, not a difference.
       for (final extra in [
         'assistant',
         'music',
-        'themePicker',
         'weather',
         'sunTheme',
       ]) {

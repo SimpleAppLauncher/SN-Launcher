@@ -509,18 +509,25 @@ void main() {
       expect(find.text('Weather'), findsNothing);
     });
 
-    testWidgets('shows a calendar and nothing else in the reduced build', (tester) async {
-      // The reduced build is a launcher with a calendar. The greeting and the
-      // Calendar card must be there; every other card must not, because a
-      // card with a dead control is the same lie as a dead button.
+    testWidgets('shows a calendar and the theme picker in the reduced build',
+        (tester) async {
+      // The reduced build is a launcher with a calendar and a background
+      // picker. The greeting, the Calendar card and the Theme card must be
+      // there; every other card must not, because a card with a dead control
+      // is the same lie as a dead button.
       //
       // Asserted on the greeting as well as the cards. The cards are
       // individually gated, so checking only their absence would pass even if
       // the page-level gate were deleted — the row would be empty either way.
+      //
+      // The Theme card joined the reduced build on 2026-11-12, at the owner's
+      // request: the background picker and its three albums are shared code
+      // with shared licences, so it was never an ef-only capability.
       FeatureFlags.forTesting = reduced;
       await _pump(tester, page: ShellPage.digest);
       expect(find.textContaining('Good'), findsOneWidget);
       expect(find.text('Calendar'), findsOneWidget);
+      expect(find.text('Theme'), findsOneWidget);
       // The date the events belong to. The card used to show a time and a
       // title and nothing else, so "Nothing else today" never said which day
       // "today" was.
@@ -531,8 +538,6 @@ void main() {
       expect(find.text('Weather'), findsNothing);
       expect(find.text('Music'), findsNothing);
       expect(find.text('Photos'), findsNothing);
-      expect(find.text('Theme'), findsNothing);
-      expect(find.text('Weather'), findsNothing);
     });
 
     testWidgets('is unreachable at all when the digest page is off', (tester) async {

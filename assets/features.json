@@ -14,7 +14,7 @@
     "music": false,
     "photoRotation": true,
     "photoDiscovery": true,
-    "themePicker": false,
+    "themePicker": true,
     "weather": false,
     "sunTheme": false,
 
