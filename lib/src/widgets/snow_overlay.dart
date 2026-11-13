@@ -103,8 +103,15 @@ class _SnowPainter extends CustomPainter {
 
       // The fall is a wrap: a flake that leaves the bottom reappears at the
       // top, so the field never empties out.
+      //
+      // `fall` is the fraction of the journey completed, so it grows with
+      // time — and y grows downward. `y = height * fall` therefore puts a flake
+      // at the top when it has not fallen yet and at the bottom when it has,
+      // and the wrap sends it back to the top. The inverted form,
+      // `height * (1 - fall)`, is the same field travelling upwards, and it
+      // looks exactly as convincing while it is wrong.
       final fall = (lane + phase * speed) % 1.0;
-      final y = size.height * (1.0 - fall);
+      final y = size.height * fall;
       final sway = math.sin((fall + lane) * math.pi * 2) * size.width * drift;
       final x = size.width * lane + sway;
 
