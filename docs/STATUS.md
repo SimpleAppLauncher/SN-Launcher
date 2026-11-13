@@ -1,7 +1,7 @@
 # Status: what works, what does not, and what to do next
 
 Written against the v0.3.0 release tree, plus the background-album and
-Christmas-mode work that has landed since. **353 tests pass and six are
+Christmas-mode work that has landed since. **360 tests pass and none are
 skipped**; `flutter analyze` is clean. The reduced and ef 0.3.0 APKs were built
 and signature-verified, but ADB was offline during this release pass, so this
 exact build was not installed on hardware. The Android now-playing strip,
@@ -83,7 +83,8 @@ desktop release build, and have never been seen on an Android tablet.
 | Live photo discovery in the normal build | The feature-flag test now proves `photoDiscovery` is on; the licence filter and discovery pool have unit tests | Whether the normal build fetches and rotates a fresh Commons photo on the tablet, and whether that changes idle network/battery behaviour |
 | Time-based theme schedule | Override windows resolve correctly for normal and past-midnight ranges; malformed entries are dropped; the schedule survives a controller restart; the Settings editor appears only while the theme is dynamic | Whether the Appearance editor fits and the palette visibly switches on the T20. Hardware smoke was skipped because ADB was offline |
 | **Background albums — Landscape / Cars / Fernando Alonso** | 88 pool entries verified live against the Commons API (file exists, licence redistributable, thumbnail fetchable); each album bundles one hero with its sidecar JSON; the service caches per album; the Settings picker renders without overflow at 1:1, 4:3, 3:4 and 9:16; the reduced build's flag test proves `themePicker` is on | Whether the picker looks right on the tablet, and whether the downloaded photographs arrive and rotate there. Seen on macOS: the albums fetch, caption and credit correctly |
-| **Christmas mode** | The palette passes the contrast check and reports itself as a night palette; the automatic window is closed on 30 Nov 23:59, open from 1 Dec 00:00 through 6 Jan 23:59, and closed from 7 Jan 00:00; the mode switch overrides a pinned theme; the snow switch is independent of the mode; the setting survives a restart; the snow paints without overflow at all 11 aspect shapes and is byte-identical across two frames when it is not animating | Whether the snow reads as snow rather than as noise on a 2000×1200 panel, and whether the Christmas palette is legible over a bright photograph. Seen on macOS: the snow falls over the photograph and the caption stays legible |
+| **Christmas mode** | The palette passes the contrast check and reports itself as a night palette; the automatic window is closed on 30 Nov 23:59, open from 1 Dec 00:00 through 6 Jan 23:59, and closed from 7 Jan 00:00; the mode switch overrides a pinned theme; the snow switch is independent of the mode; the setting survives a restart; the snow paints without overflow at all 11 aspect shapes and is byte-identical across two frames when it is not animating | Whether the snow reads as snow rather than as noise on a 2000×1200 panel, and whether the Christmas palette is legible over a bright photograph. Seen on macOS: the snow is over the photograph and the caption stays legible — but it was **rising**, not falling, when this row was first written (see the next row) |
+| **The snow fell upwards (bug fix)** | The painter computed `y = height * (1 - fall)`, so as the animation phase advanced `y` shrank, and in Flutter a smaller y is higher: the flakes were rising. It looked like snow. A new test photographs the painted pixels twice and compares the alpha-weighted centre of mass: before the fix the flake moved from y 170.1 to y 130.5 (up 39.6 px), after the one-line fix it moves from y 128.9 to y 168.5 (down 39.6 px) | Whether the snow reads as falling on a 2000×1200 panel, and whether the flakes are big enough to see from across a room. Seen on macOS: two captures a second apart show the flakes lower in the second one |
 | **Live photo discovery (bug fix)** | The candidate filter used to test the file extension by asking whether the URL *ended with* `.jpg`; Commons now appends `?utm_source=…&utm_content=original`, so **every** discovered candidate was being rejected and discovery always returned nothing. The fix strips the query string. A test uses a real API payload with the tracking string, one without it, and a `.webm` with parameters that must still be refused | Whether a fresh Commons photograph now actually arrives and rotates on the tablet — the path that was silently dead before this fix. Seen on macOS: the Landscape album fetched a fresh discovered photograph ("Barranco Valle de la Fuente - Fuerteventura", H. Zell) and cached it |
 | Tizen TV TPK | It builds for `profile tv`; the Samsung distributor certificate names the TV's DUID | Everything. It has never been installed or launched — sdb cannot open the device |
 
@@ -257,16 +258,29 @@ test. Do not call those icons real until they have been seen on a tablet.
 
 The newest work is a third ratio. **Built: three background albums (Landscape,
 Cars, Fernando Alonso), one Christmas mode with a seasonal palette and falling
-snow, and one fixed bug in live photo discovery. Verified: on the macOS
-desktop release build, on all three albums and in both Christmas states;
-zero on Android hardware.** Everything is covered by automated tests — 88 pool
-entries checked against the live Commons API, the December window's four
-boundary instants, the snow byte-identical across two frames — and the
-macOS release build was run and looked at: each album fetched its
-photograph, captioned it with the album name and the photographer's name,
-and the snow fell over the picture. Both Android release variants also build
-with all of this in them — the applicationIds were checked and are
-`dev.snlauncher.snlauncher` and `dev.snlauncher.snlauncher.ef` — but neither
+snow, one fixed bug in live photo discovery, and one fixed bug in the snow
+itself. Verified: on the macOS desktop release build, on all three albums and
+in both Christmas states; zero on Android hardware.** Everything is covered by
+automated tests — 88 pool entries checked against the live Commons API, the
+December window's four boundary instants, the snow byte-identical across two
+frames — and the macOS release build was run and looked at: each album fetched
+its photograph, captioned it with the album name and the photographer's name,
+and the snow was over the picture.
+
+The snow, though, was **falling upwards**, and the earlier sentence in this
+file was wrong when it was written. The painter computed `y = height *
+(1 - fall)`, so as the animation phase advanced, `y` shrank, and in Flutter a
+smaller y is higher: the flakes were rising. It looked like snow. A person
+asked whether the snow was actually falling. A test that photographs the
+painted pixels twice and compares the alpha-weighted centre of mass now
+pins the direction, and it failed at 170.1 → 130.5 (up 39.6 px) before the
+one-line fix and passes at 128.9 → 168.5 (down 39.6 px) after it. The
+generalisation is the one already written above this section: **a passing
+test is not a device check, and neither is a convincing picture.**
+
+Both Android release variants also build with all of this in them — the
+applicationIds were checked and are `dev.snlauncher.snlauncher` and
+`dev.snlauncher.snlauncher.ef` — but neither
 has been installed. The owner has not yet installed an Android build
 containing any of it. Until that happens, the honest
 description of the albums is "they work on the macOS desktop build", not

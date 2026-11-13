@@ -35,9 +35,9 @@ YouTube Music.
 
 Both are photographs of the tablet (SM-X110, 1340×800), not mock-ups. The
 capture test in `test/capture_music_page_test.dart` renders the same two views
-to `build/shots` for working without the device; it is skipped by default, and
-its covers are the gradient placeholder because the test binding does not decode
-network images.
+to `build/shots` for working without the device; it runs with the test suite,
+and its covers are the gradient placeholder because the test binding does not
+decode network images.
 
 ## The protocol
 

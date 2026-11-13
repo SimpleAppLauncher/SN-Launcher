@@ -499,6 +499,35 @@ GPU, and 120 of them would be a slideshow. And it must be **freezable**:
 byte and know that what it is looking at is the layout, not the animation. That
 is the same `animateDecorations` flag the aspect sweep already uses.
 
+### The snow fell upwards, and looked exactly like snow
+
+The first version computed the flake's position as
+
+```dart
+final fall = (lane + phase * speed) % 1.0;
+final y = size.height * (1.0 - fall);
+```
+
+`phase` grows with time, `fall` grows with time, and `y = height * (1 - fall)`
+therefore **shrinks** with time — which in Flutter is *upward*. The field was
+rising. The comment above it said "a flake that leaves the bottom reappears at
+the top", so the code contradicted itself, and nothing in the test suite could
+see it: the snow was only ever checked for "does it paint" and "does it paint
+the same twice", and a field of snow rising at 60 pixels a second satisfies
+both.
+
+It was caught by asking the obvious question — *is it falling, or going up?* —
+and then measuring instead of guessing. `test/snow_direction_test.dart` renders
+**one** flake, photographs the painted pixels twice, 1.2 seconds apart (a
+tenth of the 12-second cycle), and compares the alpha-weighted vertical centre
+of mass. Before the fix: y 170.13 → 130.50, so the flake had moved **up**
+39.6 pixels. After the fix: y 128.94 → 168.50, **down** 39.6 pixels.
+
+The fix is one line — `final y = size.height * fall;` — because `fall` is the
+fraction of the journey completed and y grows downward. The inverted form was
+not a different design; it was the same field travelling the wrong way, and it
+looked just as convincing while it was wrong.
+
 ---
 
 ## 7. Icons: Google's, not ours
@@ -890,7 +919,7 @@ commit the passwords. The public SHA-256 is reproducible with
 ## 14. Testing and verification
 
 ```bash
-flutter test                          # 287 pass, 1 skipped
+flutter test                          # 360 pass, 0 skipped
 flutter test test/render_shell_test.dart   # writes build/shots/*.png
 ./tool/deploy.sh                      # install + launch, finds the device
 ./tool/e2e.sh                         # exercise every gesture
