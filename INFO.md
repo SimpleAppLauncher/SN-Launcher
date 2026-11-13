@@ -385,6 +385,84 @@ moving ink cannot help, so those push the card fill away from the ink instead.
 `at()` now returns **0 of 144 steps** failing, and Day and Night are
 bit-for-bit unchanged.
 
+### Three more, found by measuring frames on the T20 (13 Nov 2026)
+
+`dumpsys gfxinfo` is useless for a Flutter app — it reported "Total frames
+rendered: 0" every time, because Flutter bypasses Android's HWUI pipeline.
+The numbers that matter come from the app's own `FrameStats` service
+(`--dart-define=PERF_LOG=true`), which prints `SNFRAME <build_us>
+<raster_us>` per frame. A **profile** build is required: a release build
+reports no frame timings at all.
+
+Measured on a Nokia T20 (Android 13, 1142.9 × 685.7 logical, dpr 1.75), in a
+profile build installed as `dev.snlauncher.snlauncher.perf` so the owner's own
+installs were left alone.
+
+| phase | before | after |
+|---|---|---|
+| launch | 31.8 ms avg, 160 of 180 frames janky | 10.7 ms avg, 16 of 130 janky |
+| drawer | 23.2 ms avg, 29 of 60 janky | 11.4 ms avg, 3 of 82 janky |
+| carousel | 16.8 ms avg, 21 of 73 janky | 10.0 ms avg, 6 of 102 janky |
+| idle | 11.4 ms avg, 7 of 60 janky, worst 43 ms | 11.6 ms avg, 13 of 76 janky, worst 23 ms |
+| sheet | 10.0 ms avg, 2 of 76 janky | 10.3 ms avg, 2 of 76 janky |
+| home | 9.8 ms avg, 0 of 90 janky | 9.8 ms avg, 0 of 89 janky |
+
+Splitting build from raster was the step that mattered: build is 2–3 ms
+everywhere, and **every** janky frame was raster. The question was never "is
+the Dart code slow", it was "what is the GPU being asked to paint".
+
+**1. The crossfade restarted on every single rebuild.** The first version of
+the photo-frame crossfade compared `ImageProvider` objects with `==` to ask
+"is this the same photograph?" — and `ImageProvider` does **not** override
+`operator ==`. Two providers built for the same file are different objects.
+The answer was therefore always "no", so every rebuild of the shell (the clock
+ticks once a second) queued another `precacheImage`, and every resolved
+precache handed the `AnimatedSwitcher` a new child key — **a new 420 ms
+crossfade, for ever**. Two full-screen photographs dissolving continuously.
+Home raster went from 7.5 ms to 16.5 ms, and the drawer inherited the same
+cost, because the never-settling photograph sits behind the sheet. That is
+why the drawer's number did not move when the badges were fixed.
+
+The fix is to key the picture by its *name* — the file path, or the asset name
+— which does not change across rebuilds. `test/photo_frame_detail_test.dart`
+now rebuilds the widget five times with the same file and asserts that exactly
+one picture is on screen each time.
+
+**2. The drawer's cost was never the badges.** The hypothesis was that the app
+badges were decoded at full size and resampled by the GPU. They were: Android
+hands a launcher the full-resolution adaptive icon, often 512 × 512, and
+`Image.memory` decoded it at that size before the GPU shrank it to a 72 px
+badge. Decoding through `ResizeImage` at the painted size is correct and
+stays — and it changed the drawer's raster by 0.03 ms. The badges were not
+the cost.
+
+**3. Two red herrings that were still worth fixing.** `AnimatedSwitcher`'s
+default `layoutBuilder` is a *loose* `Stack`, so the photograph laid itself
+out at its intrinsic size instead of filling the panel; and the drawer grid
+was built with `addRepaintBoundaries: false`, so scrolling repainted every
+visible badge on every frame. Neither moved the measurement on its own, and
+both are now correct anyway.
+
+**What is still unexplained:** the idle page produces frames on a ~115 ms
+cadence (≈8.6 Hz). That cadence was the same before this work, so it is not
+something these changes introduced, and the frames it produces are now short
+(the worst idle frame fell from 43 ms to 23 ms). Its source has not been
+isolated — it is a periodic driver somewhere in the clock, the weather or the
+media pollers — and it is recorded here as an open question rather than a
+guess.
+
+### The mutation sweep
+
+Four deliberate defects were introduced one at a time, and the suite had to
+catch every one of them:
+
+| mutation | caught by |
+| --- | --- |
+| the drawer grid's column boundary moved from 850 to 900 | the metrics detail test: "the column count steps at the documented widths" |
+| the snow flake's alpha coefficient changed from 0.52 to 0.53 | the snow detail test: "the depth of a flake drives the alpha, between 0.28 and 0.80" |
+| the page spring's damping changed from 41 to 45 | the motion detail test: "the page spring is critically damped" |
+| the crossfade keyed on the provider object again | the photo-frame detail test: "the picture that is on screen does not change identity" |
+
 ---
 
 ## 5. The quick-settings row

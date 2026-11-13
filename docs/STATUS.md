@@ -1,7 +1,7 @@
 # Status: what works, what does not, and what to do next
 
 Written against the v0.3.0 release tree, plus the background-album and
-Christmas-mode work that has landed since. **360 tests pass and none are
+Christmas-mode work that has landed since. **455 tests pass and none are
 skipped**; `flutter analyze` is clean. The reduced and ef 0.3.0 APKs were built
 and signature-verified, but ADB was offline during this release pass, so this
 exact build was not installed on hardware. The Android now-playing strip,
@@ -86,6 +86,7 @@ desktop release build, and have never been seen on an Android tablet.
 | **Christmas mode** | The palette passes the contrast check and reports itself as a night palette; the automatic window is closed on 30 Nov 23:59, open from 1 Dec 00:00 through 6 Jan 23:59, and closed from 7 Jan 00:00; the mode switch overrides a pinned theme; the snow switch is independent of the mode; the setting survives a restart; the snow paints without overflow at all 11 aspect shapes and is byte-identical across two frames when it is not animating | Whether the snow reads as snow rather than as noise on a 2000×1200 panel, and whether the Christmas palette is legible over a bright photograph. Seen on macOS: the snow is over the photograph and the caption stays legible — but it was **rising**, not falling, when this row was first written (see the next row) |
 | **The snow fell upwards (bug fix)** | The painter computed `y = height * (1 - fall)`, so as the animation phase advanced `y` shrank, and in Flutter a smaller y is higher: the flakes were rising. It looked like snow. A new test photographs the painted pixels twice and compares the alpha-weighted centre of mass: before the fix the flake moved from y 170.1 to y 130.5 (up 39.6 px), after the one-line fix it moves from y 128.9 to y 168.5 (down 39.6 px) | Whether the snow reads as falling on a 2000×1200 panel, and whether the flakes are big enough to see from across a room. Seen on macOS: two captures a second apart show the flakes lower in the second one |
 | **Live photo discovery (bug fix)** | The candidate filter used to test the file extension by asking whether the URL *ended with* `.jpg`; Commons now appends `?utm_source=…&utm_content=original`, so **every** discovered candidate was being rejected and discovery always returned nothing. The fix strips the query string. A test uses a real API payload with the tracking string, one without it, and a `.webm` with parameters that must still be refused | Whether a fresh Commons photograph now actually arrives and rotates on the tablet — the path that was silently dead before this fix. Seen on macOS: the Landscape album fetched a fresh discovered photograph ("Barranco Valle de la Fuente - Fuerteventura", H. Zell) and cached it |
+| **Frame budget on the T20 (three bug fixes)** | The photo-frame crossfade compared `ImageProvider` objects with `==`, and `ImageProvider` does not override `operator ==` — so "is this the same photograph?" always answered "no", every rebuild queued another `precacheImage`, and every resolved precache started another 420 ms dissolve: **two full-screen photographs fading continuously, for ever**. A test now rebuilds the widget five times with the same file and asserts exactly one picture is on screen each time. The app badges decoded the full 512 px adaptive icon and let the GPU resample it down (now decoded at the painted size); and the drawer grid was built with `addRepaintBoundaries: false`, so scrolling repainted every visible badge on every frame | Whether the T20 *feels* smooth to a person, or whether 11 ms per frame is fast enough for a wall display nobody is touching. **Measured on a T20 in a profile build**: launch 31.8 → 10.7 ms/frame and 160 → 16 janky frames; drawer 23.2 → 11.4 ms and 29 → 3 janky; carousel 16.8 → 10.0 ms and 21 → 6 janky; home unchanged at 9.8 ms and 0 janky. The idle page still produces frames on a ~115 ms cadence that has not been isolated |
 | Tizen TV TPK | It builds for `profile tv`; the Samsung distributor certificate names the TV's DUID | Everything. It has never been installed or launched — sdb cannot open the device |
 
 ## 3. Known broken
@@ -256,9 +257,28 @@ real icon rasterisation, package launch, labelled dock, searchable adaptive
 drawer), **zero verified on hardware**, one render-harness pass and one pixel
 test. Do not call those icons real until they have been seen on a tablet.
 
-The newest work is a third ratio. **Built: three background albums (Landscape,
+The newest work is a fourth ratio, and it is the first ratio that has been
+measured on an Android device. A **profile** build was installed on the
+Nokia T20 (as `dev.snlauncher.snlauncher.perf`, alongside the owner's own
+builds, which were not touched) and the app's own frame instrumentation was
+read out of logcat. Release builds report no frame timings at all, and
+`dumpsys gfxinfo` reports "Total frames rendered: 0" for a Flutter app, so
+the numbers came from the app itself.
+
+Splitting build from raster was the step that mattered: build is 2–3 ms
+everywhere and **every** janky frame was raster. Three real defects fell out
+of that — a crossfade that restarted on every rebuild because
+`ImageProvider` does not override `operator ==`, app icons decoded at 512 px
+and resampled by the GPU, and a drawer grid with no repaint boundaries. After
+the fixes: launch 31.8 → 10.7 ms/frame and 160 → 16 janky frames, drawer
+23.2 → 11.4 ms and 29 → 3 janky, carousel 16.8 → 10.0 ms and 21 → 6 janky,
+home unchanged. **One thing is still unexplained and is recorded as an open
+question rather than a guess:** the idle page produces frames on a ~115 ms
+cadence, and that cadence predates this work.
+
+**Built: three background albums (Landscape,
 Cars, Fernando Alonso), one Christmas mode with a seasonal palette and falling
-snow, one fixed bug in live photo discovery, and one fixed bug in the snow
+snow, one fixed bug in live photo discovery, one fixed bug in the snow
 itself. Verified: on the macOS desktop release build, on all three albums and
 in both Christmas states; zero on Android hardware.** Everything is covered by
 automated tests — 88 pool entries checked against the live Commons API, the
