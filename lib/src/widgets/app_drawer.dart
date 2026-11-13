@@ -144,8 +144,14 @@ class _AppDrawerState extends State<AppDrawer> {
                       mainAxisExtent: cellH,
                     ),
                     itemCount: filtered.length,
+                    // Measured on the T20: with the repaint boundaries off,
+                    // scrolling the drawer repainted every visible badge on
+                    // every frame — 20 ms of raster per frame, and no icon
+                    // change moved that number. Each cell now gets its own
+                    // boundary, so only the cells that actually come into
+                    // view are painted.
                     addAutomaticKeepAlives: false,
-                    addRepaintBoundaries: false,
+                    addRepaintBoundaries: true,
                     itemBuilder: (context, i) {
                       final a = filtered[i];
                       return _GridCell(

@@ -480,6 +480,18 @@ class NestAppBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final bytes = action.iconBytes;
     if (bytes != null && bytes.isNotEmpty) {
+      // Decode the icon at the size it is actually painted at.
+      //
+      // Android hands a launcher the full-resolution adaptive icon — often
+      // 512x512 — and `Image.memory` decodes it at that size before the GPU
+      // scales it down to the 72px badge. On the T20 that is a 1 MB texture
+      // per app, uploaded and then resampled with a cubic filter every time a
+      // drawer cell scrolls into view. That was most of the drawer's jank.
+      //
+      // `ResizeImage` asks the decoder for the target size instead, so the
+      // texture that reaches the GPU is the size that is drawn.
+      final dpr = MediaQuery.devicePixelRatioOf(context);
+      final target = (size * dpr).round().clamp(16, 512);
       return SizedBox.square(
         dimension: size,
         child: ClipRRect(
@@ -487,13 +499,19 @@ class NestAppBadge extends StatelessWidget {
           // not redrawing the icon. Rounded-rect is what the Pixel launcher
           // uses on every launcher icon that is not already circular.
           borderRadius: BorderRadius.circular(size * 0.24),
-          child: Image.memory(
-            bytes,
+          child: Image(
+            image: ResizeImage(
+              MemoryImage(bytes),
+              width: target,
+              allowUpscaling: false,
+            ),
             width: size,
             height: size,
             fit: BoxFit.cover,
             gaplessPlayback: true,
-            filterQuality: FilterQuality.medium,
+            // The bitmap is already the painted size, so there is nothing to
+            // resample. Cubic filtering would be paid for nothing.
+            filterQuality: FilterQuality.low,
             errorBuilder: (_, _, _) => _fallbackBadge(),
           ),
         ),
