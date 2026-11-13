@@ -48,13 +48,18 @@ class FakePhotos extends PhotoFrameService {
 
 /// Renders the new backgrounds to the PNGs in `build/shots`.
 ///
-///     SN_CAPTURE=1 flutter test test/capture_backgrounds_test.dart
+///     flutter test test/capture_backgrounds_test.dart
 ///
-/// Skipped by default, and written to `build/shots` rather than `docs/shots`:
-/// the photographs here are the bundled heroes, not the device's own gallery,
-/// and the device's photographs are what the docs show. These are a layout
-/// harness for working without the tablet — they exist so the albums and the
-/// snow can be *looked at* before anyone installs a build.
+/// Written to `build/shots` rather than `docs/shots`: the photographs here are
+/// the bundled heroes, not the device's own gallery, and the device's
+/// photographs are what the docs show. These are a layout harness for working
+/// without the tablet — they exist so the albums and the snow can be *looked
+/// at* before anyone installs a build.
+///
+/// They run with the rest of the suite rather than behind a flag: a test that
+/// only runs when somebody remembers an environment variable is a test that
+/// quietly stops being run, and this one is the only way to see the albums
+/// without a device.
 ///
 /// Not a golden: a golden that has to match byte for byte fails here on the
 /// clock alone, and a test that cries wolf is a test people learn to ignore.
@@ -76,7 +81,6 @@ void main() {
     await icons.load();
   });
 
-  final capture = Platform.environment['SN_CAPTURE'] == '1';
   final out = Directory('build/shots');
 
   /// The boundary that wraps the whole app.
@@ -154,19 +158,18 @@ void main() {
     (PhotoAlbum.racing, 'racing'),
     (PhotoAlbum.alonso, 'alonso'),
   ]) {
-    testWidgets('the $label album on the wall', skip: !capture, (tester) async {
+    testWidgets('the $label album on the wall', (tester) async {
       await pumpHome(tester, size: const Size(1280, 800), album: album);
       await write(tester, 'home-$label-16x9.png');
     });
   }
 
-  testWidgets('the racing album on a 4:3 panel', skip: !capture,
-      (tester) async {
+  testWidgets('the racing album on a 4:3 panel', (tester) async {
     await pumpHome(tester, size: const Size(1365, 1024), album: PhotoAlbum.racing);
     await write(tester, 'home-racing-4x3.png');
   });
 
-  testWidgets('Christmas mode with snow', skip: !capture, (tester) async {
+  testWidgets('Christmas mode with snow', (tester) async {
     await pumpHome(
       tester,
       size: const Size(1280, 800),
@@ -176,7 +179,7 @@ void main() {
     await write(tester, 'home-christmas-16x9.png');
   });
 
-  testWidgets('the Background section', skip: !capture, (tester) async {
+  testWidgets('the Background section', (tester) async {
     FeatureFlags.forTesting = FeatureFlags.parse(
       '{"features":{"settings":true,"themePicker":true}}',
       'capture',

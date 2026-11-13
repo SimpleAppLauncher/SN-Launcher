@@ -47,9 +47,7 @@ void main() {
   setUp(() async => player = await FakePlayer.start());
   tearDown(() async => player.stop());
 
-  final capture = Platform.environment['SN_CAPTURE'] == '1';
-
-  testWidgets('the music page', skip: !capture, (tester) async {
+  testWidgets('the music page', (tester) async {
     tester.view.physicalSize = const Size(1340, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -92,6 +90,13 @@ void main() {
     client.stop();
     await tester.pumpWidget(const SizedBox());
     client.dispose();
+
+    // dart:_http parks an idle keep-alive connection on a 15-second timer
+    // when the response body is drained, and that timer lives in the test's
+    // fake clock. Left pending it fails the test with "Pending timers", which
+    // is the whole reason this file used to be skipped. Advancing past it
+    // lets it fire and close the connection.
+    await tester.pump(const Duration(seconds: 16));
   });
 }
 
