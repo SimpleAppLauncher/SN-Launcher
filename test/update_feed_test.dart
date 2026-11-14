@@ -177,6 +177,28 @@ const String _sizeAsText = r'''
 ]
 ''';
 
+/// A payload whose asset carries a size with a fraction.
+///
+/// GitHub sends whole bytes. A payload that sends a fraction has a size the
+/// updater cannot use as it stands, and the whole bytes are what it takes.
+const String _fractionalSize = r'''
+[
+  {
+    "tag_name": "v0.4.0",
+    "name": "0.4.0",
+    "prerelease": false,
+    "body": "A size with a fraction.",
+    "assets": [
+      {
+        "name": "SN-Launcher-0.4.0-arm64-v8a.apk",
+        "browser_download_url": "https://github.com/SimpleAppLauncher/SN-Launcher/releases/download/v0.4.0/SN-Launcher-0.4.0-arm64-v8a.apk",
+        "size": 10485760.5
+      }
+    ]
+  }
+]
+''';
+
 /// A release with the canonical asset names.
 ///
 /// No published release uses these names — everything the project has
@@ -303,6 +325,15 @@ void main() {
       final asset = parseReleases(_sizeAsText)[0].assets[0];
 
       expect(asset.size, 0);
+    });
+
+    test('reads a size with a fraction as the whole bytes', () {
+      // The fraction is dropped rather than rounded, and rather than making
+      // the size unknown: the file is not half a byte, and a size of zero
+      // would read as "GitHub did not say".
+      final asset = parseReleases(_fractionalSize)[0].assets[0];
+
+      expect(asset.size, 10485760);
     });
 
     test('a body that is not JSON yields no releases', () {
