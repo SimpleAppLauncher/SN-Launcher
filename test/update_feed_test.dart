@@ -116,6 +116,67 @@ const String _sparseRelease = r'''
 ]
 ''';
 
+/// A payload whose asset carries a digest under another algorithm.
+///
+/// GitHub writes `sha256:<hex>`. A digest under a different algorithm is not
+/// this field's SHA-256, so it reads as no digest rather than as a hash of
+/// the wrong kind.
+const String _otherAlgorithmDigest = r'''
+[
+  {
+    "tag_name": "v0.4.0",
+    "name": "0.4.0",
+    "prerelease": false,
+    "body": "A digest under another algorithm.",
+    "assets": [
+      {
+        "name": "SN-Launcher-0.4.0-arm64-v8a.apk",
+        "browser_download_url": "https://github.com/SimpleAppLauncher/SN-Launcher/releases/download/v0.4.0/SN-Launcher-0.4.0-arm64-v8a.apk",
+        "size": 10485760,
+        "digest": "sha512:abc123"
+      }
+    ]
+  }
+]
+''';
+
+/// A payload whose release carries no tag.
+///
+/// GitHub always sends `tag_name`. This is the shape a payload has when it
+/// does not, and the release title is then the only name the release has.
+const String _taglessRelease = r'''
+[
+  {
+    "name": "v0.4.0",
+    "prerelease": false,
+    "body": "A release with no tag.",
+    "assets": []
+  }
+]
+''';
+
+/// A payload whose asset carries a size that is not a number.
+///
+/// GitHub sends the size as a whole number of bytes. A payload that sends
+/// anything else reads as no size at all.
+const String _sizeAsText = r'''
+[
+  {
+    "tag_name": "v0.4.0",
+    "name": "0.4.0",
+    "prerelease": false,
+    "body": "A size that is not a number.",
+    "assets": [
+      {
+        "name": "SN-Launcher-0.4.0-arm64-v8a.apk",
+        "browser_download_url": "https://github.com/SimpleAppLauncher/SN-Launcher/releases/download/v0.4.0/SN-Launcher-0.4.0-arm64-v8a.apk",
+        "size": "10485760"
+      }
+    ]
+  }
+]
+''';
+
 /// A release with the canonical asset names.
 ///
 /// No published release uses these names — everything the project has
@@ -219,6 +280,29 @@ void main() {
 
       expect(asset.sha256, isEmpty);
       expect(asset.size, 10485760);
+    });
+
+    test('reads a digest under another algorithm as no digest', () {
+      // The hex of a SHA-512 is not this field's SHA-256, and carrying it as
+      // one would be a hash that checks nothing.
+      final asset = parseReleases(_otherAlgorithmDigest)[0].assets[0];
+
+      expect(asset.sha256, isEmpty);
+    });
+
+    test('reads a release with no tag as the tag its title names', () {
+      // A payload with no tag still has a name, and a release with no
+      // version cannot be compared against anything.
+      final release = parseReleases(_taglessRelease)[0];
+
+      expect(release.tag, 'v0.4.0');
+      expect(release.version, '0.4.0');
+    });
+
+    test('reads a size that is not a number as no size', () {
+      final asset = parseReleases(_sizeAsText)[0].assets[0];
+
+      expect(asset.size, 0);
     });
 
     test('a body that is not JSON yields no releases', () {
