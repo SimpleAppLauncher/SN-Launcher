@@ -14,6 +14,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.media.AudioManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.provider.CalendarContract
@@ -51,6 +52,7 @@ class PlatformBridge(private val activity: Activity) : MethodChannel.MethodCallH
             "hasCamera" -> hasCamera(result)
             "openCamera" -> openCamera(result)
             "requestPermission" -> requestPermission(call, result)
+            "permissionState" -> permissionState(call, result)
             "getLocation" -> getLocation(result)
             "upcomingEvents" -> upcomingEvents(call, result)
             "openUrl" -> openUrl(call, result)
@@ -402,12 +404,17 @@ class PlatformBridge(private val activity: Activity) : MethodChannel.MethodCallH
     )
 
     private fun requestPermission(call: MethodCall, result: MethodChannel.Result) {
-        val permission = when (call.argument<String>("permission")) {
-            "calendar" -> Manifest.permission.READ_CALENDAR
-            "camera" -> Manifest.permission.CAMERA
-            "location" -> Manifest.permission.ACCESS_COARSE_LOCATION
-            else -> null
+        val name = call.argument<String>("permission")
+
+        // POST_NOTIFICATIONS only became a runtime permission in Android 13.
+        // Below that the platform grants it by default, so asking is a no-op
+        // and reporting "denied" would be a lie.
+        if (name == "notifications" && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            result.success(mapOf("granted" to true))
+            return
         }
+
+        val permission = permissionFor(name)
         if (permission == null) {
             result.success(mapOf("granted" to false))
             return
@@ -429,6 +436,73 @@ class PlatformBridge(private val activity: Activity) : MethodChannel.MethodCallH
         } catch (_: Exception) {
             result.success(mapOf("granted" to false))
         }
+    }
+
+    /**
+     * What the system knows about one permission, without prompting anyone.
+     *
+     * The important half is [declared]. A permission the build's manifest does
+     * not contain can never be granted, whatever the user does, so the app
+     * needs to be able to say "this build does not include it" instead of
+     * showing a button that fails forever.
+     */
+    private fun permissionState(call: MethodCall, result: MethodChannel.Result) {
+        val name = call.argument<String>("permission")
+
+        if (name == "notifications" && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            result.success(mapOf("declared" to true, "granted" to true, "canShowRationale" to false))
+            return
+        }
+
+        val permission = permissionFor(name)
+        if (permission == null) {
+            result.success(mapOf("declared" to false, "granted" to false, "canShowRationale" to false))
+            return
+        }
+        try {
+            val granted =
+                ActivityCompat.checkSelfPermission(activity, permission) ==
+                    PackageManager.PERMISSION_GRANTED
+            result.success(
+                mapOf(
+                    "declared" to isDeclared(permission),
+                    "granted" to granted,
+                    // True only after a refusal the user can still be asked
+                    // about. False before the first ask and after "don't ask
+                    // again"; the Dart side knows which of the two it is.
+                    "canShowRationale" to
+                        ActivityCompat.shouldShowRequestPermissionRationale(activity, permission),
+                ),
+            )
+        } catch (_: Exception) {
+            result.success(mapOf("declared" to false, "granted" to false, "canShowRationale" to false))
+        }
+    }
+
+    /** The Android permission behind a name the Dart side uses. */
+    private fun permissionFor(name: String?): String? = when (name) {
+        "calendar" -> Manifest.permission.READ_CALENDAR
+        "camera" -> Manifest.permission.CAMERA
+        "location" -> Manifest.permission.ACCESS_COARSE_LOCATION
+        "microphone" -> Manifest.permission.RECORD_AUDIO
+        "notifications" ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                "android.permission.POST_NOTIFICATIONS"
+            } else {
+                null
+            }
+        else -> null
+    }
+
+    /** Whether this build's manifest actually contains the permission. */
+    private fun isDeclared(permission: String): Boolean = try {
+        val info = activity.packageManager.getPackageInfo(
+            activity.packageName,
+            PackageManager.GET_PERMISSIONS,
+        )
+        info.requestedPermissions?.contains(permission) == true
+    } catch (_: Exception) {
+        false
     }
 
     private fun upcomingEvents(call: MethodCall, result: MethodChannel.Result) {

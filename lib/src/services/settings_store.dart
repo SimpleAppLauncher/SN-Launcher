@@ -177,6 +177,10 @@ abstract final class SettingKeys {
   static const haToken = 'haToken';
   static const voiceEnabled = 'voiceEnabled';
 
+  /// Whether the voice command is switched on. On by default: a launcher
+  /// that can hear a command should not need a second tap in settings first.
+  static const voiceCommandEnabled = 'voiceCommandEnabled';
+
   // ── EF-only LAN remote ─────────────────────────────────────────────────────
   static const remoteControlEnabled = 'remoteControlEnabled';
   static const remoteControlToken = 'remoteControlToken';

@@ -8,6 +8,7 @@ import '../state/shell_controller.dart';
 import '../services/device_media_watcher.dart';
 import '../services/feature_flags.dart';
 import '../services/photo_album.dart';
+import '../services/permission_service.dart';
 import '../services/remote_control_service.dart';
 import '../theme/ambient_palette.dart';
 import '../theme/nest_icons.dart';
@@ -29,6 +30,7 @@ class AssistantSettings {
     required this.homeAssistantUrl,
     required this.homeAssistantToken,
     required this.voiceEnabled,
+    required this.voiceCommandEnabled,
     required this.busy,
   });
 
@@ -52,6 +54,14 @@ class AssistantSettings {
   /// Whether replies are read aloud.
   final bool voiceEnabled;
 
+  /// Whether the voice command is switched on.
+  ///
+  /// Separate from [enabled], which is the *assistant* — the part that
+  /// answers questions, possibly over the network. The voice command only
+  /// ever runs on the device: the clock, the volume, the brightness, the
+  /// media keys, a timer.
+  final bool voiceCommandEnabled;
+
   /// True while the caller is running a connection test. The page shows its
   /// own busy state from this — it never runs the test itself.
   final bool busy;
@@ -63,6 +73,7 @@ class AssistantSettings {
     String? homeAssistantUrl,
     String? homeAssistantToken,
     bool? voiceEnabled,
+    bool? voiceCommandEnabled,
     bool? busy,
   }) {
     return AssistantSettings(
@@ -72,6 +83,7 @@ class AssistantSettings {
       homeAssistantUrl: homeAssistantUrl ?? this.homeAssistantUrl,
       homeAssistantToken: homeAssistantToken ?? this.homeAssistantToken,
       voiceEnabled: voiceEnabled ?? this.voiceEnabled,
+      voiceCommandEnabled: voiceCommandEnabled ?? this.voiceCommandEnabled,
       busy: busy ?? this.busy,
     );
   }
@@ -111,8 +123,10 @@ class SettingsPage extends StatelessWidget {
     required this.assistant,
     this.media,
     this.remote,
+    this.permissions,
     this.onAssistantChanged,
     this.onTestConnection,
+    this.onVoiceCommand,
   });
 
   final NestMetrics metrics;
@@ -131,6 +145,20 @@ class SettingsPage extends StatelessWidget {
   /// dead toggle would claim a capability the platform does not have.
   final DeviceMediaWatcher? media;
   final RemoteControlService? remote;
+
+  /// What the platform has allowed this app to do.
+  ///
+  /// Null on desktop and in tests. The section is hidden rather than shown
+  /// empty: there is nothing to grant on a platform with no permission model.
+  final PermissionService? permissions;
+
+  /// Runs a typed command, the same path the voice command takes once the
+  /// words exist.
+  ///
+  /// The keyboard is the fallback for a device with no working speech
+  /// recogniser, and the only way to try a command without making a noise in
+  /// a room.
+  final Future<void> Function(String command)? onVoiceCommand;
 
   /// Called whenever the user changes anything about the assistant.
   ///
@@ -656,6 +684,177 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
+  /// What the app has been allowed to do, and what it has not.
+  ///
+  /// Only the permissions this build's own features need are listed. A
+  /// permission with no feature behind it is a permission nobody asked for.
+  Widget _permissions(NestMetrics m) {
+    final service = permissions;
+    if (service == null) return const SizedBox.shrink();
+    final flags = FeatureFlags.current;
+    final rows = <Widget>[];
+
+    for (final requirement in kPermissionRequirements) {
+      if (!flags.isOn(requirement.feature)) continue;
+      final state = service.state(requirement.permission);
+      // A platform with no permission model has nothing to say here.
+      if (state == PermissionState.notApplicable) continue;
+      rows.add(_permissionRow(m, requirement, state));
+      if (rows.length > 1) rows.insert(rows.length - 1, _hairline(m));
+    }
+
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return _Section(
+      metrics: m,
+      type: type,
+      palette: palette,
+      icon: NestIcons.Lock,
+      title: 'Permissions',
+      children: [
+        Text(
+          'The launcher asks for each of these at the moment the feature that '
+          'needs it is used. Nothing is collected in the background.',
+          style: type.caption(color: palette.onSurfaceVariant),
+        ),
+        SizedBox(height: m.px(12)),
+        ...rows,
+      ],
+    );
+  }
+
+  Widget _permissionRow(
+    NestMetrics m,
+    PermissionRequirement requirement,
+    PermissionState state,
+  ) {
+    final service = permissions!;
+    final (status, colour) = switch (state) {
+      PermissionState.allowed => ('Allowed', palette.onSurfaceVariant),
+      PermissionState.denied => ('Not allowed yet', palette.onSurfaceVariant),
+      PermissionState.blocked => (
+          'Not allowed, and Android will not ask again',
+          palette.onSurfaceVariant,
+        ),
+      PermissionState.notInThisBuild => (
+          'Not in this build, so it can never be allowed',
+          palette.onSurfaceStrong,
+        ),
+      PermissionState.unknown => ('Not checked yet', palette.onSurfaceVariant),
+      PermissionState.notApplicable => ('', palette.onSurfaceVariant),
+    };
+
+    final Widget? action = switch (state) {
+      PermissionState.allowed => null,
+      PermissionState.denied ||
+      PermissionState.unknown =>
+        _pillButton(
+          m,
+          'Allow',
+          () => unawaited(service.request(requirement.permission)),
+        ),
+      PermissionState.blocked => _pillButton(
+          m,
+          'Open settings',
+          () => unawaited(service.openSettings()),
+        ),
+      _ => null,
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                requirement.title,
+                style: type.body(color: palette.onSurfaceStrong),
+              ),
+            ),
+            if (action != null) ...[
+              SizedBox(width: m.px(12)),
+              action,
+            ],
+          ],
+        ),
+        SizedBox(height: m.px(2)),
+        Text(status, style: type.caption(color: colour)),
+        SizedBox(height: m.px(2)),
+        Text(
+          requirement.reason,
+          style: type.caption(color: palette.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+
+  /// The house button: an outlined stadium, one line of caption type.
+  Widget _pillButton(NestMetrics m, String label, VoidCallback onPressed) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        shape: const StadiumBorder(),
+        padding: EdgeInsets.symmetric(horizontal: m.px(16)),
+      ),
+      child: Text(
+        label,
+        style: type.caption(color: palette.onSurfaceStrong),
+      ),
+    );
+  }
+
+  /// The voice command: on or off, and a keyboard to try it with.
+  Widget _voiceCommand(NestMetrics m) {
+    if (!FeatureFlags.current.isOn('voiceCommand')) {
+      return const SizedBox.shrink();
+    }
+    final a = assistant;
+    final interactive = a.voiceCommandEnabled && onAssistantChanged != null;
+
+    return _Section(
+      metrics: m,
+      type: type,
+      palette: palette,
+      icon: NestIcons.Mic,
+      title: 'Voice command',
+      children: [
+        _ToggleRow(
+          label: 'Voice command',
+          metrics: m,
+          type: type,
+          palette: palette,
+          value: a.voiceCommandEnabled,
+          note:
+              'The microphone button on the home screen. It listens only while '
+              'you press it.',
+          onChanged: onAssistantChanged == null
+              ? null
+              : (v) => _emit(a.copyWith(voiceCommandEnabled: v)),
+        ),
+        _hairline(m),
+        Text(
+          'Try a command',
+          style: type.caption(color: palette.onSurfaceStrong),
+        ),
+        SizedBox(height: m.px(2)),
+        Text(
+          'The clock, the date, the volume, the brightness, the music and a '
+          'timer all work on the device, with no network involved.',
+          style: type.caption(color: palette.onSurfaceVariant),
+        ),
+        SizedBox(height: m.px(10)),
+        _CommandField(
+          metrics: m,
+          type: type,
+          palette: palette,
+          enabled: interactive,
+          onRun: onVoiceCommand,
+        ),
+      ],
+    );
+  }
+
   Widget _assistant(NestMetrics m) {
     final a = assistant;
     final interactive = a.enabled && onAssistantChanged != null;
@@ -812,7 +1011,9 @@ class SettingsPage extends StatelessWidget {
     // listen to the controller. A settings page rebuilding during a drag is a
     // dozen widgets — trivial next to the sheet's budget.
     return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[controller, ?media, ?remote]),
+      animation: Listenable.merge(
+        <Listenable>[controller, ?media, ?remote, ?permissions],
+      ),
       builder: (context, _) => Theme(
         // Text fields, sliders and switches all reach for the ambient scheme.
         // The shell already wraps itself in this theme; wrapping again is
@@ -859,6 +1060,10 @@ class SettingsPage extends StatelessWidget {
                           _nowPlaying(m),
                         ],
                         SizedBox(height: m.px(14)),
+                        _permissions(m),
+                        SizedBox(height: m.px(14)),
+                        _voiceCommand(m),
+                        SizedBox(height: m.px(14)),
                         _assistant(m),
                         if (remote != null &&
                             FeatureFlags.current.isOn('remoteControl')) ...[
@@ -878,6 +1083,86 @@ class SettingsPage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A one-line command box with a Run button.
+///
+/// Deliberately not the same widget as the rest of the settings fields: this
+/// one is not a setting, it is a thing you try. It keeps its own text, it
+/// clears itself when the command has been sent, and it says so.
+class _CommandField extends StatefulWidget {
+  const _CommandField({
+    required this.metrics,
+    required this.type,
+    required this.palette,
+    required this.enabled,
+    required this.onRun,
+  });
+
+  final NestMetrics metrics;
+  final NestType type;
+  final AmbientPalette palette;
+  final bool enabled;
+  final Future<void> Function(String command)? onRun;
+
+  @override
+  State<_CommandField> createState() => _CommandFieldState();
+}
+
+class _CommandFieldState extends State<_CommandField> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    _controller.clear();
+    await widget.onRun?.call(text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.metrics;
+    final type = widget.type;
+    final palette = widget.palette;
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _controller,
+            enabled: widget.enabled,
+            style: type.body(color: palette.onSurfaceStrong),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'what time is it',
+              hintStyle: type.caption(color: palette.onSurfaceVariant),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(m.px(14)),
+              ),
+            ),
+            onSubmitted: (_) => _run(),
+          ),
+        ),
+        SizedBox(width: m.px(10)),
+        OutlinedButton(
+          onPressed: widget.enabled ? _run : null,
+          style: OutlinedButton.styleFrom(
+            shape: const StadiumBorder(),
+            padding: EdgeInsets.symmetric(horizontal: m.px(16)),
+          ),
+          child: Text(
+            'Run',
+            style: type.caption(color: palette.onSurfaceStrong),
+          ),
+        ),
+      ],
     );
   }
 }

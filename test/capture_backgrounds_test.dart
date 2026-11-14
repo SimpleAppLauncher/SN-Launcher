@@ -217,6 +217,7 @@ void main() {
                 homeAssistantUrl: '',
                 homeAssistantToken: '',
                 voiceEnabled: false,
+                voiceCommandEnabled: true,
                 busy: false,
               ),
             ),

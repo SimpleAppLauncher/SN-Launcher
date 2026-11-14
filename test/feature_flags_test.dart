@@ -115,6 +115,17 @@ void main() {
       // never an ef-only capability — the pools, the licences and the licence
       // check are shared.
       'themePicker',
+      // Added 2026-11-14 at the owner's request: the voice command. A
+      // launcher you can talk to is the thing a wall display is for, and the
+      // commands it runs — the clock, the volume, the brightness, the music,
+      // a timer — never leave the device.
+      //
+      // It is a deliberate exception to "the reduced build declares nothing
+      // private": the microphone is declared by the reduced build now, and
+      // the build declares it because a feature in that build uses it. It is
+      // asked for at the moment the microphone button is pressed, never at
+      // launch.
+      'voiceCommand',
     };
 
     test('contains exactly the intended features', () {

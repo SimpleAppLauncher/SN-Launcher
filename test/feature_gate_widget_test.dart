@@ -481,11 +481,23 @@ void main() {
       expect(find.byType(AssistantLightbar), findsOneWidget);
     });
 
-    testWidgets('is absent in the reduced build', (tester) async {
+    testWidgets('is on screen in the reduced build too', (tester) async {
       // The rule this repo is built on: never show an affordance for something
       // this build cannot do. A reduced build with a listening bar that does
       // nothing is the same lie as the old four-dot orb.
+      //
+      // The reduced build *can* listen — the voice command is in it — so the
+      // bar belongs there. What the rule forbids is the bar without a
+      // microphone behind it, and the bar only moves once recognition has
+      // genuinely started.
       FeatureFlags.forTesting = reduced;
+      await _pump(tester, page: ShellPage.home);
+      expect(find.byType(AssistantLightbar), findsOneWidget);
+    });
+
+    testWidgets('is absent when there is nothing to listen with',
+        (tester) async {
+      FeatureFlags.forTesting = FeatureFlags.parse('{"features":{}}', 'none');
       await _pump(tester, page: ShellPage.home);
       expect(find.byType(AssistantLightbar), findsNothing);
     });
@@ -563,7 +575,8 @@ void main() {
         FeatureFlags.forTesting = entry.value;
         await _pump(tester, page: ShellPage.home);
         expect(find.text('12:00'), findsOneWidget);
-        expect(find.byType(AssistantLightbar), entry.key == 'ef' ? findsOneWidget : findsNothing);
+        // Both shipped builds can listen, so both show the bar.
+        expect(find.byType(AssistantLightbar), findsOneWidget);
       });
     }
   });

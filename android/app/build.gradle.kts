@@ -77,40 +77,77 @@ android {
 
     // ── Sensitive permissions ────────────────────────────────────────────────
     //
-    // Off by default. The base manifest declares no microphone, no calendar
-    // and no location, because Google Play Protect warns about those at install
-    // time and the warning is correct: each can read something private.
+    // A build declares exactly the sensitive permissions its own features
+    // need, and no others. The list arrives as a property:
     //
-    // The notification-listener service is not part of this switch. It is
-    // always in the base manifest because the now-playing strip needs it, and
-    // the user must grant Notification access separately in Settings.
+    //     flutter build apk --release -PsnPermissions=RECORD_AUDIO,READ_CALENDAR
     //
-    // A build that wants the three runtime permissions merges
-    // src/sensitive/manifest-fragment.xml in:
+    // and "all" means every permission in the fragment, which is what
+    // -PsnSensitive=true still does. Nothing at all is the default.
     //
-    //     flutter build apk --release -PsnSensitive=true
+    // The reason this is per-permission rather than one switch is that the
+    // switch was a lie by construction. The reduced build had the calendar
+    // card switched on and no READ_CALENDAR in its manifest, so the request
+    // came back denied on every install and the card said "Permission needed"
+    // for the life of the app. Google Play Protect was happy; the feature was
+    // not.
+    //
+    // The notification-listener service is not part of this. It is always in
+    // the base manifest because the now-playing strip needs it, and the user
+    // must grant Notification access separately in Settings.
     //
     // The merge is done here rather than by keeping two hand-written manifests
     // so the two cannot drift. The fragment is the single place the sensitive
     // declarations live.
+    val sensitiveFragment = file("src/sensitive/manifest-fragment.xml")
+    val permissionPattern = Regex("""android\.permission\.([A-Z_]+)""")
+
+    // Every permission the fragment knows about, and the line that declares
+    // it. One entry per line in the fragment, so a line is a permission.
+    val declaredLines: List<Pair<String, String>> = sensitiveFragment.readLines()
+        .filter { it.contains("<uses-permission") }
+        .mapNotNull { line ->
+            permissionPattern.find(line)?.groupValues?.get(1)?.let { it to line }
+        }
+
     val sensitive: Boolean =
         (project.findProperty("snSensitive") as String?)?.toBoolean() ?: false
+
+    val requested: Set<String> = (project.findProperty("snPermissions") as String?)
+        ?.split(",")
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        ?.toSet()
+        ?: emptySet()
+
+    val wanted: Set<String> = when {
+        sensitive -> declaredLines.map { it.first }.toSet()
+        (project.findProperty("snPermissions") as String?) == "all" ->
+            declaredLines.map { it.first }.toSet()
+        else -> requested
+    }
 
     // The sensitive manifest is *generated* from the base one plus the
     // fragment, at configuration time, so the two can never drift. A
     // hand-kept copy is a copy that lies the first time someone edits the
     // base manifest and forgets the other file.
+    //
+    // It is generated even when nothing is spliced in, so the source set
+    // always points at one file and the build cannot quietly pick up the
+    // previous build's permissions.
     val sensitiveManifest = layout.buildDirectory.file("generated/sensitive/AndroidManifest.xml")
-    if (sensitive) {
+    run {
         val base = file("src/main/AndroidManifest.xml")
-        val fragment = file("src/sensitive/manifest-fragment.xml")
         // A plain text splice at a marker. Deliberately not XML parsing: the
         // fragment is a list of manifest elements, and the simplest thing that
         // cannot fail is a string replacement. The *result* is what gets
         // validated, by the manifest merger, and by the permission dump in
         // tool/verify_permissions.sh.
+        val spliced = declaredLines
+            .filter { it.first in wanted }
+            .joinToString("\n") { it.second }
         val merged = base.readText()
-            .replace("<!-- SENSITIVE-PERMISSIONS -->", fragment.readText().trimEnd())
+            .replace("<!-- SENSITIVE-PERMISSIONS -->", spliced.trimEnd())
         sensitiveManifest.get().asFile.apply {
             parentFile.mkdirs()
             writeText(merged)
@@ -119,13 +156,7 @@ android {
 
     sourceSets {
         getByName("main") {
-            manifest.srcFile(
-                if (sensitive) {
-                    sensitiveManifest.get().asFile.path
-                } else {
-                    "src/main/AndroidManifest.xml"
-                },
-            )
+            manifest.srcFile(sensitiveManifest.get().asFile.path)
         }
     }
 

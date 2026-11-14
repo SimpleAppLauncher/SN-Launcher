@@ -142,6 +142,28 @@ class PlatformBridge {
     return r?['granted'] as bool?;
   }
 
+  /// What the platform knows about a permission, without asking for it.
+  ///
+  /// Null on a platform with no permission model (desktop), which the caller
+  /// must read as "this platform has no such thing" rather than "denied".
+  ///
+  /// [PermissionProbe.declared] is the part that matters most: a permission
+  /// the build's manifest does not contain can never be granted, no matter
+  /// how often the user says yes. That is a build bug, and the probe is how
+  /// the app finds out instead of failing silently for the life of an install.
+  Future<PermissionProbe?> probePermission(String permission) async {
+    final r = await _invoke<Map<Object?, Object?>>(
+      'permissionState',
+      {'permission': permission},
+    );
+    if (r == null) return null;
+    return PermissionProbe(
+      declared: r['declared'] == true,
+      granted: r['granted'] == true,
+      canShowRationale: r['canShowRationale'] != false,
+    );
+  }
+
   // ── Location ──────────────────────────────────────────────────────────────
   /// The device's own position.
   ///
@@ -219,6 +241,34 @@ class PlatformBridge {
     }
     return out;
   }
+}
+
+/// What the platform said about one permission.
+@immutable
+class PermissionProbe {
+  const PermissionProbe({
+    required this.declared,
+    required this.granted,
+    this.canShowRationale = true,
+  });
+
+  /// The permission is in this build's manifest.
+  ///
+  /// False means the platform will refuse the request no matter what the user
+  /// does, because an undeclared permission is not grantable at all.
+  final bool declared;
+
+  /// The user has granted it.
+  final bool granted;
+
+  /// Whether the system says a rationale may be shown.
+  ///
+  /// This is Android's `shouldShowRequestPermissionRationale`, and it is true
+  /// in exactly one situation: the user refused once and can be asked again.
+  /// It is false before the first ask *and* after "don't ask again", which is
+  /// why the caller has to remember whether it asked — only the two together
+  /// distinguish "never asked" from "refused for good".
+  final bool canShowRationale;
 }
 
 /// One launchable application, already flattened by the platform side.

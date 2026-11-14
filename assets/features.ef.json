@@ -6,6 +6,7 @@
   "features": {
     "settings": true,
     "assistant": true,
+    "voiceCommand": true,
     "music": true,
     "ncsPlayer": true,
     "photoRotation": true,

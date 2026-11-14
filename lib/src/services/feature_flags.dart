@@ -40,6 +40,7 @@ class FeatureFlags {
   static const Set<String> known = {
     'settings',
     'assistant',
+    'voiceCommand',
     'music',
     // The ef build's music page, driven by NCS-SMLauncher instead of the
     // in-app WebView. Off means the old card and panel, which is what the

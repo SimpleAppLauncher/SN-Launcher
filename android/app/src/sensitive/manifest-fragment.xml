@@ -1,3 +1,21 @@
+<!-- The sensitive runtime permissions, one per line.
+
+     A build splices in only the lines its own features need. The list comes
+     from the build script, which reads the same feature names the Dart side
+     uses: -PsnPermissions=RECORD_AUDIO,READ_CALENDAR
+
+     This file is the single place these declarations live. The generated
+     manifest is produced from it by android/app/build.gradle.kts, and
+     tool/verify_permissions.sh checks the finished APK against the list that
+     was asked for.
+
+     Nothing here is requested at launch. Each one is asked for at the moment
+     the feature that needs it is used, and the settings page can always show
+     what has and has not been granted. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- API 33+: without this the media notification is silently dropped and
+         there are no lock-screen controls. Only the builds with a music
+         player declare it. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.READ_CALENDAR"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>

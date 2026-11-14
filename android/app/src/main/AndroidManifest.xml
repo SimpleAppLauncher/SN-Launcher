@@ -27,9 +27,6 @@
          app crashes at runtime without it. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
-    <!-- API 33+: without this the media notification is silently dropped and
-         there are no lock-screen controls. -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Let the assistant give a short haptic tick when it starts listening, so a
          wall display says something even when nobody is looking at it. -->
     <uses-permission android:name="android.permission.VIBRATE"/>

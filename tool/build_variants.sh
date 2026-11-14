@@ -55,6 +55,16 @@ verify_application_id() {
   printf '  applicationId %-34s ok\n' "$actual"
 }
 
+# ── Which permissions a build needs ───────────────────────────────────────────
+#
+# The list comes from tool/permissions_for.sh, which is the shell half of a
+# decision the Dart side also makes. The microphone, the calendar, the
+# location and the notifications are what make Google Play Protect warn on
+# install. The warning is right, so a build declares them only when a
+# feature in that build actually uses them — and then it asks for them at
+# the moment that feature is used, not at launch.
+. "$(dirname "$0")/permissions_for.sh"
+
 # Per-ABI for both. An e-waste tablet is usually arm64, a spare x86 box is
 # usually x86_64, and shipping one fat APK to cover both is how you end up
 # debugging an x86 library that is not there.
@@ -73,12 +83,11 @@ build_one() {
   # findProperty returns an empty string either way.
   local id_arg=("-PsnAppIdSuffix=$suffix")
 
-  # Sensitive permissions are OFF unless a build asks for them.
+  # The permissions this build declares.
   #
-  # The microphone, the calendar, the location and the notification listener
-  # are what make Google Play Protect warn on install. The warning is right, so
-  # the default build declares none of them and the features that want them
-  # degrade honestly instead of asking.
+  # `SN_SENSITIVE=1` still forces every sensitive permission in, for the
+  # builds that want to check a feature against a manifest that has it.
+  # Normally the list is derived from the build's own features.
   #
   #   tool/build_variants.sh both sensitive   # opt in
   #
@@ -86,11 +95,17 @@ build_one() {
   # reliably notice that the manifest source set changed and will happily
   # reuse the previous APK — with the previous build's permissions. That is
   # the same trap as the applicationId check below, one level up.
+  local permissions
+  permissions="$(required_permissions "$features")"
   if [ "${SN_SENSITIVE:-0}" = "1" ]; then
     id_arg+=("-PsnSensitive=true")
+    permissions="all"
+  else
+    id_arg+=("-PsnPermissions=$permissions")
   fi
 
   echo "=== building $name (features: $features, applicationId suffix: '${suffix}') ==="
+  echo "    sensitive permissions: ${permissions:-none}"
   flutter build apk \
     --release \
     --split-per-abi \
@@ -111,6 +126,11 @@ build_one() {
     printf '  %-46s %6.1f MB\n' "$(basename "$dest")" \
       "$(echo "scale=1; $(stat -f%z "$f") / 1048576" | bc)"
     verify_application_id "$dest" "dev.snlauncher.snlauncher$suffix"
+    if [ "$permissions" = "all" ]; then
+      tool/verify_permissions.sh "$dest" "" || true
+    else
+      tool/verify_permissions.sh "$dest" "$permissions"
+    fi
   done
 }
 

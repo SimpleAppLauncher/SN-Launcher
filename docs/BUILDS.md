@@ -111,6 +111,44 @@ exactly what made the reduced build look broken on hardware, when the digest pag
 was gated off but the dock still had the button that navigated to it. Both
 directions of that mistake are now tested.
 
+## What permissions a build declares
+
+A build declares exactly the runtime permissions its own features need, and
+nothing else.
+
+| Feature | Permission |
+| --- | --- |
+| `calendar` | `READ_CALENDAR` |
+| `weather` | `ACCESS_COARSE_LOCATION` |
+| `voiceCommand` | `RECORD_AUDIO` |
+| `music` | `POST_NOTIFICATIONS` |
+
+The mapping lives in `tool/permissions_for.sh`, which reads the feature file
+and prints the list. The build passes it to Gradle as
+`-PsnPermissions=READ_CALENDAR,RECORD_AUDIO`, and Gradle splices exactly
+those lines out of `android/app/src/sensitive/manifest-fragment.xml` into the
+generated manifest. The same feature names are in
+`lib/src/services/permission_service.dart`, and
+`test/permission_service_test.dart` runs the script and compares its answer
+against the app's — so the two cannot drift apart.
+
+`tool/verify_permissions.sh <apk> <expected>` reads the finished APK and
+fails if the declared set is not exactly the expected one. `tool/build_variants.sh`
+calls it after every build, so a build that declares too much or too little
+is a failed build, not a surprise on a phone.
+
+**This used to be broken.** The base manifest declared no runtime
+permissions, and the sensitive ones were merged in only by a build that asked
+for them with `-PsnSensitive=true` — which no shipped build did. Every
+install therefore had a calendar card that could never be granted, a
+microphone that could never be granted, and a media notification that Android
+13+ silently dropped because `POST_NOTIFICATIONS` was declared and never
+asked for. A feature the user cannot use is not a feature.
+
+The permissions are asked for at the moment the feature is used — the
+microphone when the microphone button is pressed, notifications when music
+starts — not at launch.
+
 ## How it behaves when the config is wrong
 
 Deliberately, in every case the same way: **off**.

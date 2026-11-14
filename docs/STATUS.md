@@ -1,17 +1,18 @@
 # Status: what works, what does not, and what to do next
 
-Written against the v0.3.0 release tree, plus the background-album and
-Christmas-mode work that has landed since. **455 tests pass and none are
-skipped**; `flutter analyze` is clean. The reduced and ef 0.3.0 APKs were built
-and signature-verified, but ADB was offline during this release pass, so this
-exact build was not installed on hardware. The Android now-playing strip,
-external transport and live track replacement were verified earlier on the
-Nokia T20 with Spotify and Notification access; the real installed-app
-dock/drawer and live photo discovery were used in the T20 promo captures. Full
-package-launch interaction and the time-based theme editor were not re-run on
-hardware for 0.3.0. This file exists because the honest answer to "does it
-work?" has been longer than a chat message should carry, and because the
-previous answer to that question was wrong.
+Written against the v0.3.0 release tree, plus the background-album,
+Christmas-mode, permissions and voice-command work that has landed since.
+**498 tests pass and none are skipped**; `flutter analyze` is clean. The
+reduced and ef 0.3.0 APKs were built and signature-verified, but ADB was
+offline during this release pass, so this exact build was not installed on
+hardware. The Android now-playing strip, external transport and live track
+replacement were verified earlier on the Nokia T20 with Spotify and
+Notification access; the real installed-app dock/drawer and live photo
+discovery were used in the T20 promo captures. Full package-launch interaction
+and the time-based theme editor were not re-run on hardware for 0.3.0. This
+file exists because the honest answer to "does it work?" has been longer than a
+chat message should carry, and because the previous answer to that question was
+wrong.
 
 Everything below is graded against one standard, which is the only standard
 that matters for a device sitting on a wall:
@@ -22,6 +23,61 @@ A passing test is not verification. A widget test proves a property; it cannot
 prove that a person can see it. This project has now been bitten by that
 distinction twice, and both times the thing that broke was invisible to the
 whole test suite.
+
+---
+
+## Permissions and the voice command — 14 Nov 2026
+
+The complaint was that installing on another device "does not work as
+intended". The root cause was not a bug in a feature: it was that the
+shipped build asked for permissions it had never been allowed to ask for.
+
+**What was wrong.** The base manifest declared no runtime permissions, and
+the sensitive ones — `RECORD_AUDIO`, `READ_CALENDAR`,
+`ACCESS_COARSE_LOCATION` — were merged in only by a build that asked for them
+with `-PsnSensitive=true`, which no shipped build did. So on every install:
+
+- the calendar card could never be granted. The request came back denied with
+  no dialog, and the digest page said "Permission needed" for the life of the
+  app;
+- the microphone could never be granted, so the voice command could not work
+  at all;
+- the weather place never resolved from the device;
+- `POST_NOTIFICATIONS` *was* declared and never asked for, so on Android 13+
+  the media notification was silently dropped and there were no lock-screen
+  controls.
+
+**What changed.**
+
+- A build now declares exactly the runtime permissions its own features need,
+  and nothing else. The list is derived from the same feature names the app
+  uses, and `test/permission_service_test.dart` runs the build script and
+  compares its answer against the app's, so the two cannot drift.
+- The permissions are asked for at the moment the feature is used: the
+  microphone when the microphone button is pressed, notifications when music
+  starts. Not at launch.
+- There is one `PermissionService`, and it can say "not in this build" — a
+  state that used to be invisible and is exactly what was wrong before.
+- The settings page has a Permissions section that lists each permission, why
+  it is wanted, whether it has been granted, and a button to ask for it.
+
+**The voice command.** It already existed in the code and could not be
+reached: the only trigger was a tap anywhere on the screen, and the flag was
+off in the reduced build. It is now a real button in the top-left corner, it
+asks for the microphone the first time it is pressed, and it runs the
+on-device intents — the clock, the date, the volume, the brightness, the
+media keys, a timer. None of them touch the network.
+
+The timer was a lie and now is not: "set a timer for five minutes" used to
+call a native method that wrote a label nobody ever read, and the launcher
+said the timer was set. There is now a countdown on screen, a cancel, and a
+spoken "timer finished".
+
+| | |
+| --- | --- |
+| Built | Per-variant permission declaration; the permission service; the settings Permissions section; the microphone button; the typed-command fallback; a real timer; the notification request when music starts |
+| Verified | The six APKs build; `tool/verify_permissions.sh` reads each finished APK and confirms it declares exactly `READ_CALENDAR,RECORD_AUDIO` (reduced) and `ACCESS_COARSE_LOCATION,POST_NOTIFICATIONS,READ_CALENDAR,RECORD_AUDIO` (ef); 498 tests pass; `flutter analyze` is clean; the macOS release build compiles |
+| **Not** verified | Nothing has been installed on an Android device — ADB is offline. The microphone button, the permission dialogs, the countdown and the settings section have **never been seen on hardware**. The permission probe is only exercised against a fake platform in the tests; the Kotlin side is unexercised. |
 
 ---
 

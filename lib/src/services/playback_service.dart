@@ -1,3 +1,4 @@
+import 'permission_service.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -127,8 +128,18 @@ class PlaybackState {
 /// Nothing here knows where audio comes from. It plays what it is handed, which
 /// keeps the licensing decision on the Dart side where it can be tested.
 class PlaybackService extends ChangeNotifier {
-  PlaybackService({MethodChannel? channel})
+  PlaybackService({MethodChannel? channel, this.permissions})
     : _channel = channel ?? const MethodChannel(channelName);
+
+  /// What the platform has allowed this app to do.
+  ///
+  /// Used for one thing: Android 13+ drops the media notification without
+  /// POST_NOTIFICATIONS, and the lock-screen controls go with it. The
+  /// permission was declared in the manifest and never asked for, so the
+  /// notification was silently missing on every modern phone.
+  ///
+  /// Null when there is no permission model — desktop, and tests.
+  final PermissionService? permissions;
 
   @visibleForTesting
   static const channelName = 'dev.snlauncher/playback';
@@ -199,6 +210,7 @@ class PlaybackService extends ChangeNotifier {
       _emitError('This build has no audio player');
       return;
     }
+    await _askForNotifications();
     final result = await _invoke<Map>('play', {
       'track': track.toChannel(),
       'queue': (queue ?? [track]).map((t) => t.toChannel()).toList(),
@@ -209,6 +221,22 @@ class PlaybackService extends ChangeNotifier {
       return;
     }
     _update(result);
+  }
+
+  /// Asks for the notification permission, once, at the moment the user asks
+  /// for music.
+  ///
+  /// Not at launch: a launcher that opens a system dialog before the user
+  /// has touched anything is a launcher that gets refused before it has been
+  /// used. And not when the permission is already granted, or when this
+  /// build does not declare it — there would be nothing to ask.
+  Future<void> _askForNotifications() async {
+    final permissions = this.permissions;
+    if (permissions == null) return;
+    final state = permissions.state(AppPermission.notifications);
+    if (state == PermissionState.allowed) return;
+    if (state == PermissionState.notInThisBuild) return;
+    await permissions.request(AppPermission.notifications);
   }
 
   Future<void> resume() async {

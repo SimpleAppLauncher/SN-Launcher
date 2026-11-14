@@ -9,7 +9,7 @@ flagged off, because it lied to the user about what the device could do.
 
 ---
 
-## 1. Tap-to-talk / listening — REBUILT
+## 1. Tap-to-talk / listening — REBUILT, AND THE TAP IS GONE
 
 **Status: done.** It was deleted once and then rebuilt properly. This entry is
 the record of why it was deleted, because the reason is the whole design brief
@@ -47,6 +47,29 @@ happening again:
 
 If you extend this, the test to write is not "does it recognise 'turn on the
 lights'" — it is "does it stay silent when there is nothing to hear".
+
+### What changed on 14 Nov 2026
+
+The rebuilt version listened on **a tap anywhere on the screen**. That was the
+wrong shape: every touch on a launcher was also a request to open the
+microphone, on a device meant to sit on a wall and be touched by everyone in
+the room.
+
+It is now a **button** in the top-left corner, next to the settings gear. It
+says what it is. It is greyed out when there is nothing to listen with, rather
+than hidden, because a launcher that quietly drops a control is worse than one
+that shows it and admits it cannot work.
+
+Two more things came with it:
+
+* The microphone permission is asked for **when the button is pressed**, not
+  at launch. Before this the build did not declare `RECORD_AUDIO` at all, so
+  the request came back denied with no dialog and the feature could never
+  work on any device.
+* The **timer** used to be a lie: "set a timer for five minutes" called a
+  native method that stored a label nobody ever read, and the launcher said
+  the timer was set. There is now a countdown on screen, a cancel, and a
+  spoken "timer finished".
 
 ---
 

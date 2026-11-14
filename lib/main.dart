@@ -20,11 +20,13 @@ import 'src/services/remote_control_service.dart';
 import 'src/services/place_photo_service.dart';
 import 'src/services/playback_service.dart';
 import 'src/services/platform_bridge.dart';
+import 'src/services/permission_service.dart';
 import 'src/services/settings_store.dart';
 import 'src/services/frame_stats.dart';
 import 'src/screens/nest_shell.dart';
 import 'src/services/clock_service.dart';
 import 'src/services/weather_service.dart';
+import 'src/services/timer_service.dart';
 import 'src/state/shell_controller.dart';
 import 'src/theme/nest_metrics.dart';
 
@@ -105,7 +107,9 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   /// ef only. The reduced build has no audio service, so it is handed null
   /// and the transport never appears — a card with dead controls is worse than
   /// no card.
-  late final PlaybackService _playback = PlaybackService();
+  late final PlaybackService _playback = PlaybackService(
+    permissions: _permissions,
+  );
 
   /// Photographs of the place the weather is about. ef only.
   late final PlacePhotoService _placePhoto = PlacePhotoService();
@@ -133,7 +137,20 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   /// manager; the shell then keeps the built-in action set.
   late final AppCatalog _appCatalog = AppCatalog();
 
-  late final AssistantService _assistant = AssistantService();
+  /// The countdown a voice timer command starts.
+  late final TimerService _timer = TimerService();
+
+  /// What the platform has allowed this app to do.
+  ///
+  /// One service, one answer, so the settings page and the microphone button
+  /// cannot disagree about it.
+  late final PermissionService _permissions = PermissionService(
+    settings: _settings,
+  );
+
+  late final AssistantService _assistant = AssistantService(
+    timer: _timer,
+  );
   final SettingsStore _settings = SettingsStore();
 
   /// The music page's link to NCS-SMLauncher.
@@ -203,6 +220,10 @@ class _NestLauncherAppState extends State<NestLauncherApp>
       if (FeatureFlags.current.isOn('todo')) {
         unawaited(_todo.load());
       }
+      // What the platform has allowed this app to do. The settings page
+      // shows the answer, and the microphone button asks through the same
+      // service, so the two cannot disagree.
+      unawaited(_permissions.refresh());
       // Never on the critical path: the bundled photograph is already on
       // screen, and this only upgrades it later.
       if (FeatureFlags.current.isOn('photoRotation')) {
@@ -258,10 +279,17 @@ class _NestLauncherAppState extends State<NestLauncherApp>
       (v) => v == 'true',
     );
 
+    final voiceCommand = _settings.read(
+      SettingKeys.voiceCommandEnabled,
+      true,
+      (v) => v == 'true',
+    );
+
     _assistant.configure(
       enabled: enabled,
       backend: backend,
       speechEnabled: voice,
+      voiceCommandEnabled: voiceCommand,
       geminiKey: _settings.get(SettingKeys.geminiApiKey) ?? '',
       homeAssistantUrl: _settings.get(SettingKeys.haUrl) ?? '',
       homeAssistantToken: _settings.get(SettingKeys.haToken) ?? '',
@@ -280,6 +308,12 @@ class _NestLauncherAppState extends State<NestLauncherApp>
     );
     unawaited(
       _settings.put(SettingKeys.voiceEnabled, '${_assistant.speechEnabled}'),
+    );
+    unawaited(
+      _settings.put(
+        SettingKeys.voiceCommandEnabled,
+        '${_assistant.voiceCommandEnabled}',
+      ),
     );
   }
 
@@ -314,6 +348,8 @@ class _NestLauncherAppState extends State<NestLauncherApp>
     _external.dispose();
     _ncs.dispose();
     _assistant.dispose();
+    _timer.dispose();
+    _permissions.dispose();
     _clock.dispose();
     _weather.dispose();
     _frameStats.dispose();
@@ -363,6 +399,8 @@ class _NestLauncherAppState extends State<NestLauncherApp>
                 onNcsAddressChanged: (value) =>
                     unawaited(_settings.put(SettingKeys.ncsBaseUrl, value)),
                 assistant: _assistant,
+                permissions: _permissions,
+                timer: _timer,
                 todo: _todo,
                 appCatalog: _appCatalog,
               ),

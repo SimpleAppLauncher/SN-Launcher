@@ -1,5 +1,5 @@
 {
-  "_comment": "Reduced build. This is the default. It is a launcher: open the apps, open the calendar, change the brightness. Swap values here and rebuild. Settings stays on because a launcher you cannot configure is a launcher you cannot keep using, and the digest page stays on because a calendar with nowhere to live is not a feature.",
+  "_comment": "Reduced build. This is the default. It is a launcher: open the apps, open the calendar, change the brightness, and say a command out loud. Swap values here and rebuild. Settings stays on because a launcher you cannot configure is a launcher you cannot keep using, and the digest page stays on because a calendar with nowhere to live is not a feature. voiceCommand is on because the commands it runs — the clock, the volume, the brightness, the music, a timer — never leave the device, and the microphone is asked for at the moment the microphone button is pressed.",
 
   "build": "sn-launcher",
   "features": {
@@ -11,6 +11,7 @@
     "todo": true,
 
     "assistant": false,
+    "voiceCommand": true,
     "music": false,
     "photoRotation": true,
     "photoDiscovery": true,

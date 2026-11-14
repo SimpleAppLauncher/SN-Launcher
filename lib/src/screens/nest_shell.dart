@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +17,8 @@ import '../services/playback_service.dart';
 import '../services/radio_stations.dart';
 import '../services/todo_service.dart';
 import '../services/photo_frame_service.dart';
+import '../services/permission_service.dart';
+import '../services/timer_service.dart';
 import '../models/photo_credit.dart';
 import '../services/calendar_service.dart';
 import '../services/clock_service.dart';
@@ -30,6 +34,7 @@ import '../widgets/app_drawer.dart';
 import '../widgets/clock_block.dart';
 import '../widgets/launcher_sheet.dart';
 import '../widgets/assistant_lightbar.dart';
+import '../widgets/voice_widgets.dart';
 import '../widgets/music_player.dart';
 import '../widgets/ncs_music_page.dart';
 import '../widgets/photo_frame.dart';
@@ -70,6 +75,8 @@ class NestShell extends StatefulWidget {
     this.media,
     this.remote,
     this.ncs,
+    this.permissions,
+    this.timer,
     this.onNcsAddressChanged,
     this.suggested,
     this.actions,
@@ -122,6 +129,18 @@ class NestShell extends StatefulWidget {
   /// has not been configured.
   final AssistantService? assistant;
 
+  /// What the platform has allowed this app to do.
+  ///
+  /// Null on desktop and in tests. The microphone button asks for what it
+  /// needs through this, and the settings page lists the lot.
+  final PermissionService? permissions;
+
+  /// The countdown a timer command starts.
+  ///
+  /// Null means there is nowhere to show a countdown, and a timer command
+  /// then fails rather than claiming a timer was set.
+  final TimerService? timer;
+
   /// Overrides the six badges in the sheet's app row.
   final List<NestAction>? suggested;
 
@@ -149,6 +168,7 @@ class _NestShellState extends State<NestShell> {
     super.initState();
     widget.photos?.addListener(_onPhotosChanged);
     widget.assistant?.addListener(_onAssistantChanged);
+    widget.timer?.addListener(_onTimerChanged);
 
     // The clock service owns the timer, and it only wakes on the minute
     // boundary unless it is told otherwise. The "Show seconds" setting has to
@@ -162,6 +182,33 @@ class _NestShellState extends State<NestShell> {
     widget.controller.addListener(_onControllerChanged);
     widget.location?.addListener(_onLocationChanged);
   }
+
+  /// The countdown reached zero.
+  ///
+  /// The launcher says so, once, when it happens — and says it out loud, so
+  /// a timer set from across the room is heard as well as seen.
+  bool _timerFinished = false;
+
+  void _onTimerChanged() {
+    final timer = widget.timer;
+    if (timer == null) return;
+    if (timer.finished && !_timerFinished) {
+      _timerFinished = true;
+      _c.showToast('Timer finished');
+      unawaited(widget.assistant?.speak('Timer finished.'));
+    } else if (!timer.finished) {
+      _timerFinished = false;
+    }
+    // No setState: the chip repaints itself from the service, and rebuilding
+    // the whole shell every second would cost more than the countdown is
+    // worth on a 1 GB tablet.
+  }
+
+  /// Take a finished countdown off the screen.
+  ///
+  /// A running countdown is left alone: a stray tap on a timer that is
+  /// counting down should not throw it away.
+  void _dismissTimer() => widget.timer?.clear();
 
   /// The weather page is the only thing that needs a location, so the location
   /// is worked out when the page is first opened rather than at launch.
@@ -241,6 +288,7 @@ class _NestShellState extends State<NestShell> {
     widget.controller.removeListener(_onControllerChanged);
     widget.photos?.removeListener(_onPhotosChanged);
     widget.assistant?.removeListener(_onAssistantChanged);
+    widget.timer?.removeListener(_onTimerChanged);
     widget.location?.removeListener(_onLocationChanged);
     super.dispose();
   }
@@ -546,10 +594,11 @@ class _NestShellState extends State<NestShell> {
                 // carousel still waits for the slop, but once it wins it
                 // catches up to the finger instead of starting a frame late.
                 dragStartBehavior: DragStartBehavior.down,
-                // Tap-to-talk. A launcher must not claim it is listening when
-                // no microphone exists, so this refuses outright unless the
-                // assistant is enabled *and* speech input is really available.
-                onTap: flags.isOn('assistant') ? _startListening : null,
+                // Tap-to-talk used to live here: any tap anywhere on the
+                // screen started the microphone. That meant every touch on a
+                // launcher was also a request to open the mic, which is not
+                // something a launcher is allowed to do to a room. The voice
+                // command has its own button now, and it says what it is.
                 // The drag has to be measured as well as the flick.
                 //
                 // `onHorizontalDragEnd` carries the velocity but not how far
@@ -617,7 +666,13 @@ class _NestShellState extends State<NestShell> {
                         // The listening affordance, pinned to the top edge of
                         // the window and above the carousel so it is visible
                         // from anywhere in the shell, not only on one page.
-                        if (flags.isOn('assistant') && assist != null)
+                        //
+                        // It belongs to the voice command, which is the thing
+                        // that actually listens. The assistant flag only
+                        // decides what answers a question afterwards.
+                        if ((flags.isOn('assistant') ||
+                                flags.isOn('voiceCommand')) &&
+                            assist != null)
                           Positioned(
                             left: 0,
                             right: 0,
@@ -626,6 +681,52 @@ class _NestShellState extends State<NestShell> {
                               child: AssistantLightbar(
                                 activity: assist.activity,
                                 height: _m.px(4),
+                              ),
+                            ),
+                          ),
+
+                        // The voice command button, top-left, mirroring the
+                        // settings gear on the right.
+                        //
+                        // It is a real button, and it is greyed out when
+                        // there is nothing to listen with — no permission, no
+                        // recogniser — rather than hidden. A launcher that
+                        // quietly drops a control is worse than one that
+                        // shows it and admits it cannot work.
+                        if (flags.isOn('voiceCommand') && assist != null)
+                          Positioned(
+                            left: _m.px(20),
+                            top: _m.px(12),
+                            child: MicButton(
+                              metrics: _m,
+                              type: type,
+                              palette: palette,
+                              activity: assist.activity,
+                              available: assist.voiceCommandEnabled,
+                              onPressed: assist.voiceCommandEnabled
+                                  ? _startListening
+                                  : null,
+                            ),
+                          ),
+
+                        // A countdown, when a timer is running.
+                        //
+                        // It sits at the top of the window so it is visible
+                        // from any page: a timer you have to go back to the
+                        // home screen to check is not much of a timer.
+                        if (widget.timer != null &&
+                            widget.timer!.deadline != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: _m.px(14),
+                            child: Center(
+                              child: TimerChip(
+                                metrics: _m,
+                                type: type,
+                                palette: palette,
+                                timer: widget.timer!,
+                                onTap: _dismissTimer,
                               ),
                             ),
                           ),
@@ -1021,23 +1122,45 @@ class _NestShellState extends State<NestShell> {
   /// platform refuses, say so in words that name the failure.
   /// Begin a listening turn.
   ///
-  /// Honest by construction: it refuses unless the assistant is both enabled
-  /// and actually able to hear. The deleted four-dot orb failed because it
-  /// showed a "listening" affordance with nothing behind it.
+  /// Honest by construction: it refuses unless the voice command is switched
+  /// on and the microphone is really there. The deleted four-dot orb failed
+  /// because it showed a "listening" affordance with nothing behind it.
+  ///
+  /// The microphone permission is asked for here, at the moment the user
+  /// pressed the button, and not at launch. A launcher that opens a system
+  /// dialog before the user has touched anything is a launcher that is
+  /// refused before it has been used.
   Future<void> _startListening() async {
     final assist = widget.assistant;
-    if (assist == null || !assist.enabled) return;
-    if (!_supportsVoiceInput) {
-      _c.showToast('No microphone input configured');
-      return;
+    if (assist == null || !assist.voiceCommandEnabled) return;
+
+    final permissions = widget.permissions;
+    if (permissions != null) {
+      final state = permissions.state(AppPermission.microphone);
+      if (state != PermissionState.allowed) {
+        final granted = await permissions.request(AppPermission.microphone);
+        if (!granted) {
+          _c.showToast(
+            state == PermissionState.notInThisBuild
+                ? 'This build has no microphone permission'
+                : 'The microphone is needed for voice commands',
+          );
+          return;
+        }
+      }
     }
-    assist.beginListening();
+
+    await assist.beginListening();
+    final status = assist.status;
+    if (status != null && status.isNotEmpty) _c.showToast(status);
   }
 
-  bool get _supportsVoiceInput => true;
 
   void _openSettings() {
     final assist = widget.assistant;
+    // Ask the platform again: the user may have changed a permission in the
+    // system settings while the launcher was in the background.
+    unawaited(widget.permissions?.refresh());
     Navigator.of(context).push(
       PageRouteBuilder<void>(
         opaque: false,
@@ -1050,6 +1173,7 @@ class _NestShellState extends State<NestShell> {
           controller: _c,
           media: widget.media,
           remote: widget.remote,
+          permissions: widget.permissions,
           assistant: assist == null
               ? const AssistantSettings(
                   enabled: false,
@@ -1058,14 +1182,29 @@ class _NestShellState extends State<NestShell> {
                   homeAssistantUrl: '',
                   homeAssistantToken: '',
                   voiceEnabled: false,
+                  voiceCommandEnabled: false,
                   busy: false,
                 )
               : _assistantSettingsOf(assist),
           onAssistantChanged: (next) => _applyAssistantSettings(assist, next),
+          onVoiceCommand: _runTypedCommand,
         ),
         transitionsBuilder: (_, anim, _, child) =>
             FadeTransition(opacity: anim, child: child),
       ),
+    );
+  }
+
+  /// Runs a command that was typed rather than spoken.
+  ///
+  /// The same path the voice takes once the words exist, so a device with no
+  /// working speech recogniser still has a way in.
+  Future<void> _runTypedCommand(String command) async {
+    final assist = widget.assistant;
+    if (assist == null) return;
+    final intent = await assist.handleTyped(command);
+    _c.showToast(
+      intent.kind == AssistKind.failed ? intent.reply : intent.title,
     );
   }
 
@@ -1079,6 +1218,7 @@ class _NestShellState extends State<NestShell> {
         // receive the secret back, only the fact that one is stored.
         homeAssistantToken: a.homeAssistantTokenSet ? '•' : '',
         voiceEnabled: a.speechEnabled,
+        voiceCommandEnabled: a.voiceCommandEnabled,
         busy: a.busy,
       );
 
@@ -1091,6 +1231,7 @@ class _NestShellState extends State<NestShell> {
       enabled: next.enabled,
       backend: next.backend,
       speechEnabled: next.voiceEnabled,
+      voiceCommandEnabled: next.voiceCommandEnabled,
       geminiKey: next.geminiKey,
       homeAssistantUrl: next.homeAssistantUrl,
       homeAssistantToken: next.homeAssistantToken,

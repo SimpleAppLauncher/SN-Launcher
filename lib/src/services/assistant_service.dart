@@ -8,6 +8,7 @@ import 'gemini_service.dart';
 import 'home_assistant_service.dart';
 import 'platform_bridge.dart';
 import 'speech_to_text.dart';
+import 'timer_service.dart';
 
 /// One understood request.
 @immutable
@@ -65,6 +66,7 @@ class AssistantService extends ChangeNotifier {
     HomeAssistantService? homeAssistant,
     Voice? voice,
     SpeechToText? stt,
+    this.timer,
   })  : _platform = platform ?? const PlatformBridge(),
         _stt = stt ?? SpeechToText(),
         _gemini = gemini ?? GeminiService(),
@@ -76,6 +78,15 @@ class AssistantService extends ChangeNotifier {
   final HomeAssistantService _ha;
   final Voice _voice;
   final SpeechToText _stt;
+
+  /// The countdown a timer command starts.
+  ///
+  /// Null means there is nowhere to show a countdown, and a timer command then
+  /// fails rather than claiming a timer was set. The old behaviour called a
+  /// native method that stored a label nobody ever read: the launcher said
+  /// the timer was set and nothing happened.
+  final TimerService? timer;
+
   String _haToken = '';
 
   // ── Configuration ──────────────────────────────────────────────────────────
@@ -91,11 +102,21 @@ class AssistantService extends ChangeNotifier {
   bool _speechEnabled = true;
   bool get speechEnabled => _speechEnabled;
 
+  /// Whether the voice command is switched on.
+  ///
+  /// Separate from [enabled], which is the *assistant* — the thing that
+  /// answers questions, possibly over the network. The voice command is the
+  /// part that only ever runs on the device: the clock, the volume, the
+  /// brightness, the media keys, a timer.
+  bool _voiceCommandEnabled = true;
+  bool get voiceCommandEnabled => _voiceCommandEnabled;
+
   void configure({
     bool? enabled,
     AssistantBackend? backend,
     AssistPolicy? policy,
     bool? speechEnabled,
+    bool? voiceCommandEnabled,
     String? geminiKey,
     String? homeAssistantUrl,
     String? homeAssistantToken,
@@ -104,6 +125,9 @@ class AssistantService extends ChangeNotifier {
     if (backend != null) _backend = backend;
     if (policy != null) _policy = policy;
     if (speechEnabled != null) _speechEnabled = speechEnabled;
+    if (voiceCommandEnabled != null) {
+      _voiceCommandEnabled = voiceCommandEnabled;
+    }
     if (geminiKey != null) {
       // A masked preview coming back from the settings page means "unchanged".
       if (!geminiKey.contains('•')) {
@@ -412,14 +436,30 @@ class AssistantService extends ChangeNotifier {
     }
 
     // --- timer ---
+    if (has(['cancel timer', 'stop the timer', 'clear the timer'])) {
+      return AssistIntent(
+        kind: AssistKind.local,
+        title: 'Timer',
+        detail: 'cancel',
+        reply: 'Cancelling the timer.',
+      );
+    }
     final timer = RegExp(r'(\d+)\s*(minute|min|second|hour)s?').firstMatch(lower);
     if (timer != null && has(['timer', 'remind me'])) {
       final n = int.parse(timer.group(1)!);
       final unit = timer.group(2)!;
+      final seconds = switch (unit) {
+        'minute' || 'min' => n * 60,
+        'second' => n,
+        'hour' => n * 3600,
+        _ => n * 60,
+      };
       return AssistIntent(
         kind: AssistKind.local,
         title: 'Timer',
-        detail: '$n $unit',
+        // The length in seconds. The old format was "5 minutes", which the
+        // performer then had to parse again.
+        detail: '$seconds',
         reply: 'Setting a timer for $n ${unit}s.',
       );
     }
@@ -473,7 +513,19 @@ class AssistantService extends ChangeNotifier {
         );
 
       case 'Timer':
-        return _platform.setTimerLabel(intent.detail);
+        // A timer is only real if there is a countdown to look at. Without
+        // one, the honest answer is that it could not be done.
+        final countdown = timer;
+        if (countdown == null) return false;
+        if (intent.detail == 'cancel') {
+          if (countdown.deadline == null) return false;
+          countdown.cancel();
+          return true;
+        }
+        final seconds = int.tryParse(intent.detail);
+        if (seconds == null || seconds <= 0) return false;
+        countdown.start(Duration(seconds: seconds));
+        return true;
 
       case 'The time':
       case 'The date':
@@ -487,6 +539,12 @@ class AssistantService extends ChangeNotifier {
     if (!_speechEnabled || text.isEmpty) return;
     await _voice.speak(text);
   }
+
+  /// Say something out loud, if replies are switched on.
+  ///
+  /// For the things the launcher says about itself rather than about a
+  /// request — a finished timer, for instance.
+  Future<void> speak(String text) => _say(text);
 
   /// True once the assistant is genuinely capturing. The lightbar must not move
   /// before this is true.
