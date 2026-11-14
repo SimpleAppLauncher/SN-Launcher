@@ -214,6 +214,20 @@ memory win.
 
 ---
 
+## Licence
+
+**BSD 2-Clause** — the same licence the FreeBSD Project uses for its own
+source. The full text is in [`LICENSE`](LICENSE).
+
+It is permissive: anyone may use, modify and redistribute this, including
+commercially, as long as the notice is kept. What it does *not* do is
+oblige anyone to pay, to send changes back, or to open their work — and it
+grants no rights to the SN-Launcher name or logo. The bundled photographs,
+fonts and icons keep their own licences and their own credits; see
+[`assets/photo/ATTRIBUTION.md`](assets/photo/ATTRIBUTION.md).
+
+---
+
 ## Credits
 
 Written by **Giathinh1234**, and built with **[OpenCode](https://opencode.ai)** —
