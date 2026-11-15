@@ -47,6 +47,14 @@ version="${version%%+*}"
 
 tag="v$version"
 
+# A version with a dash in it is a pre-release.
+#
+# GitHub has to be told, or the release appears as the newest *stable* one and
+# every user with the updater switched on is offered a build that is not
+# finished.
+prerelease=0
+case "$version" in *-*) prerelease=1 ;; esac
+
 # A release that already exists would be a mistake rather than an update.
 # The feed is a list, and two releases with the same tag make the newest one
 # ambiguous.
@@ -65,13 +73,16 @@ trap 'rm -rf "$stage"' EXIT
 #
 # The build script names its outputs after Gradle's ABI names; the platform
 # reports the same list. Getting this wrong means a release that exists and
-# that the updater cannot find.
+# that the updater cannot find — so the names here are exactly the ones
+# `Build.SUPPORTED_ABIS` returns, and `test/publish_release_test.dart` checks
+# this table against that list.
 canonical_abi() {
   case "$1" in
-    arm64-v8a) echo "arm64-v8a" ;;
-    armel)     echo "armeabi-v7a" ;;
-    x86_64)    echo "x86_64" ;;
-    *)         echo "" ;;
+    arm64-v8a)   echo "arm64-v8a" ;;
+    armeabi-v7a) echo "armeabi-v7a" ;;
+    armel)       echo "armeabi-v7a" ;;
+    x86_64)      echo "x86_64" ;;
+    *)           echo "" ;;
   esac
 }
 
@@ -143,9 +154,18 @@ notes="$stage/NOTES.md"
 } > "$notes"
 
 echo "=== publishing $tag ==="
-gh release create "$tag" "${apks[@]}" "$stage/SHA256SUMS" \
-  --title "SN-Launcher $version" \
-  --notes-file "$notes"
+# Not an array: macOS ships bash 3.2, where "${arr[@]}" on an empty array is an
+# unbound-variable error under `set -u`. The build script hit that once.
+if [ "$prerelease" = "1" ]; then
+  gh release create "$tag" "${apks[@]}" "$stage/SHA256SUMS" \
+    --title "SN-Launcher $version" \
+    --notes-file "$notes" \
+    --prerelease
+else
+  gh release create "$tag" "${apks[@]}" "$stage/SHA256SUMS" \
+    --title "SN-Launcher $version" \
+    --notes-file "$notes"
+fi
 
 echo
 echo "published $tag"

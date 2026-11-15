@@ -128,6 +128,7 @@ class UpdateService extends ChangeNotifier {
   final SettingsStore? _settings;
 
   UpdateStatus _status = UpdateStatus.idle;
+  bool _needsInstallPermission = false;
   String _message = 'Never checked.';
   UpdateRelease? _release;
   UpdateAsset? _asset;
@@ -340,6 +341,7 @@ class UpdateService extends ChangeNotifier {
 
     final outcome = await _installer.install(file);
     if (!outcome.started) {
+      _needsInstallPermission = outcome.needsPermission;
       _fail(
         outcome.reason.isEmpty
             ? 'Android did not start the installer.'
@@ -347,7 +349,21 @@ class UpdateService extends ChangeNotifier {
       );
       return;
     }
+    _needsInstallPermission = false;
     _set(UpdateStatus.installing, 'Handed to Android’s installer.');
+  }
+
+  /// Whether the last refusal was the one the user can fix.
+  ///
+  /// Android asks each app separately for permission to install packages from
+  /// outside the store. Until that is granted, no update can be installed, and
+  /// the only thing that can change it is a screen in Settings — so this is
+  /// what the settings page offers instead of a dead end.
+  bool get needsInstallPermission => _needsInstallPermission;
+
+  /// Opens that screen.
+  Future<void> openInstallSettings() async {
+    await _platform.openInstallSettings();
   }
 
   /// Picks the release to offer, and says what was found.

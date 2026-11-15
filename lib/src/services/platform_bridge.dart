@@ -222,7 +222,18 @@ class PlatformBridge {
     return InstallOutcome(
       started: r['started'] == true,
       reason: r['reason']?.toString() ?? '',
+      needsPermission: r['needsPermission'] == true,
     );
+  }
+
+  /// Opens the screen where the user grants this app permission to install
+  /// packages from outside the store.
+  ///
+  /// Android 8 and later ask for that per app. Without it an update cannot be
+  /// installed at all, so the settings screen is the only way forward.
+  Future<bool> openInstallSettings() async {
+    final r = await _invoke<Map<Object?, Object?>>('openInstallSettings');
+    return r?['opened'] == true;
   }
 
   // ── Location ──────────────────────────────────────────────────────────────
@@ -409,13 +420,25 @@ class UpdateVerification {
 /// What the platform said when it was asked to install an APK.
 @immutable
 class InstallOutcome {
-  const InstallOutcome({required this.started, required this.reason});
+  const InstallOutcome({
+    required this.started,
+    required this.reason,
+    this.needsPermission = false,
+  });
 
   /// Whether the installer is on its way.
   final bool started;
 
   /// Why it did not start, in words. Empty when it did.
   final String reason;
+
+  /// Whether the refusal is the one the user can fix.
+  ///
+  /// Android 8 and later ask the user, per app, for permission to install
+  /// packages from outside the store. Until that is granted, an install
+  /// cannot start — and the only way to grant it is a screen in Settings.
+  /// A refusal that carries this flag is therefore not a dead end.
+  final bool needsPermission;
 }
 
 /// One calendar instance, already flattened by the platform side.

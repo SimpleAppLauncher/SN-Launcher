@@ -56,6 +56,7 @@ class PlatformBridge(private val activity: Activity) : MethodChannel.MethodCallH
             "appInfo" -> appInfo(result)
             "verifyUpdate" -> verifyUpdate(call, result)
             "installUpdate" -> installUpdate(call, result)
+            "openInstallSettings" -> openInstallSettings(result)
             "getLocation" -> getLocation(result)
             "upcomingEvents" -> upcomingEvents(call, result)
             "openUrl" -> openUrl(call, result)
@@ -464,6 +465,11 @@ class PlatformBridge(private val activity: Activity) : MethodChannel.MethodCallH
             return
         }
         result.success(UpdateInstaller.install(activity, path))
+    }
+
+    /** Opens the screen where the install permission is granted. */
+    private fun openInstallSettings(result: MethodChannel.Result) {
+        result.success(mapOf("opened" to UpdateInstaller.openInstallSettings(activity)))
     }
 
     /**

@@ -6,6 +6,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import java.io.File
 import java.security.MessageDigest
@@ -115,11 +116,39 @@ object UpdateInstaller {
      * the reason says so: the fix is a setting the user opens, and a sentence
      * that names it is more use than "failed".
      */
+    /**
+     * Opens the screen where the user grants this app permission to install
+     * packages from outside the store.
+     *
+     * Android 8 and later ask for that per app, and the screen is where the
+     * answer has to be given — there is no runtime dialog for it. The package
+     * is carried in the data URI, which is the documented way to land on this
+     * app's own entry rather than on the list of all of them.
+     */
+    fun openInstallSettings(context: Context): Boolean {
+        return try {
+            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) {
+            // No screen to open. The caller says so rather than pretending.
+            false
+        }
+    }
+
     fun install(context: Context, path: String): Map<String, Any> {
         if (!canInstallPackages(context)) {
             return mapOf(
                 "started" to false,
                 "reason" to "SN-Launcher needs permission to install updates.",
+                // The refusal is the one the user can fix: there is a screen
+                // where that permission is granted, and the app has to be
+                // able to send the user there. Without this flag the refusal
+                // is a dead end.
+                "needsPermission" to true,
             )
         }
 

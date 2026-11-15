@@ -113,6 +113,14 @@ class UpdateSection extends StatelessWidget {
       buttons.add(_button('Install', () => updates.install()));
     }
 
+    // Android will not install an update until the user has granted this app
+    // permission to install packages from outside the store. The refusal is
+    // not the end of the road: there is a screen where that permission is
+    // granted, and this is the button that opens it.
+    if (updates.needsInstallPermission) {
+      buttons.add(_button('Open settings', () => updates.openInstallSettings()));
+    }
+
     // The check always forces: the once-a-day rule is for the startup path,
     // and a button that does nothing for a day is a broken button.
     buttons.add(_button('Check for updates', () => updates.check(force: true)));

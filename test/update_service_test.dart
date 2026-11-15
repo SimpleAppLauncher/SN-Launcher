@@ -69,6 +69,10 @@ class _FakePlatform extends PlatformBridge {
   int verifyCalls = 0;
   int installCalls = 0;
 
+  /// How many times the app was sent to the screen where the install
+  /// permission is granted.
+  int installSettingsCalls = 0;
+
   /// The path the last verified file had.
   String? verifiedPath;
 
@@ -93,6 +97,12 @@ class _FakePlatform extends PlatformBridge {
     installCalls++;
     installedPath = path;
     return installOutcome;
+  }
+
+  @override
+  Future<bool> openInstallSettings() async {
+    installSettingsCalls++;
+    return true;
   }
 }
 
@@ -536,6 +546,44 @@ void main() {
 
       expect(installer.calls, 0);
       expect(service.status, UpdateStatus.available);
+    });
+
+    test('an install Android will not allow says what has to be changed',
+        () async {
+      await service.check();
+      await service.download();
+      installer.outcome = const InstallOutcome(
+        started: false,
+        reason: 'SN-Launcher needs permission to install updates.',
+        needsPermission: true,
+      );
+
+      await service.install();
+
+      expect(service.status, UpdateStatus.failed);
+      expect(service.needsInstallPermission, isTrue);
+    });
+
+    test('an install that was refused for another reason is not a permission',
+        () async {
+      await service.check();
+      await service.download();
+      installer.outcome = const InstallOutcome(
+        started: false,
+        reason: 'Android did not open the installer.',
+      );
+
+      await service.install();
+
+      expect(service.status, UpdateStatus.failed);
+      expect(service.needsInstallPermission, isFalse);
+    });
+
+    test('the service can open the screen where that permission is granted',
+        () async {
+      await service.openInstallSettings();
+
+      expect(platform.installSettingsCalls, 1);
     });
   });
 }

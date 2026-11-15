@@ -55,6 +55,10 @@ class _FakePlatform extends PlatformBridge {
 
   AppInfo? info;
 
+  /// How many times the app was sent to the screen where the install
+  /// permission is granted.
+  int installSettingsCalls = 0;
+
   @override
   Future<AppInfo?> appInfo() async => info;
 
@@ -65,6 +69,12 @@ class _FakePlatform extends PlatformBridge {
   @override
   Future<InstallOutcome?> installUpdate(String path) async =>
       const InstallOutcome(started: true, reason: '');
+
+  @override
+  Future<bool> openInstallSettings() async {
+    installSettingsCalls++;
+    return true;
+  }
 }
 
 class _FakeFeed implements UpdateFeed {
@@ -109,6 +119,17 @@ class _FakeInstaller implements UpdateInstaller {
   @override
   Future<InstallOutcome> install(File apk) async =>
       const InstallOutcome(started: true, reason: '');
+}
+
+/// An installer that refuses the way Android does when the app has not been
+/// granted permission to install packages from outside the store.
+class _RefusingInstaller implements UpdateInstaller {
+  @override
+  Future<InstallOutcome> install(File apk) async => const InstallOutcome(
+        started: false,
+        reason: 'SN-Launcher needs permission to install updates.',
+        needsPermission: true,
+      );
 }
 
 AppInfo _info({
@@ -347,5 +368,34 @@ void main() {
     await show(tester, service);
 
     expect(find.text('Pre-release builds'), findsOneWidget);
+  });
+
+  testWidgets('an install Android will not allow offers the way to fix it',
+      (tester) async {
+    // The message "SN-Launcher needs permission to install updates" is only
+    // useful if the user can act on it. Without a button to open that screen
+    // the card is a dead end.
+    final platform = _FakePlatform(
+      info: _info(version: '0.3.0', filesDir: tmp.path),
+    );
+    final feed = _FakeFeed();
+    final downloader = _FakeDownloader();
+    final service = UpdateService(
+      platform: platform,
+      feed: feed,
+      downloader: downloader,
+      installer: _RefusingInstaller(),
+    );
+    feed.body = _releaseJson('v0.4.0');
+    await service.check();
+    await tester.runAsync(() => service.download());
+    await service.install();
+
+    await show(tester, service);
+
+    expect(find.text('Open settings'), findsOneWidget);
+    await tester.tap(find.text('Open settings'));
+    await tester.pump();
+    expect(platform.installSettingsCalls, 1);
   });
 }
