@@ -210,6 +210,22 @@ installed app — a fact no unit test in this repo could have told us.
 | The microphone | The button starts the recogniser (`RecognitionService#logStartListening`), `RECORD_AUDIO` is granted with `USER_SET`, and the lightbar moves |
 | The typed command | "set a timer for 2 minutes" in Settings → Voice command starts a real countdown; the chip on the home page reads **1:14** and ticks |
 | The updater | Settings → Updates shows the real GitHub feed: **"The published release is 0.1.3. This build is 0.4.1."** — the newest *stable* release really is older than the build that is running, and the app says so instead of claiming to be up to date |
+| The updater, finding a release | **v0.4.2** was published by `tool/publish_release.sh` with the canonical names and a `SHA256SUMS`; the phone found it on its own — **"0.4.2 is available to install."** — downloaded it with a real progress bar, and the signature check ran |
+
+### The one thing that did not finish
+
+The **install** half of the update — the download being verified, the
+"install unknown apps" hand-off, and the phone coming back as the new version
+— has **not** been seen on hardware. The phone found and downloaded v0.4.2 and
+the verification refused it for the reason described above; the fix went out as
+v0.4.3, and the T20 came off USB before the rebuilt APK could be installed on
+it. The fix is one line in one Kotlin method and it is the correct Android API,
+but "correct" is not "seen working", and this file does not trade those.
+
+What is verified on that path: the feed is fetched and parsed on the phone, the
+asset is matched by name, the file is downloaded with a progress bar, the
+signature check runs and reports a reason, and a refusal that is not a
+signature problem (the Play Store case) has its own state.
 
 ---
 
