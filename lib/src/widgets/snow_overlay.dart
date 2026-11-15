@@ -45,24 +45,78 @@ class _SnowOverlayState extends State<SnowOverlay>
     duration: const Duration(seconds: 12),
   );
 
+  /// The animation's position in time, in cycles, and never wrapping.
+  ///
+  /// The controller's own value runs 0 → 1 and starts again. That is fine for
+  /// an animation that is supposed to loop, and terrible for this one: each
+  /// flake falls a *fraction of the screen* per cycle, so restarting the
+  /// phase moved every flake at once. In the default field, 97 of the 120
+  /// flakes jumped, one of them by 94% of the screen height, every twelve
+  /// seconds — the field blinked rather than fell.
+  ///
+  /// The field's centre of mass barely moved, because the flakes that leapt
+  /// upwards and the flakes that dropped a little cancelled each other out.
+  /// That is why it went unnoticed for so long.
+  ///
+  /// So the phase is accumulated instead: it only ever goes forwards, and the
+  /// only discontinuity left is each flake's own recycle at the bottom of the
+  /// screen, which is staggered and is what snow looks like.
+  double _phase = 0;
+
+  /// The controller's value at the last tick, so the next one can be turned
+  /// into an advance rather than a position.
+  double _lastValue = 0;
+
+  /// The field, built once.
+  ///
+  /// It used to be built inside the painter's builder, which runs on every
+  /// frame — that is a hundred and twenty random numbers a frame on a device
+  /// that is meant to sit on a wall. The arrangement is deterministic, so
+  /// building it once changes nothing that is drawn.
+  late SnowField _field = SnowField(flakeCount: widget.flakeCount);
+
   @override
   void initState() {
     super.initState();
+    _controller.addListener(_accumulate);
     if (widget.animate) _controller.repeat();
   }
 
   @override
   void didUpdateWidget(SnowOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.flakeCount != oldWidget.flakeCount) {
+      _field = SnowField(flakeCount: widget.flakeCount);
+    }
     if (widget.animate && !_controller.isAnimating) {
+      // repeat() restarts the controller from zero, so the next tick is an
+      // advance from zero and not a jump from wherever it was left.
+      _lastValue = 0;
       _controller.repeat();
     } else if (!widget.animate && _controller.isAnimating) {
       _controller.stop();
     }
   }
 
+  /// Turns the controller's looping value into a running total.
+  void _accumulate() {
+    final value = _controller.value;
+    if (!_controller.isAnimating) {
+      _lastValue = value;
+      return;
+    }
+    var advance = value - _lastValue;
+    // The controller wrapped: it ran out at 1 and started again at 0. The
+    // advance across that boundary is the part that is left, not a negative
+    // one.
+    if (advance < 0) advance += 1.0;
+    _phase += advance;
+    _lastValue = value;
+  }
+
   @override
   void dispose() {
+    _controller.removeListener(_accumulate);
     _controller.dispose();
     super.dispose();
   }
@@ -74,8 +128,8 @@ class _SnowOverlayState extends State<SnowOverlay>
         animation: _controller,
         builder: (context, _) => CustomPaint(
           painter: SnowPainter(
-            field: SnowField(flakeCount: widget.flakeCount),
-            phase: widget.animate ? _controller.value : 0.0,
+            field: _field,
+            phase: widget.animate ? _phase : 0.0,
           ),
           size: Size.infinite,
         ),
