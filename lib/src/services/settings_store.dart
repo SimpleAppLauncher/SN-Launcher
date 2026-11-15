@@ -184,4 +184,18 @@ abstract final class SettingKeys {
   // ── EF-only LAN remote ─────────────────────────────────────────────────────
   static const remoteControlEnabled = 'remoteControlEnabled';
   static const remoteControlToken = 'remoteControlToken';
+
+  // ── Updates ────────────────────────────────────────────────────────────────
+
+  /// Whether the user has asked for pre-release builds.
+  ///
+  /// Off by default: a pre-release is a thing somebody chose to try, not a
+  /// thing a launcher offers on its own.
+  static const updatePreReleases = 'updatePreReleases';
+
+  /// When the last check happened, in milliseconds since the epoch.
+  ///
+  /// The stamp is what keeps the app to one check a day, and it is written by
+  /// the check itself — the service that reads it is the one that writes it.
+  static const lastUpdateCheck = 'lastUpdateCheck';
 }

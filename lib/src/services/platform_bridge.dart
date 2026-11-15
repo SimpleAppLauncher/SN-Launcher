@@ -164,6 +164,67 @@ class PlatformBridge {
     );
   }
 
+  // ── Updates ───────────────────────────────────────────────────────────────
+  /// What this build is: its version, its package, its ABI, and who put it
+  /// here.
+  ///
+  /// Null when the platform cannot say — a desktop, or an Android whose native
+  /// side is not there. The caller must read that as "this build cannot
+  /// update itself", never as "there is no update".
+  Future<AppInfo?> appInfo() async {
+    final r = await _invoke<Map<Object?, Object?>>('appInfo');
+    if (r == null) return null;
+    return AppInfo(
+      versionName: r['versionName']?.toString() ?? '',
+      versionCode: (r['versionCode'] as num?)?.toInt() ?? 0,
+      applicationId: r['applicationId']?.toString() ?? '',
+      abi: r['abi']?.toString() ?? '',
+      installer: r['installer']?.toString() ?? '',
+      canInstallPackages: r['canInstallPackages'] == true,
+      filesDir: r['filesDir']?.toString() ?? '',
+    );
+  }
+
+  /// Whether the file at [path] is this app's own newer build.
+  ///
+  /// The three checks — the package name, the signing certificate and the
+  /// version name — run natively, against the file itself, because that is
+  /// the only place the answers are. A platform that does not answer is a
+  /// check that did not pass, not one that did.
+  Future<UpdateVerification> verifyUpdate(String path) async {
+    final r = await _invoke<Map<Object?, Object?>>(
+      'verifyUpdate',
+      {'path': path},
+    );
+    if (r == null) {
+      return const UpdateVerification(
+        ok: false,
+        reason: 'Could not check the download.',
+      );
+    }
+    return UpdateVerification(
+      ok: r['ok'] == true,
+      reason: r['reason']?.toString() ?? '',
+    );
+  }
+
+  /// Hands the file at [path] to Android's installer.
+  ///
+  /// Null when the platform does not answer at all. The reason travels with
+  /// the answer: "the installer did not start" is not a sentence the user can
+  /// do anything with, and the native side knows why.
+  Future<InstallOutcome?> installUpdate(String path) async {
+    final r = await _invoke<Map<Object?, Object?>>(
+      'installUpdate',
+      {'path': path},
+    );
+    if (r == null) return null;
+    return InstallOutcome(
+      started: r['started'] == true,
+      reason: r['reason']?.toString() ?? '',
+    );
+  }
+
   // ── Location ──────────────────────────────────────────────────────────────
   /// The device's own position.
   ///
@@ -286,6 +347,75 @@ class InstalledApp {
   /// PNG bytes read from the application's own icon. Null when the platform
   /// could not rasterise it; the badge then falls back to a glyph.
   final Uint8List? iconBytes;
+}
+
+/// What this build is, as the platform reports it.
+///
+/// Every field comes from the running app itself: there is no second source
+/// for the version, the package name or the ABI, because two sources would be
+/// two truths and one of them would be wrong.
+@immutable
+class AppInfo {
+  const AppInfo({
+    required this.versionName,
+    required this.versionCode,
+    required this.applicationId,
+    required this.abi,
+    required this.installer,
+    required this.canInstallPackages,
+    required this.filesDir,
+  });
+
+  /// The version name — `0.3.0`. Never the version code: Flutter's per-ABI
+  /// offsets make a universal APK look older than an installed arm64 build at
+  /// the same version.
+  final String versionName;
+
+  /// The version code, as the platform counts them. Carried, never compared.
+  final int versionCode;
+
+  /// The package this build is installed as — `dev.snlauncher.snlauncher`.
+  final String applicationId;
+
+  /// The device's primary ABI — `arm64-v8a`.
+  final String abi;
+
+  /// The package that installed this build — `com.android.vending` when it
+  /// came from the Play Store, empty when nothing claims it.
+  final String installer;
+
+  /// Whether the user has let this app install packages.
+  final bool canInstallPackages;
+
+  /// The app's own files directory, where an update is downloaded to.
+  ///
+  /// The files directory and not the cache directory: Android may clear the
+  /// cache at any time, and the installer is handed the file.
+  final String filesDir;
+}
+
+/// What the platform said about a downloaded APK.
+@immutable
+class UpdateVerification {
+  const UpdateVerification({required this.ok, required this.reason});
+
+  /// Whether the file may be installed.
+  final bool ok;
+
+  /// Which check failed, in words. Empty when [ok].
+  final String reason;
+}
+
+/// What the platform said when it was asked to install an APK.
+@immutable
+class InstallOutcome {
+  const InstallOutcome({required this.started, required this.reason});
+
+  /// Whether the installer is on its way.
+  final bool started;
+
+  /// Why it did not start, in words. Empty when it did.
+  final String reason;
 }
 
 /// One calendar instance, already flattened by the platform side.
