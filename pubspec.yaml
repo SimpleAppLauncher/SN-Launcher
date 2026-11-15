@@ -3,7 +3,7 @@ description: >-
   SN-Launcher — a Google Nest Hub style launcher for Android and
   Unix/Linux desktops, tuned for low-RAM e-waste hardware.
 publish_to: "none"
-version: 0.4.1+9001
+version: 0.4.3+9001
 
 environment:
   sdk: ^3.13.0

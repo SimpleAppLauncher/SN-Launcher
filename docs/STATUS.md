@@ -146,6 +146,73 @@ version codes, because Flutter gives each ABI a different version code.
 
 ---
 
+## The device pass — 15 Nov 2026
+
+Everything above was graded against a Nokia T20 (Android 13) that was plugged
+in for this pass. Two real bugs showed up, and **both were found by looking at
+a screenshot**, not by a test and not by logcat.
+
+### The home page swallowed every tap
+
+The shell's own controls — the settings gear, the listening lightbar, the
+microphone button and the timer chip — were painted **below** the page
+carousel. The home page's photograph is opaque and fills the screen, so on the
+home page those four controls were not merely hidden, they were **invisible**.
+
+Worse, the photograph is wrapped in an `AnimatedSwitcher` whose transition is a
+fade, and **a fade absorbs touches**: while the transition is running, the
+photograph's hit test swallows every tap in its area. So on the home page the
+settings gear did not open Settings and the microphone button did nothing. The
+button was visible on the digest page, whose background is transparent, which
+is exactly why this had never been noticed.
+
+The fix moves those four blocks **above** the carousel, and the now-playing
+strip down out of the gear's corner. The regression test asks a question no
+test had asked before: *is the gear painted above the page, and does tapping
+the microphone button actually start listening?*
+
+### The microphone button did nothing
+
+Tapping it produced no dialog and no logcat line. The button was enabled
+because the **voice command** is on, but the tap went through a check for the
+**assistant's** master switch — the one that decides whether answers may come
+from Gemini or Home Assistant — whose stored default is off. The voice command
+must not depend on a network-backend switch, and now it does not.
+
+### The updater refused every update it downloaded
+
+The first end-to-end attempt failed, on the phone, with **"Could not read the
+signature of the download."**
+
+The cause was in `UpdateInstaller.currentSigners`. For an app signed by a
+single key it read `SigningInfo.signingCertificateHistory` and took the last
+entry. That history is an **installed app's lineage** — which key signed it,
+and which key took over from it. An APK read off the disk with
+`getPackageArchiveInfo` has no lineage, so its history comes back **empty**, and
+an empty history read as "this file has no signer". Every update was refused,
+correctly refusing a file it could not identify, for a reason that had nothing
+to do with the file.
+
+The fix is `apkContentsSigners` — the certificate that signed *this* APK. It is
+filled in for an installed app and for an archive alike, and in a key rotation
+it is the current key, not the retired one, which is what the check wants.
+
+**This is the argument for running the thing on a phone.** Every test in the
+suite passed, the code read correctly, and the reasoning was sound. The failure
+was in an assumption about what Android returns for a file that is not an
+installed app — a fact no unit test in this repo could have told us.
+
+### What the phone confirmed
+
+| | Evidence on the T20 |
+| --- | --- |
+| The calendar card | The permission dialog appears, `READ_CALENDAR` becomes `granted=true`, and the card reads real events ("Sun, Nov 15 · 20:00 Play/Doin homework"). **The first time the calendar has ever worked on a phone** — it could not before, because the permission was never declared in the manifest |
+| The microphone | The button starts the recogniser (`RecognitionService#logStartListening`), `RECORD_AUDIO` is granted with `USER_SET`, and the lightbar moves |
+| The typed command | "set a timer for 2 minutes" in Settings → Voice command starts a real countdown; the chip on the home page reads **1:14** and ticks |
+| The updater | Settings → Updates shows the real GitHub feed: **"The published release is 0.1.3. This build is 0.4.1."** — the newest *stable* release really is older than the build that is running, and the app says so instead of claiming to be up to date |
+
+---
+
 ## 0.3.0 release assessment
 
 - **Built:** six per-ABI APKs (reduced and ef, arm64-v8a/armeabi-v7a/x86_64).

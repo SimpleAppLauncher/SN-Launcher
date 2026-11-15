@@ -87,8 +87,11 @@ object UpdateInstaller {
 
         // 2. The signing key. This is the check that matters.
         val mine = currentSigners(installed)
+        if (mine.isEmpty()) {
+            return refusal("Could not read this build's own signature.")
+        }
         val theirs = currentSigners(candidate)
-        if (mine.isEmpty() || theirs.isEmpty()) {
+        if (theirs.isEmpty()) {
             return refusal("Could not read the signature of the download.")
         }
         if (mine != theirs) {
@@ -234,16 +237,20 @@ object UpdateInstaller {
     private fun currentSigners(info: PackageInfo): List<String> {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val signing = info.signingInfo ?: return emptyList()
-            return if (signing.hasMultipleSigners()) {
-                signing.apkContentsSigners.map { digest(it.toByteArray()) }.sorted()
-            } else {
-                val history = signing.signingCertificateHistory
-                if (history.isEmpty()) {
-                    emptyList()
-                } else {
-                    listOf(digest(history[history.size - 1].toByteArray()))
-                }
-            }
+            // `apkContentsSigners`, not `signingCertificateHistory`.
+            //
+            // The history is an *installed app's* lineage: it says which key
+            // signed the app and which key took over from it. An APK read off
+            // the disk with `getPackageArchiveInfo` has no lineage, so its
+            // history comes back **empty** — and an empty history read as "no
+            // signer" refused every update on the first try, on the phone.
+            //
+            // `apkContentsSigners` is the certificate that signed *this* APK,
+            // which is the thing being compared, and it is filled in for both
+            // an installed app and an archive. For a key rotation it is the
+            // current key, not the retired one, which is what we want: a
+            // retired key must not be able to sign an update this app accepts.
+            return signing.apkContentsSigners.map { digest(it.toByteArray()) }.sorted()
         }
         @Suppress("DEPRECATION")
         return info.signatures?.map { digest(it.toByteArray()) }?.sorted() ?: emptyList()

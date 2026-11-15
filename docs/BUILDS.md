@@ -195,6 +195,15 @@ created, and a failure stops the publish. Publishing an APK that declares the
 wrong permissions is worse than publishing nothing: the updater would install it
 and the feature would fail on a phone.
 
+`test/publish_release_test.dart` reads the script off disk and holds it to the
+contract: every ABI Android reports (`arm64-v8a`, `armeabi-v7a`, `x86_64`) must
+be in its table, the names it produces must be exactly the ones
+`expectedAssetName` looks for, a version with a `-` in it must be published as
+a pre-release, an existing tag must be refused, and the permissions must be
+checked. The ABI table already had one wrong name in it — Gradle says
+`armeabi-v7a`, the script said `armel` — and the test is what catches that
+class of mistake now.
+
 Releases published **before 15 November 2026** use the older names
 (`-arm64`, `-armv7`, `-beta-`) and carry no `SHA256SUMS`. They cannot be seen by
 the updater, and they were signed with the **Android debug key**
