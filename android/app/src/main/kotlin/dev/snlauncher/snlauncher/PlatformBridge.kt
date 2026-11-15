@@ -53,6 +53,9 @@ class PlatformBridge(private val activity: Activity) : MethodChannel.MethodCallH
             "openCamera" -> openCamera(result)
             "requestPermission" -> requestPermission(call, result)
             "permissionState" -> permissionState(call, result)
+            "appInfo" -> appInfo(result)
+            "verifyUpdate" -> verifyUpdate(call, result)
+            "installUpdate" -> installUpdate(call, result)
             "getLocation" -> getLocation(result)
             "upcomingEvents" -> upcomingEvents(call, result)
             "openUrl" -> openUrl(call, result)
@@ -436,6 +439,31 @@ class PlatformBridge(private val activity: Activity) : MethodChannel.MethodCallH
         } catch (_: Exception) {
             result.success(mapOf("granted" to false))
         }
+    }
+
+    /** What this build is. Null when the platform cannot say. */
+    private fun appInfo(result: MethodChannel.Result) {
+        result.success(UpdateInstaller.appInfo(activity))
+    }
+
+    /** Whether the downloaded file is this app's own newer build. */
+    private fun verifyUpdate(call: MethodCall, result: MethodChannel.Result) {
+        val path = call.argument<String>("path")
+        if (path.isNullOrBlank()) {
+            result.success(mapOf("ok" to false, "reason" to "There is no file to check."))
+            return
+        }
+        result.success(UpdateInstaller.verify(activity, path))
+    }
+
+    /** Hands the downloaded file to Android's installer. */
+    private fun installUpdate(call: MethodCall, result: MethodChannel.Result) {
+        val path = call.argument<String>("path")
+        if (path.isNullOrBlank()) {
+            result.success(mapOf("started" to false, "reason" to "There is no file to install."))
+            return
+        }
+        result.success(UpdateInstaller.install(activity, path))
     }
 
     /**

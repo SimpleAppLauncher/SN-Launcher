@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The one file the updater is allowed to hand to Android's installer.
+
+    The downloaded build lives in the app's own files directory, and Android
+    will not take a path: it takes a content:// URI, which this provider
+    makes. The path is named exactly, so nothing else in the app's storage
+    can be handed out by mistake.
+-->
+<paths>
+    <files-path name="updates" path="update.apk" />
+</paths>

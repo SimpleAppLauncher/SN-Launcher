@@ -31,6 +31,17 @@
          wall display says something even when nobody is looking at it. -->
     <uses-permission android:name="android.permission.VIBRATE"/>
 
+    <!-- The in-app updater. This permission is not a runtime one: the app
+         asks for it the way Android asks for it, which is by opening the
+         "install unknown apps" screen for the user to turn on. Without it the
+         downloaded build cannot be handed to Android's installer.
+
+         It is a serious permission to hold - it is what lets an app put
+         another app on the device - so the file it is used on is checked
+         first: the package name, the signing key and the version name all
+         have to match this build before the installer is ever opened. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
     <!-- Touchscreen, but not required to be a phone: Nest Hubs, Raspberry Pi
          panels, HDMI sticks and repurposed tablets all qualify. -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
@@ -102,6 +113,21 @@
             <action android:name="android.media.browse.MediaBrowserService"/>
         </intent-filter>
     </service>
+
+    <!-- The updater hands Android's installer a file, and a file is handed
+         over as a content:// URI, not a path. This provider turns the app's
+         own files directory into that URI. It is not exported: nothing
+         outside this app can read the files directory through it, and the
+         grant is for one install, not for the world. -->
+    <provider
+        android:name="androidx.core.content.FileProvider"
+        android:authorities="${applicationId}.updates"
+        android:exported="false"
+        android:grantUriPermissions="true">
+        <meta-data
+            android:name="android.support.FILE_PROVIDER_PATHS"
+            android:resource="@xml/file_paths" />
+    </provider>
 
     <!-- Hardware and Bluetooth transport buttons. Without this the headset
          buttons do nothing while the app is in the background. -->
