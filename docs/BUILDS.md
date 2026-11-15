@@ -167,6 +167,41 @@ exists, but the build does not claim the controls behind it.
 If a key is misspelled, `FeatureFlags.unknown` reports it and the console prints
 the name. A silently ignored typo is how an afternoon disappears.
 
+## Publishing a release the updater can find
+
+`tool/publish_release.sh` is the script that makes a release findable.
+
+It reads the version from `pubspec.yaml` (`version: 0.4.0+9001` → `0.4.0`; the
+build number is dropped, because Flutter gives each ABI its own versionCode and
+the updater compares version *names*). Then it builds both variants, copies the
+APKs to the exact names the updater matches on, checks the permissions of every
+staged file, writes `SHA256SUMS`, and publishes a **stable** release.
+
+The names it produces are the contract with the app:
+
+| Variant | Name |
+| --- | --- |
+| reduced | `SN-Launcher-<version>-<abi>.apk` |
+| ef | `SN-Launcher-ef-<version>-<abi>.apk` |
+
+where `<abi>` is `arm64-v8a`, `armeabi-v7a` or `x86_64`. The updater derives the
+prefix from its own applicationId (`dev.snlauncher.snlauncher` →
+`SN-Launcher-`, `dev.snlauncher.snlauncher.ef` → `SN-Launcher-ef-`) and matches
+the asset by name alone, so a release that does not use these names is invisible
+to it.
+
+`tool/verify_permissions.sh` runs over every staged APK before the release is
+created, and a failure stops the publish. Publishing an APK that declares the
+wrong permissions is worse than publishing nothing: the updater would install it
+and the feature would fail on a phone.
+
+Releases published **before 15 November 2026** use the older names
+(`-arm64`, `-armv7`, `-beta-`) and carry no `SHA256SUMS`. They cannot be seen by
+the updater, and they were signed with the **Android debug key**
+(`CN=Android Debug`), not the release key. From 0.4.0 the published APKs are
+signed with the release key, so installing them over a debug-signed build means
+uninstalling first — Android will not upgrade across different signing keys.
+
 ## The tests that hold this up
 
 `test/feature_flags_test.dart` reads the two JSON files **off disk** rather than

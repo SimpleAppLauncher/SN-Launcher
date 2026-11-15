@@ -17,44 +17,55 @@ a wall and having it look like a smart display.
 
 ## Download
 
-Grab it from **[releases](../../releases/latest)**.
+Grab it from **[releases](../../releases)**.
 
-| File | Size | For |
-|---|---|---|
-| **`SN-Launcher-0.3.0-arm64-v8a.apk`** | 10.6 MB | **Start here.** Nearly all modern tablets and phones. |
-| `SN-Launcher-0.3.0-armeabi-v7a.apk` | 10.1 MB | Older 32-bit tablets. |
-| `SN-Launcher-0.3.0-x86_64.apk` | 10.8 MB | Chromebooks and emulators. |
-| `SN-Launcher-ef-0.3.0-arm64-v8a.apk` | 10.6 MB | The beta, with every feature on. |
-| `SN-Launcher-ef-0.3.0-armeabi-v7a.apk` | 10.1 MB | The beta, for older 32-bit tablets. |
-| `SN-Launcher-ef-0.3.0-x86_64.apk` | 10.8 MB | The beta, for Chromebooks and emulators. |
+The updater inside the app looks for one exact file name per build and per
+device, and it matches on the name alone:
 
-The per-ABI APKs carry the usual Android ABI offset on top of the base
-`versionCode` 9001: armeabi-v7a is 10001, arm64-v8a is 11001, and x86_64 is
-13001. Pick the one that matches the device; the checksums ship beside them in
-`SHA256SUMS`.
+| File | For |
+|---|---|
+| **`SN-Launcher-<version>-arm64-v8a.apk`** | **Start here.** Nearly all modern tablets and phones. |
+| `SN-Launcher-<version>-armeabi-v7a.apk` | Older 32-bit tablets. |
+| `SN-Launcher-<version>-x86_64.apk` | Chromebooks and emulators. |
+| `SN-Launcher-ef-<version>-arm64-v8a.apk` | The beta, with every feature on. |
+| `SN-Launcher-ef-<version>-armeabi-v7a.apk` | The beta, for older 32-bit tablets. |
+| `SN-Launcher-ef-<version>-x86_64.apk` | The beta, for Chromebooks and emulators. |
+
+`<version>` is the version in the release title. The per-ABI APKs carry the
+usual Android ABI offset on top of the base `versionCode` 9001: armeabi-v7a is
+10001, arm64-v8a is 11001, and x86_64 is 13001. The checksums ship beside them
+in `SHA256SUMS`.
+
+**The releases published before 15 November 2026 use older file names**
+(`-arm64`, `-armv7`, `-beta-`) and carry no `SHA256SUMS`. The in-app updater
+cannot see those, so they still have to be installed by hand.
 
 Copy the `.apk` to the device and tap it, allowing **Install unknown apps** for
 whatever opened it. Or over USB:
 
 ```bash
-adb install -r SN-Launcher-0.3.0-arm64-v8a.apk
+adb install -r SN-Launcher-0.4.0-arm64-v8a.apk
 ```
 
 Then set it as your home screen.
 
 ### Two things to know first
 
-**These APKs are signed with the project's release key,** not the Android debug
-key. The certificate is `CN=SN-Launcher, OU=Android, O=SimpleAppLauncher,
-C=US`; its SHA-256 fingerprint is
-`94d75bcb19143281e16a98393b81f2467c3bd528632c696ffde8b3bdf4951804`. The
+**Check which key a build was signed with.** Every APK published before
+15 November 2026 is signed with the **Android debug key** (`CN=Android Debug`,
+SHA-256
+`8ab93dd4695fb7ac2bd2323d1b6af6219501733743268af620010318a8951c42`) — the
+key that comes with the Android SDK, not a secret. From the next release the
+APKs are signed with the project's **release key** (`CN=SN-Launcher, OU=Android,
+O=SimpleAppLauncher, C=US`; SHA-256
+`94d75bcb19143281e26a98393b81f2467c3bd528632c696ffde8b3bdf4951804`). The
 release keystore is not in the repository; it lives on the build machine and is
 backed up outside the repository. Keep that backup: losing it means no future
-APK can upgrade over these installs.
+APK can upgrade over those installs.
 
-If you have an older debug-signed SN-Launcher, uninstall it once before
-installing this build, because Android will not upgrade across different signing
-keys.
+Android will not upgrade across different signing keys, so **uninstall the
+debug-signed build once** before installing a release-key build. Its settings go
+with it.
 
 **It wants to be the home screen.** Set it as default launcher after
 installing.

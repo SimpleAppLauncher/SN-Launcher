@@ -1,11 +1,15 @@
 # Status: what works, what does not, and what to do next
 
 Written against the v0.3.0 release tree, plus the background-album,
-Christmas-mode, permissions and voice-command work that has landed since.
-**498 tests pass and none are skipped**; `flutter analyze` is clean. The
+Christmas-mode, permissions, voice-command and in-app-update work that has
+landed since.
+**569 tests pass and none are skipped**; `flutter analyze` is clean. The
 reduced and ef 0.3.0 APKs were built and signature-verified, but ADB was
-offline during this release pass, so this exact build was not installed on
-hardware. The Android now-playing strip, external transport and live track
+offline during that release pass, so that exact build was not installed on
+hardware. A **Nokia T20 was attached** for the work that followed — the
+permissions, the voice command and the updater — so those claims are graded
+against a real phone; the sections below say which of them were actually
+exercised. The Android now-playing strip, external transport and live track
 replacement were verified earlier on the Nokia T20 with Spotify and
 Notification access; the real installed-app dock/drawer and live photo
 discovery were used in the T20 promo captures. Full package-launch interaction
@@ -77,7 +81,40 @@ spoken "timer finished".
 | --- | --- |
 | Built | Per-variant permission declaration; the permission service; the settings Permissions section; the microphone button; the typed-command fallback; a real timer; the notification request when music starts |
 | Verified | The six APKs build; `tool/verify_permissions.sh` reads each finished APK and confirms it declares exactly `READ_CALENDAR,RECORD_AUDIO` (reduced) and `ACCESS_COARSE_LOCATION,POST_NOTIFICATIONS,READ_CALENDAR,RECORD_AUDIO` (ef); 498 tests pass; `flutter analyze` is clean; the macOS release build compiles |
-| **Not** verified | Nothing has been installed on an Android device — ADB is offline. The microphone button, the permission dialogs, the countdown and the settings section have **never been seen on hardware**. The permission probe is only exercised against a fake platform in the tests; the Kotlin side is unexercised. |
+| **Not** verified | Whether the microphone button, the permission dialogs, the countdown and the settings section look and behave right **on a phone**. The permission probe is exercised only against a fake platform in the tests; the Kotlin side was not, until the device pass below. |
+
+---
+
+## The in-app updater — 15 Nov 2026
+
+The launcher can now update itself: Settings → Updates checks the GitHub
+releases feed, says what it found, downloads the right APK for this device,
+verifies it, and hands it to Android's installer.
+
+Three things were true before this and were all worth fixing:
+
+- **There was no way to update at all.** The only download was a copy of an
+  APK onto a device by hand — a channel that Google's developer verification
+  closes from 2027.
+- **Every published APK was signed with the Android debug key**
+  (`CN=Android Debug`, SHA-256
+  `8ab93dd4695fb7ac2bd2323d1b6af6219501733743268af620010318a8951c42`), not
+  with the project's release key. The release keystore existed and had never
+  signed anything that was published. The README said otherwise; it did not.
+- **The README advertised files that exist in no release.** It listed
+  `SN-Launcher-0.3.0-arm64-v8a.apk` and a `SHA256SUMS`; the newest stable
+  release was v0.1.3, with a different naming scheme and no checksums.
+
+The updater matches an asset by **name** — `SN-Launcher-<version>-<abi>.apk` and
+`SN-Launcher-ef-<version>-<abi>.apk` — because that is the only thing both
+sides can agree on without a server. It compares **version names**, never
+version codes, because Flutter gives each ABI a different version code.
+
+| | |
+| --- | --- |
+| Built | The release feed parser; the update service (check, download, verify, install); the native side (`appInfo`, `verifyUpdate`, `installUpdate`, the `FileProvider`, `REQUEST_INSTALL_PACKAGES`); the Settings → Updates section; the startup check; the publish script |
+| Verified | The feed parser is pinned by 32 tests against the live API's real shape (a JSON **list**, `digest: sha256:<hex>`, a required `User-Agent`); the update service by 26 tests; the settings section by 12 tests; 569 tests pass; `flutter analyze` is clean; the release APKs build and `tool/verify_permissions.sh` confirms their permission sets |
+| **Not** verified | **The whole path on a phone.** The Kotlin has never run. The download, the signature check, the "install unknown apps" hand-off and the restart into the new version have not been seen on hardware. The publish script has never created a release. |
 
 ---
 
@@ -90,7 +127,7 @@ spoken "timer finished".
   `94d75bcb19143281e16a98393b81f2467c3bd528632c696ffde8b3bdf4951804`.
 - **Automated:** `flutter analyze` clean; **287 tests pass, 1 skipped**.
 - **Hardware:** this exact 0.3.0 build was **not installed** in this pass because
-  ADB was offline. Earlier T20 evidence covers the now-playing strip, transport
+  ADB was offline at the time. Earlier T20 evidence covers the now-playing strip, transport
   and live track replacement, and the T20 promo captures show the real
   installed-app dock/drawer and live photo. Package launch and the time-based
   theme editor were not re-run on hardware for 0.3.0.
@@ -137,7 +174,7 @@ desktop release build, and have never been seen on an Android tablet.
 | Labelled app row + grabber hit area | Renders at 1280×800 without overflow; the handle now has a 48 dp opaque target | Whether a thumb finds it, and whether tapping it opens the sheet without the drag listener swallowing the tap |
 | Android now-playing | `DeviceMediaWatcher` maps mocked media sessions, permission state and pause/play; tests prove capability-gated external transport, that a new external song replaces the old one without a restart, and that unsupported controls are absent; the base manifest declares the notification-listener service | Whether Notification access can be granted on the T20/SM-X110, whether Spotify/SoundCloud/podcast/PiP accept play/pause/skip through `MediaController`, and whether artwork and titles survive background playback |
 | Live photo discovery in the normal build | The feature-flag test now proves `photoDiscovery` is on; the licence filter and discovery pool have unit tests | Whether the normal build fetches and rotates a fresh Commons photo on the tablet, and whether that changes idle network/battery behaviour |
-| Time-based theme schedule | Override windows resolve correctly for normal and past-midnight ranges; malformed entries are dropped; the schedule survives a controller restart; the Settings editor appears only while the theme is dynamic | Whether the Appearance editor fits and the palette visibly switches on the T20. Hardware smoke was skipped because ADB was offline |
+| Time-based theme schedule | Override windows resolve correctly for normal and past-midnight ranges; malformed entries are dropped; the schedule survives a controller restart; the Settings editor appears only while the theme is dynamic | Whether the Appearance editor fits and the palette visibly switches on the T20. Hardware smoke was skipped in that pass because ADB was offline at the time |
 | **Background albums — Landscape / Cars / Fernando Alonso** | 88 pool entries verified live against the Commons API (file exists, licence redistributable, thumbnail fetchable); each album bundles one hero with its sidecar JSON; the service caches per album; the Settings picker renders without overflow at 1:1, 4:3, 3:4 and 9:16; the reduced build's flag test proves `themePicker` is on | Whether the picker looks right on the tablet, and whether the downloaded photographs arrive and rotate there. Seen on macOS: the albums fetch, caption and credit correctly |
 | **Christmas mode** | The palette passes the contrast check and reports itself as a night palette; the automatic window is closed on 30 Nov 23:59, open from 1 Dec 00:00 through 6 Jan 23:59, and closed from 7 Jan 00:00; the mode switch overrides a pinned theme; the snow switch is independent of the mode; the setting survives a restart; the snow paints without overflow at all 11 aspect shapes and is byte-identical across two frames when it is not animating | Whether the snow reads as snow rather than as noise on a 2000×1200 panel, and whether the Christmas palette is legible over a bright photograph. Seen on macOS: the snow is over the photograph and the caption stays legible — but it was **rising**, not falling, when this row was first written (see the next row) |
 | **The snow fell upwards (bug fix)** | The painter computed `y = height * (1 - fall)`, so as the animation phase advanced `y` shrank, and in Flutter a smaller y is higher: the flakes were rising. It looked like snow. A new test photographs the painted pixels twice and compares the alpha-weighted centre of mass: before the fix the flake moved from y 170.1 to y 130.5 (up 39.6 px), after the one-line fix it moves from y 128.9 to y 168.5 (down 39.6 px) | Whether the snow reads as falling on a 2000×1200 panel, and whether the flakes are big enough to see from across a room. Seen on macOS: two captures a second apart show the flakes lower in the second one |
@@ -208,7 +245,7 @@ service, but it is unreachable while `homeControl` is off.
 - Any automated test that runs on a device; CI only builds the desktop targets
 - A 72-hour soak on the T20, and the long-session memory/poll behaviour
 - A hardware smoke run of the exact 0.3.0 APKs; the release is signed, but ADB
-  was offline during the release pass
+  was offline during that release pass
 - Desktop targets — built in CI, never run here; the Linux build has never been launched
 
 ---
