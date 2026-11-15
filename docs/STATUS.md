@@ -80,8 +80,36 @@ spoken "timer finished".
 | | |
 | --- | --- |
 | Built | Per-variant permission declaration; the permission service; the settings Permissions section; the microphone button; the typed-command fallback; a real timer; the notification request when music starts |
-| Verified | The six APKs build; `tool/verify_permissions.sh` reads each finished APK and confirms it declares exactly `READ_CALENDAR,RECORD_AUDIO` (reduced) and `ACCESS_COARSE_LOCATION,POST_NOTIFICATIONS,READ_CALENDAR,RECORD_AUDIO` (ef); 498 tests pass; `flutter analyze` is clean; the macOS release build compiles |
-| **Not** verified | Whether the microphone button, the permission dialogs, the countdown and the settings section look and behave right **on a phone**. The permission probe is exercised only against a fake platform in the tests; the Kotlin side was not, until the device pass below. |
+| Verified | The six APKs build; `tool/verify_permissions.sh` reads each finished APK and confirms it declares exactly `READ_CALENDAR,RECORD_AUDIO` (reduced) and `ACCESS_COARSE_LOCATION,POST_NOTIFICATIONS,READ_CALENDAR,RECORD_AUDIO` (ef); 572 tests pass; `flutter analyze` is clean; the macOS release build compiles |
+| Verified **on the T20** | The calendar permission dialog appears and granting it works — `READ_CALENDAR: granted=true` — and the digest card then reads **real events** ("Sun, Nov 15 · 20:00 Play/Doin homework"). The microphone dialog appears ("Allow SN-Launcher to record audio?") and granting it starts the recogniser (`SodaSpeechRecognizer: #handleStart`). This is the first time either has worked on a phone: before, the permissions could not be granted at all. |
+| **Not** verified | The voice command's **speech** on the T20 — the recogniser started, but nobody spoke to it, so what it heard is unknown. The countdown, the typed-command fallback and the Permissions section have not been exercised on the phone. The notification request needs a music player to be meaningful. |
+
+### The bug that only a screenshot found — 15 Nov 2026
+
+With the permissions finally grantable, the microphone button was pressed on the
+T20 and **nothing happened**: no dialog, no log line. Two separate faults, both
+invisible to every test in the suite:
+
+1. **The shell's controls were painted under the photograph.** The gear, the
+   listening lightbar, the microphone button and the timer chip were all
+   positioned *before* the page carousel in the shell's stack. On the digest
+   page — whose background is transparent — they showed. On the home page,
+   whose photograph fills the screen, they did not exist.
+2. **A fade absorbs touches.** The photograph is inside an `AnimatedSwitcher`
+   whose transition is a `FadeTransition`, and Flutter's `RenderOpacity` hits
+   itself while its alpha is non-zero. So even where the controls were drawn,
+   the photograph ate the tap. The settings gear did not open Settings.
+
+The fix moves the four overlays above the carousel, and
+`test/shell_overlay_test.dart` now asserts both the paint order and that
+tapping the microphone button starts listening. It also moved the now-playing
+strip out of the top-right corner, where it had been sitting on top of the
+gear's tap area with its own buttons.
+
+The lesson is the one this file keeps repeating: **a passing test proves a
+property, not a person can see it.** Nothing in 572 tests asked whether the
+settings gear was reachable from the home screen. One screenshot on a phone
+asked, and the answer was no.
 
 ---
 
@@ -252,8 +280,14 @@ service, but it is unreachable while `homeControl` is off.
 
 ## 5. What to do, in this order
 
-### Current, 26 Oct 2026
+### Current, 15 Nov 2026
 
+0. **Run the updater on a real phone.** Everything the updater does is
+   unexercised: the native probe, the download, the signature check, the
+   "install unknown apps" hand-off, the restart into the new version. Install
+   the release-key 0.4.0 on the T20, publish v0.4.1, and watch the phone find
+   it. Until that happens the updater is a set of well-tested parts and not a
+   working feature.
 1. **Verify the installed-app drawer on both tablets.** This is the change that
    just landed and the only thing allowed to happen before new work. Install
    both variants, open the drawer, confirm the icons are the apps' own, tap a
@@ -273,8 +307,9 @@ service, but it is unreachable while `homeControl` is off.
    after the app catalog, which keeps one 144 px PNG per installed app.
 5. **Settle the weather place name (3a).** It is still the one bug that shows
    on the wall: conditions without a place.
-6. **Release signing.** A proper keystore, so upgrades do not require an
-   uninstall.
+6. ~~**Release signing.**~~ Done: the keystore exists and 0.4.0 is the first
+   release signed with it. The cost is that everyone uninstalls the
+   debug-signed build once, and its settings go with it.
 
 ### Earlier plan (kept for the record; the native-player step is superseded by the NCS remote)
 

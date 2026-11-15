@@ -666,6 +666,31 @@ class _NestShellState extends State<NestShell> {
                           brightness: _c.brightness,
                         ),
 
+                        // ── Page carousel ───────────────────────────────────
+                        // Not wrapped in an AnimatedBuilder of its own. It used
+                        // to be, and that wrapper is why the weather page could
+                        // show a temperature with no place name: see the note
+                        // in _buildCarousel. The per-page AnimatedBuilders
+                        // inside drive the animation, and each one keeps its
+                        // content as a `child` so the content is built here,
+                        // in the ordinary path, and a setState reaches it.
+
+                        _buildCarousel(palette, type),
+
+                        // ── The shell's own controls ───────────────────────
+                        //
+                        // These are above the carousel on purpose. They used
+                        // to be below it, and on the home page that made them
+                        // useless twice over: the photograph is opaque and
+                        // covers the screen, so none of them could be seen —
+                        // and the photograph's crossfade is a FadeTransition,
+                        // which absorbs touches, so none of them could be
+                        // tapped either. The settings gear did not open the
+                        // settings from the home screen, and the microphone
+                        // button did nothing at all.
+                        //
+                        // Only a screenshot taken on a phone showed it. No
+                        // test had asked whether the gear was reachable.
                         // Settings, top-right. Deliberately *not* added to the
                         // quick-settings row: that row is seven buttons wide
                         // because it was measured off a rectified photograph
@@ -760,15 +785,6 @@ class _NestShellState extends State<NestShell> {
                             ),
                           ),
 
-                        // ── Page carousel ───────────────────────────────────
-                        // Not wrapped in an AnimatedBuilder of its own. It used
-                        // to be, and that wrapper is why the weather page could
-                        // show a temperature with no place name: see the note
-                        // in _buildCarousel. The per-page AnimatedBuilders
-                        // inside drive the animation, and each one keeps its
-                        // content as a `child` so the content is built here,
-                        // in the ordinary path, and a setState reaches it.
-                        _buildCarousel(palette, type),
 
                         // ── Launcher sheet ──────────────────────────────────
                         // Driven by its own AnimatedBuilder rather than the
@@ -1028,7 +1044,9 @@ class _NestShellState extends State<NestShell> {
             // made a new song wait for a relaunch.
             if (widget.playback != null)
               Positioned(
-                top: _m.px(18),
+                // Below the settings gear, which lives in the shell and is
+                // painted above the page. The two used to share this corner.
+                top: _m.px(62),
                 right: _m.px(18),
                 child: _MiniNowPlaying(
                   metrics: _m,
