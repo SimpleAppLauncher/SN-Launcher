@@ -3,7 +3,7 @@
 Written against the v0.3.0 release tree, plus the background-album,
 Christmas-mode, permissions, voice-command and in-app-update work that has
 landed since.
-**569 tests pass and none are skipped**; `flutter analyze` is clean. The
+**581 tests pass and none are skipped**; `flutter analyze` is clean. The
 reduced and ef 0.3.0 APKs were built and signature-verified, but ADB was
 offline during that release pass, so that exact build was not installed on
 hardware. A **Nokia T20 was attached** for the work that followed — the
