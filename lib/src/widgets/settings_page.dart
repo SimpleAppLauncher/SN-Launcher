@@ -10,11 +10,13 @@ import '../services/feature_flags.dart';
 import '../services/photo_album.dart';
 import '../services/permission_service.dart';
 import '../services/remote_control_service.dart';
+import '../services/update_service.dart';
 import '../theme/ambient_palette.dart';
 import '../theme/nest_icons.dart';
 import '../theme/nest_metrics.dart';
 import '../theme/nest_theme.dart';
 import '../theme/nest_type.dart';
+import 'update_section.dart';
 
 /// Everything the settings page can change about the assistant.
 ///
@@ -124,6 +126,7 @@ class SettingsPage extends StatelessWidget {
     this.media,
     this.remote,
     this.permissions,
+    this.updates,
     this.onAssistantChanged,
     this.onTestConnection,
     this.onVoiceCommand,
@@ -145,6 +148,14 @@ class SettingsPage extends StatelessWidget {
   /// dead toggle would claim a capability the platform does not have.
   final DeviceMediaWatcher? media;
   final RemoteControlService? remote;
+
+  /// The updater, when this build can update itself.
+  ///
+  /// Null on a platform that cannot install an APK, so the section is
+  /// hidden rather than shown disabled: there is no update to look for on a
+  /// desktop, and a card that offers one would be claiming a capability the
+  /// platform does not have.
+  final UpdateService? updates;
 
   /// What the platform has allowed this app to do.
   ///
@@ -1065,6 +1076,15 @@ class SettingsPage extends StatelessWidget {
                         _voiceCommand(m),
                         SizedBox(height: m.px(14)),
                         _assistant(m),
+                        if (updates != null) ...[
+                          SizedBox(height: m.px(14)),
+                          UpdateSection(
+                            updates: updates!,
+                            metrics: m,
+                            type: type,
+                            palette: palette,
+                          ),
+                        ],
                         if (remote != null &&
                             FeatureFlags.current.isOn('remoteControl')) ...[
                           SizedBox(height: m.px(14)),
