@@ -19,6 +19,7 @@ import '../services/todo_service.dart';
 import '../services/photo_frame_service.dart';
 import '../services/permission_service.dart';
 import '../services/timer_service.dart';
+import '../services/update_service.dart';
 import '../models/photo_credit.dart';
 import '../services/calendar_service.dart';
 import '../services/clock_service.dart';
@@ -77,6 +78,7 @@ class NestShell extends StatefulWidget {
     this.ncs,
     this.permissions,
     this.timer,
+    this.updates,
     this.onNcsAddressChanged,
     this.suggested,
     this.actions,
@@ -141,6 +143,13 @@ class NestShell extends StatefulWidget {
   /// then fails rather than claiming a timer was set.
   final TimerService? timer;
 
+  /// The updater, when this build can update itself.
+  ///
+  /// Null on desktop. The launcher never waits for it: the check happens
+  /// once at startup, off the critical path, and says something only when
+  /// there is something to say.
+  final UpdateService? updates;
+
   /// Overrides the six badges in the sheet's app row.
   final List<NestAction>? suggested;
 
@@ -169,6 +178,7 @@ class _NestShellState extends State<NestShell> {
     widget.photos?.addListener(_onPhotosChanged);
     widget.assistant?.addListener(_onAssistantChanged);
     widget.timer?.addListener(_onTimerChanged);
+    widget.updates?.addListener(_onUpdatesChanged);
 
     // The clock service owns the timer, and it only wakes on the minute
     // boundary unless it is told otherwise. The "Show seconds" setting has to
@@ -181,6 +191,24 @@ class _NestShellState extends State<NestShell> {
 
     widget.controller.addListener(_onControllerChanged);
     widget.location?.addListener(_onLocationChanged);
+  }
+
+  /// A newer build turned up.
+  ///
+  /// The launcher says so once, when it happens. It says the version and
+  /// nothing else: whether the update can be installed is the settings
+  /// page's business, and a toast that claimed more than it knew would be
+  /// the same lie the updater is built to avoid.
+  String? _announcedUpdate;
+
+  void _onUpdatesChanged() {
+    final updates = widget.updates;
+    if (updates == null) return;
+    if (updates.status != UpdateStatus.available) return;
+    final version = updates.release?.version;
+    if (version == null || version == _announcedUpdate) return;
+    _announcedUpdate = version;
+    _c.showToast('SN-Launcher $version is available.');
   }
 
   /// The countdown reached zero.
@@ -288,6 +316,7 @@ class _NestShellState extends State<NestShell> {
     widget.controller.removeListener(_onControllerChanged);
     widget.photos?.removeListener(_onPhotosChanged);
     widget.assistant?.removeListener(_onAssistantChanged);
+    widget.updates?.removeListener(_onUpdatesChanged);
     widget.timer?.removeListener(_onTimerChanged);
     widget.location?.removeListener(_onLocationChanged);
     super.dispose();
@@ -1174,6 +1203,7 @@ class _NestShellState extends State<NestShell> {
           media: widget.media,
           remote: widget.remote,
           permissions: widget.permissions,
+          updates: widget.updates,
           assistant: assist == null
               ? const AssistantSettings(
                   enabled: false,

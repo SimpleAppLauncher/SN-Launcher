@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -27,6 +28,7 @@ import 'src/screens/nest_shell.dart';
 import 'src/services/clock_service.dart';
 import 'src/services/weather_service.dart';
 import 'src/services/timer_service.dart';
+import 'src/services/update_service.dart';
 import 'src/state/shell_controller.dart';
 import 'src/theme/nest_metrics.dart';
 
@@ -153,6 +155,16 @@ class _NestLauncherAppState extends State<NestLauncherApp>
   );
   final SettingsStore _settings = SettingsStore();
 
+  /// The updater, on the platform that can install an APK.
+  ///
+  /// Null everywhere else. A desktop has no package installer to hand the
+  /// download to, so the section is not offered rather than offered and
+  /// broken.
+  late final UpdateService? _updates =
+      defaultTargetPlatform == TargetPlatform.android
+          ? UpdateService(settings: _settings)
+          : null;
+
   /// The music page's link to NCS-SMLauncher.
   ///
   /// It reads its address from settings on first use rather than in the field
@@ -231,6 +243,10 @@ class _NestLauncherAppState extends State<NestLauncherApp>
       }
       unawaited(_restoreAssistant());
       unawaited(_restoreNcs());
+      // Look for a newer build, once, off the critical path. The launcher
+      // never waits for the network: the check is a courtesy, and the
+      // settings page is where the user goes when they want it.
+      unawaited(_updates?.check());
     });
   }
 
@@ -401,6 +417,7 @@ class _NestLauncherAppState extends State<NestLauncherApp>
                 assistant: _assistant,
                 permissions: _permissions,
                 timer: _timer,
+                updates: _updates,
                 todo: _todo,
                 appCatalog: _appCatalog,
               ),
