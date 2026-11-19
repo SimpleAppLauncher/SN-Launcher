@@ -44,6 +44,7 @@ import '../widgets/snow_overlay.dart';
 import '../widgets/todo_card.dart';
 import '../widgets/now_playing_card.dart';
 import '../widgets/weather_page.dart';
+import '../widgets/simple_kiosk_launcher.dart';
 
 /// The Nest launcher shell.
 ///
@@ -1154,6 +1155,27 @@ class _NestShellState extends State<NestShell> {
         return _HomeControlPage(metrics: _m, type: type, palette: palette);
       case ShellPage.discover:
         return const SizedBox.shrink();
+      case ShellPage.skLauncher:
+        return SimpleKioskLauncher(
+          metrics: _m,
+          type: type,
+          palette: palette,
+          now: now,
+          weather: widget.weather.current,
+          actions: _actions,
+          onActionTap: _c.openAction,
+          photoFile: widget.photos?.currentFile,
+          heroAsset: widget.photos?.heroAsset ?? 'assets/photo/landscape.jpg',
+          photoCredit: (widget.photos?.credit ??
+                  widget.photos?.heroCredit ??
+                  PhotoCredit.loadFor(_c.photoAlbum))
+              .displayCredit,
+          albumTitle: _c.albumTitle,
+          loading: widget.appCatalog?.isLoading ?? false,
+          use24Hour: _c.use24Hour,
+          showSeconds: _c.showSeconds,
+          zoom: _c.zoom,
+        );
     }
   }
 
