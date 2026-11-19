@@ -67,7 +67,16 @@ object UpdateInstaller {
         }
 
         val candidate = try {
-            pm.getPackageArchiveInfo(file.absolutePath, PackageManager.GET_SIGNING_CERTIFICATES)
+            // Some OEM Android 13 builds return a null `signingInfo` from
+            // getPackageArchiveInfo when only GET_SIGNING_CERTIFICATES is
+            // asked for (AOSP issues 243324820 and 159537841). The deprecated
+            // GET_SIGNATURES flag is still honoured on those devices, so ask
+            // for both: currentSigners prefers signingInfo, and falls back to
+            // the deprecated field only when it is missing.
+            pm.getPackageArchiveInfo(
+                file.absolutePath,
+                PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES
+            )
         } catch (_: Exception) {
             null
         } ?: return refusal("The download is not an installable app.")
@@ -86,11 +95,11 @@ object UpdateInstaller {
         }
 
         // 2. The signing key. This is the check that matters.
-        val mine = currentSigners(installed)
+        val mine = currentSigners(installed, installed.applicationInfo?.sourceDir)
         if (mine.isEmpty()) {
             return refusal("Could not read this build's own signature.")
         }
-        val theirs = currentSigners(candidate)
+        val theirs = currentSigners(candidate, file.absolutePath)
         if (theirs.isEmpty()) {
             return refusal("Could not read the signature of the download.")
         }
@@ -111,7 +120,6 @@ object UpdateInstaller {
 
         return mapOf("ok" to true, "reason" to "")
     }
-
     /**
      * Hands the file at [path] to Android's installer.
      *
@@ -234,26 +242,103 @@ object UpdateInstaller {
      * accept, and comparing histories would accept a file signed with the
      * old key.
      */
-    private fun currentSigners(info: PackageInfo): List<String> {
+    private fun currentSigners(info: PackageInfo, path: String? = null): List<String> {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val signing = info.signingInfo ?: return emptyList()
-            // `apkContentsSigners`, not `signingCertificateHistory`.
-            //
-            // The history is an *installed app's* lineage: it says which key
-            // signed the app and which key took over from it. An APK read off
-            // the disk with `getPackageArchiveInfo` has no lineage, so its
-            // history comes back **empty** — and an empty history read as "no
-            // signer" refused every update on the first try, on the phone.
-            //
-            // `apkContentsSigners` is the certificate that signed *this* APK,
-            // which is the thing being compared, and it is filled in for both
-            // an installed app and an archive. For a key rotation it is the
-            // current key, not the retired one, which is what we want: a
-            // retired key must not be able to sign an update this app accepts.
-            return signing.apkContentsSigners.map { digest(it.toByteArray()) }.sorted()
+            val signing = info.signingInfo
+            if (signing != null) {
+                // The current signer, not the lineage. An APK read off disk has
+                // no lineage, so its history is empty; `apkContentsSigners` is
+                // the certificate that signed this specific file, for both an
+                // installed app and an archive.
+                val apkSigners = signing.apkContentsSigners
+                if (!apkSigners.isNullOrEmpty()) {
+                    return apkSigners.map { digest(it.toByteArray()) }.sorted()
+                }
+            }
+            // Some OEM Android 13 builds hand back a **null signingInfo** from
+            // getPackageArchiveInfo (AOSP issues 243324820, 159537841), so
+            // there is nothing to read above. The deprecated field is still
+            // populated there when GET_SIGNATURES was requested alongside
+            // GET_SIGNING_CERTIFICATES. This is a fallback only: a device that
+            // returns signingInfo keeps the rotation-correct behaviour above.
+            @Suppress("DEPRECATION")
+            val fromField = info.signatures
+            if (!fromField.isNullOrEmpty()) {
+                return fromField.map { digest(it.toByteArray()) }.sorted()
+            }
+            // And on the builds where even that comes back null (the Nokia:
+            // signingInfo null *and* signatures null for the downloaded
+            // file), the signer's certificates are still inside the archive —
+            // they are embedded in the APK Signing Block — so read the file
+            // and hash the certificates out of it. Same comparison, same
+            // digest.
+            val fromFile = path?.let { apkCertDigests(it) } ?: emptyList()
+            if (fromFile.isNotEmpty()) {
+                return fromFile
+            }
+            android.util.Log.w(
+                "SNDIAG",
+                "currentSigners pkg=${info.packageName} path=$path pm=none file=${fromFile.size}",
+            )
+            return emptyList()
         }
         @Suppress("DEPRECATION")
         return info.signatures?.map { digest(it.toByteArray()) }?.sorted() ?: emptyList()
+    }
+
+    /**
+     * The certificates the archive at [path] is signed with, read out of the
+     * file itself: every DER-encoded X.509 certificate embedded in it, hashed
+     * the same way currentSigners() hashes a package manager's output.
+     *
+     * The OEM Android 13 builds named in currentSigners() return nothing
+     * through the package manager for archives, so this scans the file's
+     * bytes for SEQUENCE TLVs that are long enough to be certificates (a real
+     * signing certificate is hundreds of bytes) and start with an INTEGER or
+     * context tag, which is what a TBS certificate starts with.
+     */
+    private fun apkCertDigests(path: String): List<String> {
+        val data = try {
+            File(path).readBytes()
+        } catch (_: Exception) {
+            return emptyList()
+        }
+        val out = mutableListOf<String>()
+        var i = 0
+        while (i + 4 < data.size) {
+            if (data[i].toInt() != 0x30) {
+                i += 1
+                continue
+            }
+            val j = i + 1
+            val first = data[j].toInt() and 0xff
+            var length: Int
+            var contentStart: Int
+            if ((first and 0x80) != 0) {
+                val nb = first and 0x7f
+                if (nb == 0 || nb > 4 || j + 1 + nb > data.size) {
+                    i += 1
+                    continue
+                }
+                length = 0
+                for (k in 1..nb) {
+                    length = (length shl 8) or (data[j + k].toInt() and 0xff)
+                }
+                contentStart = j + 1 + nb
+            } else {
+                length = first
+                contentStart = j + 1
+            }
+            if (length > 500 && contentStart + length <= data.size) {
+                val c0 = data[contentStart].toInt() and 0xff
+                if (c0 == 0x02 || c0 == 0xa0 || c0 == 0x30) {
+                    val d = digest(data.copyOfRange(i, contentStart + length))
+                    if (d !in out) out.add(d)
+                }
+            }
+            i += 1
+        }
+        return out.sorted()
     }
 
     private fun digest(bytes: ByteArray): String =

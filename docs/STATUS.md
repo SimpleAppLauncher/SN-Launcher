@@ -142,7 +142,7 @@ version codes, because Flutter gives each ABI a different version code.
 | --- | --- |
 | Built | The release feed parser; the update service (check, download, verify, install); the native side (`appInfo`, `verifyUpdate`, `installUpdate`, the `FileProvider`, `REQUEST_INSTALL_PACKAGES`); the Settings → Updates section; the startup check; the publish script |
 | Verified | The feed parser is pinned by 32 tests against the live API's real shape (a JSON **list**, `digest: sha256:<hex>`, a required `User-Agent`); the update service by 26 tests; the settings section by 12 tests; 569 tests pass; `flutter analyze` is clean; the release APKs build and `tool/verify_permissions.sh` confirms their permission sets |
-| **Not** verified | **The whole path on a phone.** The Kotlin has never run. The download, the signature check, the "install unknown apps" hand-off and the restart into the new version have not been seen on hardware. The publish script has never created a release. |
+| Verified on a phone | The Nokia T20 (Android 13): the updater found v0.4.3 on the real feed, downloaded it, the signature check now passes (**"Ready to install 0.4.3."** — the OEM returns null through the package manager, so the fixed `currentSigners()` reads the certificates out of the archive itself), the install hand-off reached the Package Installer (the old FileProvider-root bug no longer throws), and the app restarted as v0.4.3 (versionCode 11001), running normally. The only manual step was tapping through Play Protect's first-install "App scan recommended" screen. `UpdateInstaller.kt` (v2) and `file_paths.xml` are now in the main repo, uncommitted; a patched v0.4.4 has not been made or released yet. |
 
 ---
 

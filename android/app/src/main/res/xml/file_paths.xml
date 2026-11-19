@@ -8,5 +8,15 @@
     can be handed out by mistake.
 -->
 <paths>
-    <files-path name="updates" path="update.apk" />
+    <!--
+        The updater hands the downloaded build to Android's installer, and
+        the installer takes a content:// URI, not a path. This provider
+        makes that URI; the file is update.apk in the app's files directory.
+
+        The root is the files directory, not the file: SimplePathStrategy
+        registers a root only if it exists at provider init, and the file
+        is downloaded after startup, so a root named for the file drops out
+        and install() then fails with "Failed to find configured root".
+    -->
+    <files-path name="updates" path="." />
 </paths>
