@@ -509,8 +509,11 @@ void main() {
       await _pump(tester, page: ShellPage.digest);
       expect(find.textContaining('Good'), findsOneWidget);
       expect(find.text('Theme'), findsOneWidget);
-      expect(find.text('Calendar'), findsOneWidget);
       expect(find.text('Music'), findsOneWidget);
+      // Two matches is the expected count on ef: the digest card's title,
+      // plus the SimpleKioskLauncher page's app tile — the real calendar app,
+      // now that this build ships the kiosk page.
+      expect(find.text('Calendar'), findsExactly(2));
     });
 
     testWidgets('the weather is not a card on the digest page', (tester) async {
@@ -518,6 +521,9 @@ void main() {
       // showed a temperature and two words.
       FeatureFlags.forTesting = ef;
       await _pump(tester, page: ShellPage.digest);
+      // The kiosk page does list the weather *app* as a grid tile, but the
+      // GridView is lazy and the tile is off the visible viewport on this
+      // pump — so the digest page itself still shows no weather text here.
       expect(find.text('Weather'), findsNothing);
     });
 
@@ -574,7 +580,10 @@ void main() {
       testWidgets('${entry.key} build renders the clock', (tester) async {
         FeatureFlags.forTesting = entry.value;
         await _pump(tester, page: ShellPage.home);
-        expect(find.text('12:00'), findsOneWidget);
+        // On ef the kiosk page is also in the carousel and shows the same
+        // clock, so the time appears twice there; on reduced once.
+        final clocks = entry.key == 'ef' ? findsExactly(2) : findsOneWidget;
+        expect(find.text('12:00'), clocks);
         // Both shipped builds can listen, so both show the bar.
         expect(find.byType(AssistantLightbar), findsOneWidget);
       });

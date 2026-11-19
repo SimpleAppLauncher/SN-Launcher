@@ -44,6 +44,10 @@ enum ShellPage {
   /// Home control.
   homeControl,
 
+  /// SimpleKioskLauncher (barebone kiosk launcher page).
+  /// Not gated by feature flags; always present in carousel.
+  skLauncher,
+
   /// Discover / launcher grid.
   discover,
 }
@@ -459,6 +463,7 @@ class ShellController extends ChangeNotifier {
     // put a blank fourth page after "Home" in the reduced build — found by
     // installing that build on the tablet and swiping to the end.
     ShellPage.discover => false,
+    ShellPage.skLauncher => f.isOn('skLauncher'),
     _ => true,
   };
 

@@ -20,6 +20,7 @@
     "sunTheme": true,
     "remoteControl": true,
 
-    "homeControl": false
+    "homeControl": false,
+    "skLauncher": true
   }
 }

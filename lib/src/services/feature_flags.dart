@@ -60,6 +60,7 @@ class FeatureFlags {
     // shipped builds; the page and its code stay so it can be turned back on
     // by a config change, not a code change.
     'homeControl',
+    'skLauncher',
     'weather',
     'quickSettings',
     'sunTheme',
